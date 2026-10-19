@@ -1,0 +1,339 @@
+[
+  {
+    "screenId": "C01",
+    "role": "customer",
+    "folder": "services_available_chaircare_mobile",
+    "title": "Services Available (Browse Catalog)",
+    "previousScreen": "I05",
+    "nextScreen": "C02",
+    "entryPoints": [
+      "I05",
+      "CustomerTabHome"
+    ],
+    "exitPoints": [
+      "C02",
+      "C19",
+      "C21",
+      "C22"
+    ]
+  },
+  {
+    "screenId": "C02",
+    "role": "customer",
+    "folder": "service_details_office_chair_repair_chaircare_mobile",
+    "title": "Service Details (Office Chair Repair)",
+    "previousScreen": "C01",
+    "nextScreen": "C03",
+    "entryPoints": [
+      "C01"
+    ],
+    "exitPoints": [
+      "C03",
+      "C04"
+    ]
+  },
+  {
+    "screenId": "C03",
+    "role": "customer",
+    "folder": "authentication_gate_chaircare_mobile",
+    "title": "Authentication Gate (Sign In / Sign Up Modal)",
+    "previousScreen": "C02",
+    "nextScreen": "C04",
+    "entryPoints": [
+      "C02"
+    ],
+    "exitPoints": [
+      "C04",
+      "C02"
+    ]
+  },
+  {
+    "screenId": "C04",
+    "role": "customer",
+    "folder": "booking_step_1_select_service_chaircare_mobile",
+    "title": "Booking Step 1: Select Chair & Issue",
+    "previousScreen": "C03",
+    "nextScreen": "C05",
+    "entryPoints": [
+      "C03",
+      "C02"
+    ],
+    "exitPoints": [
+      "C05",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "C05",
+    "role": "customer",
+    "folder": "booking_step_2_describe_problem_chaircare_mobile",
+    "title": "Booking Step 2: Ergonomic Diagnostics & Photos",
+    "previousScreen": "C04",
+    "nextScreen": "C06",
+    "entryPoints": [
+      "C04"
+    ],
+    "exitPoints": [
+      "C06",
+      "C04"
+    ]
+  },
+  {
+    "screenId": "C06",
+    "role": "customer",
+    "folder": "booking_step_3_service_location_chaircare_mobile",
+    "title": "Booking Step 3: Service Location",
+    "previousScreen": "C05",
+    "nextScreen": "C07",
+    "entryPoints": [
+      "C05"
+    ],
+    "exitPoints": [
+      "C07",
+      "C05"
+    ]
+  },
+  {
+    "screenId": "C07",
+    "role": "customer",
+    "folder": "booking_step_4_schedule_visit_chaircare_mobile",
+    "title": "Booking Step 4: Schedule Visit & Slot",
+    "previousScreen": "C06",
+    "nextScreen": "C08",
+    "entryPoints": [
+      "C06"
+    ],
+    "exitPoints": [
+      "C08",
+      "C06"
+    ]
+  },
+  {
+    "screenId": "C08",
+    "role": "customer",
+    "folder": "booking_step_5_confirm_request_chaircare_mobile",
+    "title": "Booking Step 5: Review & Confirm Request",
+    "previousScreen": "C07",
+    "nextScreen": "C09",
+    "entryPoints": [
+      "C07"
+    ],
+    "exitPoints": [
+      "C09",
+      "C07"
+    ]
+  },
+  {
+    "screenId": "C09",
+    "role": "customer",
+    "folder": "finding_a_technician_chaircare_mobile",
+    "title": "Finding a Technician (Radar Matching)",
+    "previousScreen": "C08",
+    "nextScreen": "C10",
+    "entryPoints": [
+      "C08"
+    ],
+    "exitPoints": [
+      "C10",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "C10",
+    "role": "customer",
+    "folder": "technician_assigned_chaircare_mobile",
+    "title": "Technician Assigned",
+    "previousScreen": "C09",
+    "nextScreen": "C11",
+    "entryPoints": [
+      "C09"
+    ],
+    "exitPoints": [
+      "C11",
+      "C18"
+    ]
+  },
+  {
+    "screenId": "C11",
+    "role": "customer",
+    "folder": "live_technician_tracking_chaircare_mobile",
+    "title": "Live Technician Tracking (GPS Map)",
+    "previousScreen": "C10",
+    "nextScreen": "C12",
+    "entryPoints": [
+      "C10",
+      "C19"
+    ],
+    "exitPoints": [
+      "C12",
+      "C18"
+    ]
+  },
+  {
+    "screenId": "C12",
+    "role": "customer",
+    "folder": "technician_arrived_chaircare_mobile",
+    "title": "Technician Arrived",
+    "previousScreen": "C11",
+    "nextScreen": "C13",
+    "entryPoints": [
+      "C11"
+    ],
+    "exitPoints": [
+      "C13",
+      "C18"
+    ]
+  },
+  {
+    "screenId": "C13",
+    "role": "customer",
+    "folder": "active_service_chaircare_mobile",
+    "title": "Active Service Execution Checklist",
+    "previousScreen": "C12",
+    "nextScreen": "C14",
+    "entryPoints": [
+      "C12",
+      "C19"
+    ],
+    "exitPoints": [
+      "C14",
+      "C18"
+    ]
+  },
+  {
+    "screenId": "C14",
+    "role": "customer",
+    "folder": "service_completed_chaircare_mobile",
+    "title": "Service Completed",
+    "previousScreen": "C13",
+    "nextScreen": "C15",
+    "entryPoints": [
+      "C13"
+    ],
+    "exitPoints": [
+      "C15"
+    ]
+  },
+  {
+    "screenId": "C15",
+    "role": "customer",
+    "folder": "payment_invoice_chaircare_mobile",
+    "title": "Payment Invoice",
+    "previousScreen": "C14",
+    "nextScreen": "C16",
+    "entryPoints": [
+      "C14"
+    ],
+    "exitPoints": [
+      "C16"
+    ]
+  },
+  {
+    "screenId": "C16",
+    "role": "customer",
+    "folder": "payment_success_chaircare_mobile",
+    "title": "Payment Success & Warranty Certificate",
+    "previousScreen": "C15",
+    "nextScreen": "C17",
+    "entryPoints": [
+      "C15"
+    ],
+    "exitPoints": [
+      "C17"
+    ]
+  },
+  {
+    "screenId": "C17",
+    "role": "customer",
+    "folder": "rate_your_experience_chaircare_mobile",
+    "title": "Rate Your Experience (Review & Tip)",
+    "previousScreen": "C16",
+    "nextScreen": "C19",
+    "entryPoints": [
+      "C16"
+    ],
+    "exitPoints": [
+      "C19",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "C18",
+    "role": "customer",
+    "folder": "chat_with_technician_chaircare_mobile",
+    "title": "Chat With Technician",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "C10",
+      "C11",
+      "C12",
+      "C13",
+      "C20"
+    ],
+    "exitPoints": [
+      "BackToCaller"
+    ]
+  },
+  {
+    "screenId": "C19",
+    "role": "customer",
+    "folder": "my_requests_chaircare_mobile",
+    "title": "My Requests (Active & Historic Bookings)",
+    "previousScreen": null,
+    "nextScreen": "C20",
+    "entryPoints": [
+      "CustomerTabRequests"
+    ],
+    "exitPoints": [
+      "C20",
+      "C11",
+      "C13"
+    ]
+  },
+  {
+    "screenId": "C20",
+    "role": "customer",
+    "folder": "request_details_chaircare_mobile",
+    "title": "Request Details",
+    "previousScreen": "C19",
+    "nextScreen": "C18",
+    "entryPoints": [
+      "C19"
+    ],
+    "exitPoints": [
+      "C18",
+      "C19"
+    ]
+  },
+  {
+    "screenId": "C21",
+    "role": "customer",
+    "folder": "notifications_chaircare_mobile",
+    "title": "Customer Notifications",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "CustomerTabNotifications"
+    ],
+    "exitPoints": [
+      "C20",
+      "C19"
+    ]
+  },
+  {
+    "screenId": "C22",
+    "role": "customer",
+    "folder": "customer_profile_chaircare_mobile",
+    "title": "Customer Profile & Settings",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "CustomerTabProfile"
+    ],
+    "exitPoints": [
+      "C19",
+      "C01"
+    ]
+  }
+]

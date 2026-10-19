@@ -1,0 +1,1484 @@
+import { Response } from 'express';
+import bcrypt from 'bcryptjs';
+import { query } from '../config/database';
+import { AuthenticatedRequest } from '../types';
+
+export const getDashboardMetrics = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  // Aggregate real database stats
+  const [
+    reqStats,
+    pendingReqs,
+    todayReqs,
+    onlineTechs,
+    verifiedTechs,
+    totalTechs,
+    totalCusts,
+    revenueRes,
+    pendingVerif,
+    avgRatingRes,
+    recentRequests,
+    supportRes,
+    disputesRes,
+  ] = await Promise.all([
+    query(`SELECT COUNT(*) as active_count FROM service_requests WHERE status NOT IN ('completed', 'cancelled');`),
+    query(`SELECT COUNT(*) as pending_count FROM service_requests WHERE status = 'finding_technician';`),
+    query(`SELECT COUNT(*) as today_count FROM service_requests WHERE created_at >= CURRENT_DATE;`),
+    query(`SELECT COUNT(*) as online_count FROM technician_profiles WHERE is_online = TRUE;`),
+    query(`SELECT COUNT(*) as verified_count FROM technician_profiles WHERE verification_status = 'verified';`),
+    query(`SELECT COUNT(*) as total_tech_count FROM users WHERE role = 'technician';`),
+    query(`SELECT COUNT(*) as total_cust_count FROM users WHERE role = 'customer';`),
+    query(`SELECT COALESCE(SUM(amount), 0) as total_rev FROM payments WHERE status = 'completed';`),
+    query(`SELECT COUNT(*) as pending_verif_count FROM technician_profiles WHERE verification_status = 'pending';`),
+    query(`SELECT COALESCE(AVG(rating), 5.0)::numeric(3,2) as avg_rating FROM reviews;`),
+    query(`
+      SELECT sr.id, sr.tracking_code, sr.chair_model, sr.status, sr.total_amount, sr.created_at, sr.address,
+             sr.time_slot, sr.visit_date, sr.issue_description,
+             cu.name as customer_name, cu.phone as customer_phone,
+             tu.name as technician_name, tu.phone as technician_phone,
+             s.title as service_title,
+             tp.current_zone, tp.is_online, tp.rating as technician_rating, tp.vehicle_info as technician_vehicle
+      FROM service_requests sr
+      JOIN users cu ON sr.customer_id = cu.id
+      LEFT JOIN users tu ON sr.technician_id = tu.id
+      LEFT JOIN services s ON sr.service_id = s.id
+      LEFT JOIN technician_profiles tp ON sr.technician_id = tp.user_id
+      ORDER BY 
+        CASE 
+          WHEN sr.status IN ('in_route', 'arrived', 'in_progress', 'assigned') THEN 1 
+          WHEN sr.status = 'finding_technician' THEN 2
+          ELSE 3
+        END,
+        sr.created_at DESC
+      LIMIT 20;
+    `),
+    query(`SELECT COUNT(*) as unresolved_support FROM support_tickets WHERE status IN ('open', 'under_review');`).catch(() => ({ rows: [{ unresolved_support: 0 }] })),
+    query(`SELECT COUNT(*) as pending_disputes FROM refunds WHERE status IN ('open', 'under_review', 'escalated', 'pending');`).catch(() => ({ rows: [{ pending_disputes: 0 }] })),
+  ]);
+
+  const activeRequests = Number(reqStats.rows[0]?.active_count || 0);
+  const pendingRequests = Number(pendingReqs.rows[0]?.pending_count || 0);
+  const todayRequests = Number(todayReqs.rows[0]?.today_count || 0);
+  const onlineTechnicians = Number(onlineTechs.rows[0]?.online_count || 0);
+  const verifiedTechnicians = Number(verifiedTechs.rows[0]?.verified_count || 0);
+  const totalTechnicians = Number(totalTechs.rows[0]?.total_tech_count || 0);
+  const totalCustomers = Number(totalCusts.rows[0]?.total_cust_count || 0);
+  const totalRevenue = Number(revenueRes.rows[0]?.total_rev || 0);
+  const pendingVerifications = Number(pendingVerif.rows[0]?.pending_verif_count || 0);
+  const satisfactionScore = Number(avgRatingRes.rows[0]?.avg_rating || 5.0);
+  const unresolvedSupport = Number(supportRes.rows[0]?.unresolved_support || 0);
+  const pendingDisputes = Number(disputesRes.rows[0]?.pending_disputes || 0);
+
+  const formattedRecent = recentRequests.rows.map((r: any) => ({
+    id: r.id,
+    trackingCode: r.tracking_code,
+    tracking_code: r.tracking_code,
+    chairModel: r.chair_model,
+    chair_model: r.chair_model,
+    serviceTitle: r.service_title || 'Office Chair Service',
+    service_title: r.service_title || 'Office Chair Service',
+    status: r.status,
+    totalAmount: Number(r.total_amount),
+    total_amount: Number(r.total_amount),
+    customerName: r.customer_name,
+    customer_name: r.customer_name,
+    customerPhone: r.customer_phone,
+    customer_phone: r.customer_phone,
+    technicianName: r.technician_name || 'Unassigned (Awaiting Match)',
+    technician_name: r.technician_name || 'Unassigned (Awaiting Match)',
+    technicianPhone: r.technician_phone,
+    technician_phone: r.technician_phone,
+    technicianRating: Number(r.technician_rating || 5.0).toFixed(1),
+    technician_rating: Number(r.technician_rating || 5.0).toFixed(1),
+    technicianVehicle: r.technician_vehicle || 'Field Service Unit',
+    technician_vehicle: r.technician_vehicle || 'Field Service Unit',
+    address: r.address || 'NCR Region',
+    timeSlot: r.time_slot,
+    time_slot: r.time_slot,
+    visitDate: r.visit_date,
+    visit_date: r.visit_date,
+    issueDescription: r.issue_description,
+    issue_description: r.issue_description,
+    currentZone: r.current_zone || 'NCR Hub',
+    current_zone: r.current_zone || 'NCR Hub',
+    isOnline: Boolean(r.is_online),
+    createdAt: r.created_at,
+    created_at: r.created_at,
+  }));
+
+  const activeLiveOperations = formattedRecent.filter((r: any) =>
+    ['finding_technician', 'assigned', 'in_route', 'arrived', 'in_progress'].includes(r.status)
+  );
+
+  res.json({
+    success: true,
+    data: {
+      activeRequests,
+      pendingRequests,
+      todayRequests,
+      onlineTechnicians,
+      verifiedTechnicians,
+      totalTechnicians,
+      totalCustomers,
+      totalRevenue,
+      pendingVerifications,
+      satisfactionScore,
+      unresolvedSupport,
+      pendingDisputes,
+      latestRequests: formattedRecent,
+      recentRequests: formattedRecent,
+      activeLiveOperations,
+      metrics: {
+        activeRequests,
+        pendingRequests,
+        todayRequests,
+        onlineTechnicians,
+        verifiedTechnicians,
+        totalTechnicians,
+        totalCustomers,
+        totalRevenue,
+        pendingVerifications,
+        satisfactionScore,
+        unresolvedSupport,
+        pendingDisputes,
+      },
+    },
+  });
+};
+
+export const getAllRequests = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { status, limit = 50, page = 1 } = req.query;
+  const offset = (Number(page) - 1) * Number(limit);
+
+  let filterClause = '';
+  const params: any[] = [Number(limit), offset];
+
+  if (status && status !== 'all') {
+    filterClause = 'WHERE sr.status = $3';
+    params.push(status);
+  }
+
+  const countRes = await query(
+    `SELECT COUNT(*) as total FROM service_requests sr ${filterClause};`,
+    status && status !== 'all' ? [status] : []
+  );
+  const total = Number(countRes.rows[0]?.total || 0);
+
+  const result = await query(
+    `SELECT 
+      sr.id,
+      sr.tracking_code,
+      sr.chair_model,
+      sr.issue_description,
+      sr.status,
+      sr.address,
+      sr.unit_floor,
+      sr.time_slot,
+      sr.visit_date,
+      sr.total_amount,
+      sr.is_paid,
+      sr.created_at,
+      cu.name as customer_name,
+      cu.phone as customer_phone,
+      tu.name as technician_name,
+      tu.phone as technician_phone,
+      tp.rating as technician_rating,
+      tp.current_zone,
+      tp.vehicle_info,
+      s.title as service_title
+     FROM service_requests sr
+     JOIN users cu ON sr.customer_id = cu.id
+     LEFT JOIN users tu ON sr.technician_id = tu.id
+     LEFT JOIN services s ON sr.service_id = s.id
+     LEFT JOIN technician_profiles tp ON sr.technician_id = tp.user_id
+     ${filterClause}
+     ORDER BY sr.created_at DESC
+     LIMIT $1 OFFSET $2;`,
+    params
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((r) => ({
+      id: r.id,
+      trackingCode: r.tracking_code,
+      chairModel: r.chair_model,
+      issueDescription: r.issue_description,
+      status: r.status,
+      address: r.address,
+      unitFloor: r.unit_floor,
+      timeSlot: r.time_slot,
+      visitDate: r.visit_date,
+      totalAmount: Number(r.total_amount),
+      isPaid: r.is_paid,
+      customerName: r.customer_name,
+      customerPhone: r.customer_phone,
+      technicianName: r.technician_name,
+      technicianPhone: r.technician_phone,
+      technicianRating: r.technician_rating ? Number(r.technician_rating).toFixed(1) : '5.0',
+      currentZone: r.current_zone || 'Gurugram & Delhi NCR',
+      vehicleInfo: r.vehicle_info || 'Field Service Unit',
+      serviceTitle: r.service_title,
+      createdAt: r.created_at,
+    })),
+    pagination: {
+      page: Number(page),
+      limit: Number(limit),
+      total,
+      totalPages: Math.ceil(total / Number(limit)),
+    },
+  });
+};
+
+export const getAllTechnicians = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      u.id,
+      u.name,
+      u.email,
+      u.phone,
+      u.avatar_url,
+      u.is_active,
+      u.created_at,
+      tp.rating,
+      tp.completed_jobs_count,
+      tp.is_online,
+      tp.verification_status,
+      tp.current_zone,
+      tp.vehicle_info,
+      tp.today_earnings,
+      (
+        SELECT COUNT(*) 
+        FROM service_requests sr 
+        WHERE sr.technician_id = u.id 
+          AND sr.status IN ('in_route', 'arrived', 'in_progress', 'assigned')
+      ) as active_jobs_count,
+      (
+        SELECT sr.tracking_code 
+        FROM service_requests sr 
+        WHERE sr.technician_id = u.id 
+          AND sr.status IN ('in_route', 'arrived', 'in_progress', 'assigned')
+        ORDER BY sr.created_at DESC 
+        LIMIT 1
+      ) as active_job_code,
+      (
+        SELECT sr.status 
+        FROM service_requests sr 
+        WHERE sr.technician_id = u.id 
+          AND sr.status IN ('in_route', 'arrived', 'in_progress', 'assigned')
+        ORDER BY sr.created_at DESC 
+        LIMIT 1
+      ) as active_job_status
+     FROM users u
+     JOIN technician_profiles tp ON u.id = tp.user_id
+     WHERE u.role = 'technician'
+     ORDER BY u.created_at DESC;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((r) => {
+      const activeCount = Number(r.active_jobs_count || 0);
+      const isOnline = Boolean(r.is_online);
+      const dutyState = !isOnline
+        ? 'offline'
+        : activeCount > 0
+        ? 'doing_job'
+        : 'online';
+
+      return {
+        id: r.id,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+        avatarUrl: r.avatar_url,
+        isActive: r.is_active,
+        rating: Number(r.rating || 5.0),
+        completedJobs: Number(r.completed_jobs_count || 0),
+        isOnline,
+        activeJobsCount: activeCount,
+        activeJobCode: r.active_job_code || null,
+        activeJobStatus: r.active_job_status || null,
+        dutyState,
+        verificationStatus: r.verification_status,
+        zone: r.current_zone,
+        vehicleInfo: r.vehicle_info,
+        todayEarnings: Number(r.today_earnings || 0),
+        createdAt: r.created_at,
+      };
+    }),
+  });
+};
+
+export const getTechnicianDetails = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+
+  const profileRes = await query(
+    `SELECT 
+      u.id,
+      u.name,
+      u.email,
+      u.phone,
+      u.avatar_url,
+      u.is_active,
+      u.created_at,
+      tp.rating,
+      tp.completed_jobs_count,
+      tp.is_online,
+      tp.verification_status,
+      tp.suspended_reason,
+      tp.current_zone,
+      tp.vehicle_info,
+      tp.today_earnings
+     FROM users u
+     JOIN technician_profiles tp ON u.id = tp.user_id
+     WHERE u.id::text = $1 OR u.email = $1;`,
+    [id]
+  );
+
+  if (profileRes.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'Technician not found.' });
+    return;
+  }
+
+  const tech = profileRes.rows[0];
+  const techId = tech.id;
+
+  const [jobsRes, reviewsRes] = await Promise.all([
+    query(
+      `SELECT 
+        sr.id,
+        sr.tracking_code,
+        sr.chair_model,
+        sr.issue_description,
+        sr.status,
+        sr.address,
+        sr.unit_floor,
+        sr.time_slot,
+        sr.visit_date,
+        sr.total_amount,
+        sr.is_paid,
+        sr.created_at,
+        sr.updated_at,
+        cu.name as customer_name,
+        cu.phone as customer_phone,
+        s.title as service_title
+       FROM service_requests sr
+       JOIN users cu ON sr.customer_id = cu.id
+       LEFT JOIN services s ON sr.service_id = s.id
+       WHERE sr.technician_id = $1
+       ORDER BY sr.created_at DESC
+       LIMIT 30;`,
+      [techId]
+    ),
+    query(
+      `SELECT 
+        r.id,
+        r.rating,
+        r.comment,
+        r.created_at,
+        cu.name as customer_name,
+        sr.tracking_code,
+        sr.chair_model,
+        s.title as service_title
+       FROM reviews r
+       JOIN service_requests sr ON r.request_id = sr.id
+       JOIN users cu ON r.customer_id = cu.id
+       LEFT JOIN services s ON sr.service_id = s.id
+       WHERE r.technician_id = $1
+       ORDER BY r.created_at DESC
+       LIMIT 30;`,
+      [techId]
+    ),
+  ]);
+
+  const activeJob = jobsRes.rows.find((j: any) =>
+    ['in_route', 'arrived', 'in_progress', 'assigned'].includes(j.status)
+  );
+
+  const activeJobsCount = jobsRes.rows.filter((j: any) =>
+    ['in_route', 'arrived', 'in_progress', 'assigned'].includes(j.status)
+  ).length;
+
+  const completedCount = Number(tech.completed_jobs_count || 0);
+  const isOnline = Boolean(tech.is_online);
+  const dutyState = !isOnline
+    ? 'offline'
+    : activeJob
+    ? 'doing_job'
+    : 'online';
+
+  res.json({
+    success: true,
+    data: {
+      id: tech.id,
+      name: tech.name,
+      email: tech.email,
+      phone: tech.phone || '+91 98112 04921',
+      avatarUrl: tech.avatar_url,
+      isActive: tech.is_active,
+      rating: Number(tech.rating || 5.0),
+      completedJobs: completedCount,
+      activeJobsCount,
+      todayEarnings: Number(tech.today_earnings || 0),
+      isOnline,
+      dutyState,
+      verificationStatus: tech.verification_status,
+      suspendedReason: tech.suspended_reason,
+      zone: tech.current_zone || 'Delhi NCR Hub',
+      vehicleInfo: tech.vehicle_info || 'Mobile Van #CC-04',
+      createdAt: tech.created_at,
+      currentJob: activeJob
+        ? {
+            id: activeJob.id,
+            trackingCode: activeJob.tracking_code,
+            chairModel: activeJob.chair_model,
+            serviceTitle: activeJob.service_title || 'Chair Service',
+            status: activeJob.status,
+            customerName: activeJob.customer_name,
+            address: activeJob.address,
+            timeSlot: activeJob.time_slot,
+          }
+        : null,
+      jobs: jobsRes.rows.map((j: any) => ({
+        id: j.id,
+        trackingCode: j.tracking_code,
+        chairModel: j.chair_model,
+        serviceTitle: j.service_title || 'Chair Service',
+        issueDescription: j.issue_description,
+        status: j.status,
+        address: j.address,
+        unitFloor: j.unit_floor,
+        timeSlot: j.time_slot,
+        visitDate: j.visit_date,
+        totalAmount: Number(j.total_amount),
+        isPaid: j.is_paid,
+        customerName: j.customer_name,
+        customerPhone: j.customer_phone,
+        createdAt: j.created_at,
+      })),
+      reviews: reviewsRes.rows.map((r: any) => ({
+        id: r.id,
+        rating: Number(r.rating),
+        comment: r.comment || '',
+        customerName: r.customer_name,
+        trackingCode: r.tracking_code,
+        chairModel: r.chair_model,
+        serviceTitle: r.service_title || 'Chair Repair',
+        createdAt: r.created_at,
+      })),
+    },
+  });
+};
+
+export const verifyTechnician = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { verificationStatus, suspendedReason } = req.body;
+  const adminId = req.user?.userId;
+
+  await query(
+    `UPDATE technician_profiles
+     SET verification_status = $1,
+         suspended_reason = COALESCE($2, suspended_reason),
+         updated_at = NOW()
+     WHERE user_id = $3;`,
+    [verificationStatus, suspendedReason || null, id]
+  );
+
+  // Log admin action
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'VERIFY_TECHNICIAN', 'technician', $2, $3);`,
+      [adminId, id, JSON.stringify({ verificationStatus, suspendedReason })]
+    );
+  }
+
+  res.json({
+    success: true,
+    message: `Technician verification status updated to ${verificationStatus}.`,
+  });
+};
+
+export const assignTechnician = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { technicianId } = req.body;
+  const adminId = req.user?.userId;
+
+  const techCheck = await query(
+    "SELECT id, name FROM users WHERE id = $1 AND role = 'technician';",
+    [technicianId]
+  );
+
+  if (techCheck.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'Technician not found.' });
+    return;
+  }
+
+  const techName = techCheck.rows[0].name;
+
+  const cleanId = String(id).trim().replace(/^#/, '');
+  const reqRes = await query(
+    `SELECT id, tracking_code, customer_id, chair_model, address 
+     FROM service_requests
+     WHERE id::text = $1 OR id::text = $2 OR tracking_code = $1 OR tracking_code = $2;`,
+    [id, cleanId]
+  );
+
+  if (reqRes.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'Service request not found.' });
+    return;
+  }
+
+  const targetReq = reqRes.rows[0];
+  const actualReqId = targetReq.id;
+
+  // Check if technician is already working on an active job
+  const activeCheck = await query(
+    `SELECT id, tracking_code, status, chair_model 
+     FROM service_requests
+     WHERE technician_id = $1 
+       AND status IN ('assigned', 'in_route', 'arrived', 'in_progress')
+       AND id != $2
+     ORDER BY updated_at DESC
+     LIMIT 1;`,
+    [technicianId, actualReqId]
+  );
+
+  const isAlreadyInJob = activeCheck.rows.length > 0;
+  const currentActiveJob = isAlreadyInJob ? activeCheck.rows[0] : null;
+
+  // Admin assignment proceeds regardless of technician's current busy state
+  await query(
+    `UPDATE service_requests
+     SET technician_id = $1, status = 'assigned', updated_at = NOW()
+     WHERE id = $2;`,
+    [technicianId, actualReqId]
+  );
+
+  const historyNote = isAlreadyInJob
+    ? `Manually assigned to technician ${techName} by Operations Admin (Queued next: technician currently working on #${currentActiveJob?.tracking_code}).`
+    : `Manually assigned to technician ${techName} by Operations Admin.`;
+
+  await query(
+    `INSERT INTO service_status_history (request_id, status, updated_by, notes)
+     VALUES ($1, 'assigned', $2, $3);`,
+    [actualReqId, adminId, historyNote]
+  );
+
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'MANUAL_TECH_ASSIGN', 'service_request', $2, $3);`,
+      [
+        adminId,
+        actualReqId,
+        JSON.stringify({
+          technicianId,
+          technicianName: techName,
+          isQueued: isAlreadyInJob,
+          currentActiveTrackingCode: currentActiveJob?.tracking_code || null,
+        }),
+      ]
+    );
+  }
+
+  // 🔔 NOTIFY TECHNICIAN: Admin has assigned you a job
+  try {
+    const notifTitle = 'Admin Assigned You a Job';
+    const notifMessage = isAlreadyInJob
+      ? `Admin has assigned you a new job #${targetReq.tracking_code} (${targetReq.chair_model || 'Service'}). It is queued next — you can start it once your current job #${currentActiveJob?.tracking_code} is completed.`
+      : `Admin has assigned you a job #${targetReq.tracking_code} (${targetReq.chair_model || 'Service'}). Tap to view details and start route.`;
+
+    await query(
+      `INSERT INTO notifications (user_id, title, message, type, data)
+       VALUES ($1, $2, $3, 'admin_job_assigned', $4);`,
+      [
+        technicianId,
+        notifTitle,
+        notifMessage,
+        JSON.stringify({
+          requestId: actualReqId,
+          trackingCode: targetReq.tracking_code,
+          chairModel: targetReq.chair_model,
+          address: targetReq.address,
+          assignedByAdmin: true,
+          isQueued: isAlreadyInJob,
+          currentActiveTrackingCode: currentActiveJob?.tracking_code || null,
+        }),
+      ]
+    );
+  } catch (notifErr: any) {
+    console.warn('⚠️ [Technician admin-assign notification error]:', notifErr.message);
+  }
+
+  // 🔔 NOTIFY CUSTOMER: Technician assigned
+  try {
+    if (targetReq.customer_id) {
+      await query(
+        `INSERT INTO notifications (user_id, title, message, type, data)
+         VALUES ($1, $2, $3, 'technician_assigned', $4);`,
+        [
+          targetReq.customer_id,
+          `Technician Assigned #${targetReq.tracking_code}`,
+          `${techName} has been assigned to your service request by Operations Admin.`,
+          JSON.stringify({
+            requestId: actualReqId,
+            trackingCode: targetReq.tracking_code,
+            technicianId,
+            technicianName: techName,
+          }),
+        ]
+      );
+    }
+  } catch (custNotifErr: any) {
+    console.warn('⚠️ [Customer admin-assign notification error]:', custNotifErr.message);
+  }
+
+  res.json({
+    success: true,
+    message: isAlreadyInJob
+      ? `Assigned technician ${techName} to request successfully (queued as next job since technician is currently working on #${currentActiveJob?.tracking_code}). Notification sent to technician.`
+      : `Assigned technician ${techName} to request successfully. Notification sent to technician.`,
+    data: {
+      requestId: actualReqId,
+      technicianId,
+      isQueued: isAlreadyInJob,
+      currentActiveTrackingCode: currentActiveJob?.tracking_code || null,
+    },
+  });
+};
+
+export const getPayments = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      p.id,
+      p.amount,
+      p.currency,
+      p.status,
+      p.provider,
+      p.transaction_id,
+      p.created_at,
+      sr.tracking_code,
+      cu.name as customer_name
+     FROM payments p
+     JOIN service_requests sr ON p.request_id = sr.id
+     JOIN users cu ON sr.customer_id = cu.id
+     ORDER BY p.created_at DESC
+     LIMIT 50;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((p) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      currency: p.currency,
+      status: p.status,
+      provider: p.provider,
+      transactionId: p.transaction_id,
+      trackingCode: p.tracking_code,
+      customerName: p.customer_name,
+      createdAt: p.created_at,
+    })),
+  });
+};
+
+export const getAllCustomers = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      u.id,
+      u.name,
+      u.email,
+      u.phone,
+      u.is_active,
+      u.created_at,
+      cp.default_address,
+      cp.loyalty_points,
+      COUNT(sr.id) as requests_count,
+      COALESCE(SUM(sr.total_amount), 0) as total_spent,
+      MAX(sr.created_at) as last_service_time,
+      MAX(s.title) as last_service_title
+     FROM users u
+     LEFT JOIN customer_profiles cp ON u.id = cp.user_id
+     LEFT JOIN service_requests sr ON u.id = sr.customer_id
+     LEFT JOIN services s ON sr.service_id = s.id
+     WHERE u.role = 'customer'
+     GROUP BY u.id, u.name, u.email, u.phone, u.is_active, u.created_at, cp.default_address, cp.loyalty_points
+     ORDER BY u.created_at DESC;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone || '+91 98000 00000',
+      isActive: c.is_active,
+      location: c.default_address || 'Unspecified Location',
+      requestsCount: Number(c.requests_count || 0),
+      totalSpent: Number(c.total_spent || 0),
+      loyaltyPoints: Number(c.loyalty_points || 0),
+      lastServiceTitle: c.last_service_title || 'No Service Yet',
+      lastServiceTime: c.last_service_time || 'None',
+      createdAt: c.created_at,
+    })),
+  });
+};
+
+export const getAllReviews = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      r.id,
+      r.rating,
+      r.comment,
+      r.is_moderated,
+      r.created_at,
+      sr.tracking_code,
+      sr.chair_model,
+      cu.name as customer_name,
+      tu.name as technician_name,
+      s.title as service_title,
+      s.code as service_code
+     FROM reviews r
+     JOIN service_requests sr ON r.request_id = sr.id
+     JOIN users cu ON r.customer_id = cu.id
+     JOIN users tu ON r.technician_id = tu.id
+     LEFT JOIN services s ON sr.service_id = s.id
+     ORDER BY r.created_at DESC
+     LIMIT 100;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((r) => ({
+      id: r.id,
+      rating: Number(r.rating),
+      comment: r.comment || '',
+      isModerated: r.is_moderated,
+      trackingCode: r.tracking_code,
+      chairModel: r.chair_model,
+      customerName: r.customer_name,
+      technicianName: r.technician_name,
+      serviceTitle: r.service_title || 'Service',
+      serviceCode: r.service_code || '#CC',
+      createdAt: r.created_at,
+    })),
+  });
+};
+
+export const getAdminUsers = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      id,
+      name,
+      email,
+      phone,
+      is_active,
+      created_at
+     FROM users
+     WHERE role = 'admin'
+     ORDER BY created_at ASC;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((a) => ({
+      id: a.id,
+      name: a.name,
+      email: a.email,
+      phone: a.phone || '+91 98000 00000',
+      isActive: a.is_active,
+      role: 'Super Admin',
+      createdAt: a.created_at,
+    })),
+  });
+};
+
+export const getActivityLogs = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      ssh.id,
+      ssh.status,
+      ssh.notes,
+      ssh.created_at,
+      sr.tracking_code,
+      sr.chair_model,
+      cu.name as customer_name,
+      tu.name as technician_name
+     FROM service_status_history ssh
+     JOIN service_requests sr ON ssh.request_id = sr.id
+     JOIN users cu ON sr.customer_id = cu.id
+     LEFT JOIN users tu ON sr.technician_id = tu.id
+     ORDER BY ssh.created_at DESC
+     LIMIT 50;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((row) => ({
+      id: `LOG-${row.id.slice(0, 5).toUpperCase()}`,
+      category: 'operations',
+      badgeCategory: 'OPERATIONS',
+      badgeStatus: row.status,
+      badgeStatusType: 'completed',
+      time: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      title: `Service Status: ${row.status.replace('_', ' ').toUpperCase()}`,
+      icon: 'sync',
+      iconColor: '#005ac1',
+      target: `${row.chair_model || 'Chair'} (${row.tracking_code})`,
+      contextNote: row.notes || 'Status updated in workflow',
+      contextNoteIcon: 'info',
+      contextNoteError: false,
+      actorInitials: row.technician_name ? row.technician_name.slice(0, 2).toUpperCase() : 'SYS',
+      actorName: row.technician_name || 'System Dispatch',
+      actionButtonLabel: 'Inspect Request',
+      actionButtonIcon: 'arrow_forward',
+      nonce: `0x${row.id.slice(0, 8)}`,
+      ipOrigin: '103.21.144.18 (Secure Gateway)',
+      sessionId: `sess_${row.id.slice(0, 6)}`,
+      operatorAnnotation: row.notes || `Request ${row.tracking_code} status transitioned to ${row.status}`,
+    })),
+  });
+};
+
+export const getSupportTickets = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      st.id,
+      st.ticket_code,
+      st.user_id,
+      st.request_id,
+      st.subject,
+      st.message,
+      st.priority,
+      st.status,
+      st.created_at,
+      u.name as user_name,
+      u.email as user_email,
+      u.role as user_role,
+      sr.tracking_code,
+      sr.chair_model
+     FROM support_tickets st
+     JOIN users u ON st.user_id = u.id
+     LEFT JOIN service_requests sr ON st.request_id = sr.id
+     ORDER BY st.created_at DESC
+     LIMIT 50;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((row) => ({
+      id: row.id,
+      code: row.ticket_code,
+      priority: row.priority === 'urgent' || row.priority === 'high' ? 'high' : row.priority === 'low' ? 'low' : 'med',
+      priorityLabel: `${(row.priority || 'medium').toUpperCase()} Priority`,
+      status: row.status === 'open' ? 'Open' : row.status === 'under_review' ? 'In Progress' : 'Closed',
+      userType: row.user_role === 'technician' ? 'Technician' : 'Customer',
+      userName: row.user_name || 'Customer',
+      title: row.subject,
+      description: row.message,
+      category: 'services',
+      categoryLabel: 'Service Support',
+      timeLabel: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      trackingCode: row.tracking_code,
+      chairModel: row.chair_model,
+      accentColor: row.priority === 'urgent' || row.priority === 'high' ? '#ba1a1a' : '#005ac1',
+      primaryActionLabel: 'Investigate Ticket',
+      createdAt: row.created_at,
+    })),
+  });
+};
+
+export const assignSupportTicket = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { assignee } = req.body;
+  const adminId = req.user?.userId;
+
+  await query(
+    `UPDATE support_tickets
+     SET status = 'under_review', updated_at = NOW()
+     WHERE id::text = $1 OR ticket_code = $1;`,
+    [id]
+  );
+
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'ASSIGN_SUPPORT_TICKET', 'support_ticket', $2, $3);`,
+      [adminId, id, JSON.stringify({ assignee })]
+    );
+  }
+
+  res.json({
+    success: true,
+    message: `Support ticket assigned to ${assignee || 'support agent'}.`,
+  });
+};
+
+export const resolveSupportTicket = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { resolutionNotes } = req.body;
+  const adminId = req.user?.userId;
+
+  await query(
+    `UPDATE support_tickets
+     SET status = 'resolved', updated_at = NOW()
+     WHERE id::text = $1 OR ticket_code = $1;`,
+    [id]
+  );
+
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'RESOLVE_SUPPORT_TICKET', 'support_ticket', $2, $3);`,
+      [adminId, id, JSON.stringify({ resolutionNotes })]
+    );
+  }
+
+  res.json({
+    success: true,
+    message: 'Support ticket resolved successfully.',
+  });
+};
+
+export const getDisputes = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const result = await query(
+    `SELECT 
+      ref.id,
+      ref.amount,
+      ref.reason,
+      ref.status as refund_status,
+      ref.created_at,
+      p.transaction_id,
+      sr.tracking_code,
+      sr.chair_model,
+      sr.address,
+      cu.name as customer_name,
+      tu.name as technician_name,
+      s.title as service_title
+     FROM refunds ref
+     JOIN payments p ON ref.payment_id = p.id
+     JOIN service_requests sr ON p.request_id = sr.id
+     JOIN users cu ON sr.customer_id = cu.id
+     LEFT JOIN users tu ON sr.technician_id = tu.id
+     LEFT JOIN services s ON sr.service_id = s.id
+     ORDER BY ref.created_at DESC
+     LIMIT 50;`
+  );
+
+  res.json({
+    success: true,
+    data: result.rows.map((row) => {
+      const rawStatus = (row.refund_status || '').toLowerCase();
+      let status = 'Open';
+      if (rawStatus === 'resolved' || rawStatus === 'completed') {
+        status = 'Resolved';
+      } else if (rawStatus === 'escalated' || rawStatus === 'failed') {
+        status = 'Escalated';
+      } else if (rawStatus === 'under_review' || rawStatus === 'processing') {
+        status = 'Under Review';
+      } else {
+        status = 'Open';
+      }
+
+      const numAmount = Number(row.amount || 0);
+      const isHighPriority = numAmount >= 1000 || status === 'Escalated';
+      const isLowPriority = numAmount < 350 && status !== 'Escalated';
+      const priority = isHighPriority ? 'high' : isLowPriority ? 'low' : 'med';
+      const priorityLabel = isHighPriority ? 'High Priority' : isLowPriority ? 'Low Priority' : 'Medium Priority';
+
+      const isResolved = status === 'Resolved';
+      return {
+        id: row.id,
+        code: `DSP-${row.id.slice(0, 5).toUpperCase()}`,
+        priority,
+        priorityLabel,
+        status,
+        customerName: row.customer_name || 'Customer',
+        customerLocation: row.address ? row.address.split(',')[0].trim() : 'Gurugram',
+        technicianName: row.technician_name || 'Assigned Technician',
+        serviceTitle: row.service_title || 'Chair Service',
+        serviceCode: row.tracking_code ? (row.tracking_code.startsWith('#') ? row.tracking_code : `#${row.tracking_code}`) : `#CC-${row.id.slice(0, 5)}`,
+        amountFormatted: `₹${numAmount.toLocaleString('en-IN')}`,
+        escrowStatusText: isResolved ? 'Refund Processed' : 'Escrow Frozen',
+        isEscrowFrozen: !isResolved,
+        quoteSummary: row.reason || 'Customer reported service dispute requiring administrative review.',
+        timestamp: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        createdAt: row.created_at,
+        accentColor: isResolved ? '#009668' : isHighPriority ? '#ba1a1a' : '#0051d5',
+        actionButtonLabel: isResolved ? 'Inspect Ledger' : 'Investigate Case',
+        actionButtonIcon: isResolved ? 'receipt_long' : 'arrow_forward',
+        isResolved,
+        refundSummary: isResolved ? `Refund of ₹${numAmount} settled` : undefined,
+      };
+    }),
+  });
+};
+
+export const processRefund = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const adminId = req.user?.userId;
+
+  const refCheck = await query('SELECT * FROM refunds WHERE id = $1;', [id]);
+  if (refCheck.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'Refund record not found.' });
+    return;
+  }
+
+  const refund = refCheck.rows[0];
+  await query(
+    `UPDATE refunds SET status = 'completed', processed_at = NOW() WHERE id = $1;`,
+    [id]
+  );
+  await query(
+    `UPDATE payments SET status = 'refunded', updated_at = NOW() WHERE id = $1;`,
+    [refund.payment_id]
+  );
+
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'PROCESS_REFUND', 'refund', $2, $3);`,
+      [adminId, id, JSON.stringify({ amount: refund.amount, paymentId: refund.payment_id })]
+    );
+  }
+
+  res.json({
+    success: true,
+    message: `Refund of ₹${refund.amount} completed successfully.`,
+    data: { id, status: 'completed' },
+  });
+};
+
+export const createAdminUser = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { name, email, phone, password } = req.body;
+  const adminId = req.user?.userId;
+
+  if (!email || !name || !phone || !password) {
+    res.status(400).json({ success: false, error: 'Name, email, phone number, and password are required.' });
+    return;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedPhone = phone.trim();
+  const existing = await query(
+    `SELECT id, email, phone FROM users WHERE LOWER(email) = $1 OR (phone = $2 AND phone <> '');`,
+    [normalizedEmail, normalizedPhone]
+  );
+  if (existing.rows.length > 0) {
+    const isEmail = existing.rows.some((r) => r.email.toLowerCase() === normalizedEmail);
+    res.status(409).json({
+      success: false,
+      error: isEmail
+        ? 'An account with this email address already exists.'
+        : 'An account with this phone number already exists.',
+    });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const insertRes = await query(
+    `INSERT INTO users (name, email, phone, password_hash, role, is_active)
+     VALUES ($1, $2, $3, $4, 'admin', TRUE)
+     RETURNING id, name, email, phone, role, is_active, created_at;`,
+    [name.trim(), normalizedEmail, normalizedPhone, passwordHash]
+  );
+  const newAdmin = insertRes.rows[0];
+
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'CREATE_ADMIN_USER', 'user', $2, $3);`,
+      [adminId, newAdmin.id, JSON.stringify({ email: newAdmin.email, name: newAdmin.name })]
+    );
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Admin account created successfully.',
+    data: {
+      id: newAdmin.id,
+      name: newAdmin.name,
+      email: newAdmin.email,
+      phone: newAdmin.phone,
+      role: 'Super Admin',
+      isActive: true,
+      createdAt: newAdmin.created_at,
+    },
+  });
+};
+
+export const createTechnician = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { name, email, phone, password, zone, vehicleInfo } = req.body;
+  const adminId = req.user?.userId;
+
+  if (!name || !email || !phone || !password) {
+    res.status(400).json({
+      success: false,
+      error: 'Name, email, phone number, and password are required.',
+    });
+    return;
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedPhone = phone.trim();
+
+  // Check existing user
+  const existing = await query(
+    `SELECT id, email, phone FROM users WHERE LOWER(email) = $1 OR (phone = $2 AND phone <> '');`,
+    [normalizedEmail, normalizedPhone]
+  );
+  if (existing.rows.length > 0) {
+    const isEmail = existing.rows.some((r) => r.email.toLowerCase() === normalizedEmail);
+    res.status(409).json({
+      success: false,
+      error: isEmail
+        ? 'An account with this email address already exists.'
+        : 'An account with this phone number already exists.',
+    });
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  // 1. Create user with role 'technician'
+  const userRes = await query(
+    `INSERT INTO users (name, email, phone, password_hash, role, is_active)
+     VALUES ($1, $2, $3, $4, 'technician', TRUE)
+     RETURNING id, name, email, phone, role, is_active, created_at;`,
+    [name.trim(), normalizedEmail, normalizedPhone, passwordHash]
+  );
+  const newTechUser = userRes.rows[0];
+
+  // 2. Create technician profile with verified status
+  const defaultZone = zone && zone.trim() ? zone.trim() : 'Delhi NCR';
+  const defaultVehicle = vehicleInfo && vehicleInfo.trim() ? vehicleInfo.trim() : 'Mobile Service Van';
+  await query(
+    `INSERT INTO technician_profiles (
+       user_id,
+       verification_status,
+       is_online,
+       rating,
+       completed_jobs_count,
+       current_zone,
+       vehicle_info,
+       today_earnings
+     )
+     VALUES ($1, 'verified', TRUE, 5.0, 0, $2, $3, 0);`,
+    [newTechUser.id, defaultZone, defaultVehicle]
+  );
+
+  // 3. Log activity
+  if (adminId) {
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'CREATE_TECHNICIAN', 'technician', $2, $3);`,
+      [adminId, newTechUser.id, JSON.stringify({ email: newTechUser.email, name: newTechUser.name, phone: newTechUser.phone })]
+    );
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Technician registered and verified successfully.',
+    data: {
+      id: newTechUser.id,
+      name: newTechUser.name,
+      email: newTechUser.email,
+      phone: newTechUser.phone,
+      isActive: true,
+      rating: 5.0,
+      completedJobs: 0,
+      isOnline: true,
+      verificationStatus: 'verified',
+      zone: defaultZone,
+      vehicleInfo: defaultVehicle,
+      todayEarnings: 0,
+      createdAt: newTechUser.created_at,
+    },
+  });
+};
+
+export const getSystemStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const [usersCount, techCount, reqCount, payCount, revCount, dbTime] = await Promise.all([
+    query('SELECT COUNT(*) as count FROM users;'),
+    query('SELECT COUNT(*) as count FROM technician_profiles;'),
+    query('SELECT COUNT(*) as count FROM service_requests;'),
+    query('SELECT COUNT(*) as count FROM payments;'),
+    query('SELECT COUNT(*) as count FROM reviews;'),
+    query('SELECT NOW() as server_time;'),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      environment: process.env.NODE_ENV || 'development',
+      serverStatus: 'OPERATIONAL',
+      serverTime: dbTime.rows[0]?.server_time,
+      database: {
+        provider: 'Neon PostgreSQL (Serverless)',
+        connected: true,
+        ssl: true,
+        tables: {
+          users: Number(usersCount.rows[0]?.count || 0),
+          technicians: Number(techCount.rows[0]?.count || 0),
+          serviceRequests: Number(reqCount.rows[0]?.count || 0),
+          payments: Number(payCount.rows[0]?.count || 0),
+          reviews: Number(revCount.rows[0]?.count || 0),
+        },
+      },
+      telemetry: {
+        nodeVersion: process.version,
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryUsageMb: Math.round(process.memoryUsage().rss / (1024 * 1024)),
+      },
+    },
+  });
+};
+
+export const getAllServicesAdmin = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, created_at, updated_at
+       FROM services
+       ORDER BY created_at ASC;`
+    );
+
+    res.json({
+      success: true,
+      data: (result?.rows || []).map((row) => ({
+        id: row.id,
+        code: row.code,
+        title: row.title,
+        description: row.description,
+        estimatedPrice: Number(row.estimated_price),
+        durationMinutes: row.duration_minutes,
+        badge: row.badge,
+        imageUrl: row.image_url,
+        isActive: Boolean(row.is_active),
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve admin service catalog.',
+    });
+  }
+};
+
+export const createService = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, code, isActive } = req.body;
+
+    if (!title || !title.trim()) {
+      res.status(400).json({ success: false, error: 'Service title is required.' });
+      return;
+    }
+
+    const priceNum = Number(price !== undefined ? price : estimatedPrice);
+    if (isNaN(priceNum) || priceNum < 0) {
+      res.status(400).json({ success: false, error: 'Valid estimated price is required.' });
+      return;
+    }
+
+    // Generate unique code if not provided
+    const baseCode = (code || title)
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .slice(0, 30);
+    const uniqueSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const serviceCode = code ? code.trim().toUpperCase() : `${baseCode}_${uniqueSuffix}`;
+
+    const duration = durationMinutes ? Number(durationMinutes) : 45;
+    const desc = description?.trim() || 'Professional ergonomic chair repair service';
+    const isAct = isActive !== undefined ? Boolean(isActive) : true;
+
+    const result = await query(
+      `INSERT INTO services (code, title, description, estimated_price, duration_minutes, badge, image_url, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, created_at;`,
+      [serviceCode, title.trim(), desc, priceNum, duration, badge || null, imageUrl || null, isAct]
+    );
+
+    const row = result.rows[0];
+    res.status(201).json({
+      success: true,
+      message: 'Service created successfully.',
+      data: {
+        id: row.id,
+        code: row.code,
+        title: row.title,
+        description: row.description,
+        estimatedPrice: Number(row.estimated_price),
+        durationMinutes: row.duration_minutes,
+        badge: row.badge,
+        imageUrl: row.image_url,
+        isActive: Boolean(row.is_active),
+        createdAt: row.created_at,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message || 'Failed to create service.',
+    });
+  }
+};
+
+export const updateService = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, isActive } = req.body;
+
+    const existingRes = await query('SELECT * FROM services WHERE id = $1;', [id]);
+    if (!existingRes || existingRes.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Service not found.' });
+      return;
+    }
+
+    const existing = existingRes.rows[0];
+
+    const newTitle = title !== undefined ? title.trim() : existing.title;
+    const newDesc = description !== undefined ? description.trim() : existing.description;
+    const newPrice = (price !== undefined || estimatedPrice !== undefined)
+      ? Number(price !== undefined ? price : estimatedPrice)
+      : Number(existing.estimated_price);
+    const newDuration = durationMinutes !== undefined ? Number(durationMinutes) : existing.duration_minutes;
+    const newBadge = badge !== undefined ? badge : existing.badge;
+    const newImageUrl = imageUrl !== undefined ? imageUrl : existing.image_url;
+    const newIsActive = isActive !== undefined ? Boolean(isActive) : existing.is_active;
+
+    const result = await query(
+      `UPDATE services
+       SET title = $1,
+           description = $2,
+           estimated_price = $3,
+           duration_minutes = $4,
+           badge = $5,
+           image_url = $6,
+           is_active = $7,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8
+       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, updated_at;`,
+      [newTitle, newDesc, newPrice, newDuration, newBadge, newImageUrl, newIsActive, id]
+    );
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      message: 'Service updated successfully.',
+      data: {
+        id: row.id,
+        code: row.code,
+        title: row.title,
+        description: row.description,
+        estimatedPrice: Number(row.estimated_price),
+        durationMinutes: row.duration_minutes,
+        badge: row.badge,
+        imageUrl: row.image_url,
+        isActive: Boolean(row.is_active),
+        updatedAt: row.updated_at,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message || 'Failed to update service.',
+    });
+  }
+};
+
+export const deleteService = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+
+    try {
+      await query('DELETE FROM services WHERE id = $1;', [id]);
+    } catch {
+      await query('UPDATE services SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP WHERE id = $1;', [id]);
+    }
+
+    res.json({
+      success: true,
+      message: 'Service deleted / deactivated successfully.',
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err.message || 'Failed to delete service.',
+    });
+  }
+};
+
+

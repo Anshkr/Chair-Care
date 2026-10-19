@@ -1,0 +1,76 @@
+[
+  {
+    "screenId": "I01",
+    "role": "intro",
+    "folder": "splash_screen_chaircare_mobile",
+    "title": "Splash Screen",
+    "previousScreen": null,
+    "nextScreen": "I02",
+    "entryPoints": [
+      "AppLaunch"
+    ],
+    "exitPoints": [
+      "I02",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "I02",
+    "role": "intro",
+    "folder": "intro_1_your_chair_always_ready_chaircare_mobile",
+    "title": "Your Chair, Always Ready",
+    "previousScreen": "I01",
+    "nextScreen": "I03",
+    "entryPoints": [
+      "I01"
+    ],
+    "exitPoints": [
+      "I03",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "I03",
+    "role": "intro",
+    "folder": "intro_2_trusted_technicians_chaircare_mobile",
+    "title": "Trusted Technicians",
+    "previousScreen": "I02",
+    "nextScreen": "I04",
+    "entryPoints": [
+      "I02"
+    ],
+    "exitPoints": [
+      "I04",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "I04",
+    "role": "intro",
+    "folder": "intro_3_track_your_service_chaircare_mobile",
+    "title": "Track Your Service",
+    "previousScreen": "I03",
+    "nextScreen": "I05",
+    "entryPoints": [
+      "I03"
+    ],
+    "exitPoints": [
+      "I05",
+      "C01"
+    ]
+  },
+  {
+    "screenId": "I05",
+    "role": "intro",
+    "folder": "intro_4_one_app._every_chair_service_chaircare_mobile",
+    "title": "One App. Every Chair Service.",
+    "previousScreen": "I04",
+    "nextScreen": "C01",
+    "entryPoints": [
+      "I04"
+    ],
+    "exitPoints": [
+      "C01"
+    ]
+  }
+]

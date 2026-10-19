@@ -1,0 +1,279 @@
+[
+  {
+    "screenId": "T01",
+    "role": "technician",
+    "folder": "technician_login_chaircare_mobile",
+    "title": "Technician Login",
+    "previousScreen": null,
+    "nextScreen": "T02",
+    "entryPoints": [
+      "TechAuthLaunch"
+    ],
+    "exitPoints": [
+      "T02",
+      "T03"
+    ]
+  },
+  {
+    "screenId": "T02",
+    "role": "technician",
+    "folder": "technician_onboarding_chaircare_mobile",
+    "title": "Technician Onboarding & KYC Verification",
+    "previousScreen": "T01",
+    "nextScreen": "T03",
+    "entryPoints": [
+      "T01"
+    ],
+    "exitPoints": [
+      "T03"
+    ]
+  },
+  {
+    "screenId": "T03",
+    "role": "technician",
+    "folder": "technician_dashboard_chaircare_mobile",
+    "title": "Technician Dashboard",
+    "previousScreen": "T02",
+    "nextScreen": "T05",
+    "entryPoints": [
+      "TechTabDashboard",
+      "T02"
+    ],
+    "exitPoints": [
+      "T04",
+      "T05",
+      "T09",
+      "T14",
+      "T18"
+    ]
+  },
+  {
+    "screenId": "T04",
+    "role": "technician",
+    "folder": "technician_availability_chaircare_mobile",
+    "title": "Technician Availability & Schedule",
+    "previousScreen": "T03",
+    "nextScreen": "T03",
+    "entryPoints": [
+      "T03"
+    ],
+    "exitPoints": [
+      "T03"
+    ]
+  },
+  {
+    "screenId": "T05",
+    "role": "technician",
+    "folder": "job_requests_chaircare_mobile",
+    "title": "Job Requests Queue",
+    "previousScreen": "T03",
+    "nextScreen": "T06",
+    "entryPoints": [
+      "TechTabJobRequests",
+      "T03"
+    ],
+    "exitPoints": [
+      "T06"
+    ]
+  },
+  {
+    "screenId": "T06",
+    "role": "technician",
+    "folder": "job_request_details_chaircare_mobile",
+    "title": "Job Request Details",
+    "previousScreen": "T05",
+    "nextScreen": "T07",
+    "entryPoints": [
+      "T05"
+    ],
+    "exitPoints": [
+      "T07",
+      "T05"
+    ]
+  },
+  {
+    "screenId": "T07",
+    "role": "technician",
+    "folder": "accept_request_confirmation_chaircare_mobile",
+    "title": "Accept Request Confirmation Modal",
+    "previousScreen": "T06",
+    "nextScreen": "T08",
+    "entryPoints": [
+      "T06"
+    ],
+    "exitPoints": [
+      "T08",
+      "T06"
+    ]
+  },
+  {
+    "screenId": "T08",
+    "role": "technician",
+    "folder": "request_accepted_chaircare_mobile",
+    "title": "Job Accepted!",
+    "previousScreen": "T07",
+    "nextScreen": "T09",
+    "entryPoints": [
+      "T07"
+    ],
+    "exitPoints": [
+      "T09",
+      "T17"
+    ]
+  },
+  {
+    "screenId": "T09",
+    "role": "technician",
+    "folder": "navigate_to_customer_chaircare_mobile",
+    "title": "Navigate to Customer (GPS HUD)",
+    "previousScreen": "T08",
+    "nextScreen": "T10",
+    "entryPoints": [
+      "T08",
+      "T03"
+    ],
+    "exitPoints": [
+      "T10",
+      "T17"
+    ]
+  },
+  {
+    "screenId": "T10",
+    "role": "technician",
+    "folder": "arrived_at_customer_chaircare_mobile",
+    "title": "Arrived at Customer Location",
+    "previousScreen": "T09",
+    "nextScreen": "T11",
+    "entryPoints": [
+      "T09"
+    ],
+    "exitPoints": [
+      "T11",
+      "T17"
+    ]
+  },
+  {
+    "screenId": "T11",
+    "role": "technician",
+    "folder": "active_job_chaircare_mobile",
+    "title": "Active Job Repair Checklist",
+    "previousScreen": "T10",
+    "nextScreen": "T13",
+    "entryPoints": [
+      "T10",
+      "T03"
+    ],
+    "exitPoints": [
+      "T12",
+      "T13",
+      "T17"
+    ]
+  },
+  {
+    "screenId": "T12",
+    "role": "technician",
+    "folder": "additional_work_approval_chaircare_mobile",
+    "title": "Additional Work Approval Request",
+    "previousScreen": "T11",
+    "nextScreen": "T11",
+    "entryPoints": [
+      "T11"
+    ],
+    "exitPoints": [
+      "T11"
+    ]
+  },
+  {
+    "screenId": "T13",
+    "role": "technician",
+    "folder": "job_completed_chaircare_mobile",
+    "title": "Job Completed & Sign-off",
+    "previousScreen": "T11",
+    "nextScreen": "T14",
+    "entryPoints": [
+      "T11"
+    ],
+    "exitPoints": [
+      "T14",
+      "T03"
+    ]
+  },
+  {
+    "screenId": "T14",
+    "role": "technician",
+    "folder": "earnings_chaircare_mobile",
+    "title": "Earnings Overview",
+    "previousScreen": "T13",
+    "nextScreen": "T15",
+    "entryPoints": [
+      "TechTabEarnings",
+      "T13",
+      "T03"
+    ],
+    "exitPoints": [
+      "T15"
+    ]
+  },
+  {
+    "screenId": "T15",
+    "role": "technician",
+    "folder": "earning_details_chaircare_mobile",
+    "title": "Earning Details (Job Payout Breakdown)",
+    "previousScreen": "T14",
+    "nextScreen": "T14",
+    "entryPoints": [
+      "T14"
+    ],
+    "exitPoints": [
+      "T14"
+    ]
+  },
+  {
+    "screenId": "T16",
+    "role": "technician",
+    "folder": "reviews_ratings_chaircare_mobile",
+    "title": "Technician Reviews & Ratings",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "T18",
+      "T03"
+    ],
+    "exitPoints": [
+      "T18"
+    ]
+  },
+  {
+    "screenId": "T17",
+    "role": "technician",
+    "folder": "technician_chat_chaircare_mobile",
+    "title": "Technician Chat (with Customer & Dispatch)",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "T08",
+      "T09",
+      "T10",
+      "T11"
+    ],
+    "exitPoints": [
+      "BackToCaller"
+    ]
+  },
+  {
+    "screenId": "T18",
+    "role": "technician",
+    "folder": "technician_profile_chaircare_mobile",
+    "title": "Technician Profile & Certifications",
+    "previousScreen": null,
+    "nextScreen": null,
+    "entryPoints": [
+      "TechTabProfile"
+    ],
+    "exitPoints": [
+      "T16",
+      "T04",
+      "T01"
+    ]
+  }
+]

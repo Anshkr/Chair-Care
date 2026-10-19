@@ -1,0 +1,887 @@
+[
+  {
+    "screenId": "A01",
+    "role": "admin",
+    "folder": "super_admin_login_chaircare_mobile",
+    "title": "Super Admin Login & 2FA",
+    "previousScreen": null,
+    "nextScreen": "A02",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A02",
+    "role": "admin",
+    "folder": "admin_dashboard_chaircare_mobile",
+    "title": "Executive Command Dashboard",
+    "previousScreen": "A01",
+    "nextScreen": "A03",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A03",
+    "role": "admin",
+    "folder": "live_operations_overview_chaircare_mobile",
+    "title": "Live Operations Fleet Map",
+    "previousScreen": "A02",
+    "nextScreen": "A04",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A04",
+    "role": "admin",
+    "folder": "service_requests_chaircare_mobile",
+    "title": "Service Requests Queue",
+    "previousScreen": "A03",
+    "nextScreen": "A05",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A05",
+    "role": "admin",
+    "folder": "service_request_details_cc_10483_chaircare_mobile",
+    "title": "Service Request Details (#CC-10483)",
+    "previousScreen": "A04",
+    "nextScreen": "A06",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A06",
+    "role": "admin",
+    "folder": "assign_technician_chaircare_mobile",
+    "title": "Assign Technician Modal",
+    "previousScreen": "A05",
+    "nextScreen": "A07",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A07",
+    "role": "admin",
+    "folder": "assignment_confirmation_chaircare_mobile",
+    "title": "Assignment Confirmation",
+    "previousScreen": "A06",
+    "nextScreen": "A08",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A08",
+    "role": "admin",
+    "folder": "assignment_success_chaircare_mobile",
+    "title": "Assignment Success",
+    "previousScreen": "A07",
+    "nextScreen": "A09",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A09",
+    "role": "admin",
+    "folder": "technicians_chaircare_mobile",
+    "title": "Technicians Directory",
+    "previousScreen": "A08",
+    "nextScreen": "A10",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A10",
+    "role": "admin",
+    "folder": "technician_profile_rahul_sharma_chaircare_mobile",
+    "title": "Technician Profile (Rahul Sharma)",
+    "previousScreen": "A09",
+    "nextScreen": "A11",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A11",
+    "role": "admin",
+    "folder": "verify_technician_vikram_singh_chaircare_mobile",
+    "title": "Verify Technician (Vikram Singh)",
+    "previousScreen": "A10",
+    "nextScreen": "A12",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A12",
+    "role": "admin",
+    "folder": "suspend_reactivate_technician_chaircare_mobile",
+    "title": "Suspend / Reactivate Technician",
+    "previousScreen": "A11",
+    "nextScreen": "A13",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A13",
+    "role": "admin",
+    "folder": "technician_action_confirmed_chaircare_mobile",
+    "title": "Technician Action Confirmed",
+    "previousScreen": "A12",
+    "nextScreen": "A14",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A14",
+    "role": "admin",
+    "folder": "customers_chaircare_mobile",
+    "title": "Customers Directory",
+    "previousScreen": "A13",
+    "nextScreen": "A15",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A15",
+    "role": "admin",
+    "folder": "customer_profile_ansh_kumar_chaircare_mobile",
+    "title": "Customer Profile (Ansh Kumar)",
+    "previousScreen": "A14",
+    "nextScreen": "A16",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A16",
+    "role": "admin",
+    "folder": "customer_service_history_chaircare_mobile",
+    "title": "Customer Service History",
+    "previousScreen": "A15",
+    "nextScreen": "A17",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A17",
+    "role": "admin",
+    "folder": "customer_account_management_chaircare_mobile",
+    "title": "Customer Account Management",
+    "previousScreen": "A16",
+    "nextScreen": "A18",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A18",
+    "role": "admin",
+    "folder": "customer_action_confirmed_chaircare_mobile",
+    "title": "Customer Action Confirmed",
+    "previousScreen": "A17",
+    "nextScreen": "A19",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A19",
+    "role": "admin",
+    "folder": "payments_chaircare_mobile",
+    "title": "Payments & Platform Revenue",
+    "previousScreen": "A18",
+    "nextScreen": "A20",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A20",
+    "role": "admin",
+    "folder": "payment_details_txn_84291_chaircare_mobile",
+    "title": "Payment Details (#TXN-84291)",
+    "previousScreen": "A19",
+    "nextScreen": "A21",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A21",
+    "role": "admin",
+    "folder": "refund_payment_issue_chaircare_mobile",
+    "title": "Refund Payment Issue",
+    "previousScreen": "A20",
+    "nextScreen": "A22",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A22",
+    "role": "admin",
+    "folder": "refund_confirmation_chaircare_mobile",
+    "title": "Refund Confirmation",
+    "previousScreen": "A21",
+    "nextScreen": "A23",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A23",
+    "role": "admin",
+    "folder": "refund_completed_chaircare_mobile",
+    "title": "Refund Completed",
+    "previousScreen": "A22",
+    "nextScreen": "A24",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A24",
+    "role": "admin",
+    "folder": "support_chaircare_super_admin",
+    "title": "Support Center Overview",
+    "previousScreen": "A23",
+    "nextScreen": "A25",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A25",
+    "role": "admin",
+    "folder": "support_ticket_details_sup_10482_chaircare_mobile",
+    "title": "Support Ticket Details (#SUP-10482)",
+    "previousScreen": "A24",
+    "nextScreen": "A26",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A26",
+    "role": "admin",
+    "folder": "assign_support_ticket_sup_10482_chaircare_mobile",
+    "title": "Assign Support Ticket",
+    "previousScreen": "A25",
+    "nextScreen": "A27",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A27",
+    "role": "admin",
+    "folder": "support_conversation_chaircare_mobile",
+    "title": "Support Conversation",
+    "previousScreen": "A26",
+    "nextScreen": "A28",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A28",
+    "role": "admin",
+    "folder": "ticket_resolved_sup_10482_chaircare_mobile",
+    "title": "Ticket Resolved Successfully",
+    "previousScreen": "A27",
+    "nextScreen": "A29",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A29",
+    "role": "admin",
+    "folder": "disputes_chaircare_super_admin",
+    "title": "Disputes Hub",
+    "previousScreen": "A28",
+    "nextScreen": "A30",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A30",
+    "role": "admin",
+    "folder": "dispute_details_dsp_20481_chaircare_mobile",
+    "title": "Dispute Details (#DSP-20481)",
+    "previousScreen": "A29",
+    "nextScreen": "A31",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A31",
+    "role": "admin",
+    "folder": "dispute_resolution_chaircare_mobile",
+    "title": "Dispute Resolution",
+    "previousScreen": "A30",
+    "nextScreen": "A32",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A32",
+    "role": "admin",
+    "folder": "resolution_confirmation_chaircare_mobile",
+    "title": "Resolution Confirmation",
+    "previousScreen": "A31",
+    "nextScreen": "A33",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A33",
+    "role": "admin",
+    "folder": "dispute_resolved_chaircare_mobile",
+    "title": "Dispute Resolved",
+    "previousScreen": "A32",
+    "nextScreen": "A34",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A34",
+    "role": "admin",
+    "folder": "reviews_ratings_chaircare_mobile",
+    "title": "Reviews & Ratings Stream",
+    "previousScreen": "A33",
+    "nextScreen": "A35",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A35",
+    "role": "admin",
+    "folder": "review_details_chaircare_mobile",
+    "title": "Review Details",
+    "previousScreen": "A34",
+    "nextScreen": "A36",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A36",
+    "role": "admin",
+    "folder": "review_moderation_chaircare_mobile",
+    "title": "Review Moderation",
+    "previousScreen": "A35",
+    "nextScreen": "A37",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A37",
+    "role": "admin",
+    "folder": "hide_review_confirmation_chaircare_mobile",
+    "title": "Hide Review Confirmation",
+    "previousScreen": "A36",
+    "nextScreen": "A38",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A38",
+    "role": "admin",
+    "folder": "review_action_completed_chaircare_mobile",
+    "title": "Review Action Completed",
+    "previousScreen": "A37",
+    "nextScreen": "A39",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A39",
+    "role": "admin",
+    "folder": "notifications_chaircare_mobile",
+    "title": "Notification Broadcast Log",
+    "previousScreen": "A38",
+    "nextScreen": "A40",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A40",
+    "role": "admin",
+    "folder": "create_notification_chaircare_mobile",
+    "title": "Create Notification Campaign",
+    "previousScreen": "A39",
+    "nextScreen": "A41",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A41",
+    "role": "admin",
+    "folder": "notification_confirmation_sent_chaircare_mobile",
+    "title": "Review & Broadcast Notification",
+    "previousScreen": "A40",
+    "nextScreen": "A42",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A42",
+    "role": "admin",
+    "folder": "notification_details_chaircare_mobile",
+    "title": "Notification Details & Performance",
+    "previousScreen": "A41",
+    "nextScreen": "A43",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A43",
+    "role": "admin",
+    "folder": "notification_preferences_chaircare_mobile",
+    "title": "Notification Preferences",
+    "previousScreen": "A42",
+    "nextScreen": "A44",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A44",
+    "role": "admin",
+    "folder": "platform_configuration_chaircare_mobile",
+    "title": "Platform Configuration (Rules & SLAs)",
+    "previousScreen": "A43",
+    "nextScreen": "A45",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A45",
+    "role": "admin",
+    "folder": "service_pricing_configuration_chaircare_mobile",
+    "title": "Service Pricing Configuration",
+    "previousScreen": "A44",
+    "nextScreen": "A46",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A46",
+    "role": "admin",
+    "folder": "technician_matching_system_configuration_chaircare_mobile",
+    "title": "Technician Matching Configuration",
+    "previousScreen": "A45",
+    "nextScreen": "A47",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A47",
+    "role": "admin",
+    "folder": "security_system_preferences_chaircare_mobile",
+    "title": "Security System Preferences",
+    "previousScreen": "A46",
+    "nextScreen": "A48",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A48",
+    "role": "admin",
+    "folder": "security_activity_chaircare_mobile",
+    "title": "Security Activity Logs",
+    "previousScreen": "A47",
+    "nextScreen": "A49",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A49",
+    "role": "admin",
+    "folder": "activity_logs_chaircare_mobile",
+    "title": "Activity Audit Logs",
+    "previousScreen": "A48",
+    "nextScreen": "A50",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A50",
+    "role": "admin",
+    "folder": "activity_details_rf_39281_chaircare_mobile",
+    "title": "Log Entry Details (#RF-39281)",
+    "previousScreen": "A49",
+    "nextScreen": "A51",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A51",
+    "role": "admin",
+    "folder": "filter_activity_chaircare_mobile",
+    "title": "Filter Activity Drawer",
+    "previousScreen": "A50",
+    "nextScreen": "A52",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A52",
+    "role": "admin",
+    "folder": "audit_export_chaircare_mobile",
+    "title": "Audit Export Generator",
+    "previousScreen": "A51",
+    "nextScreen": "A53",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A53",
+    "role": "admin",
+    "folder": "admin_users_chaircare_mobile",
+    "title": "Admin Users Directory",
+    "previousScreen": "A52",
+    "nextScreen": "A54",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A54",
+    "role": "admin",
+    "folder": "add_admin_chaircare_mobile",
+    "title": "Add Admin User",
+    "previousScreen": "A53",
+    "nextScreen": "A55",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A55",
+    "role": "admin",
+    "folder": "admin_created_successfully_chaircare_mobile",
+    "title": "Admin Created Successfully",
+    "previousScreen": "A54",
+    "nextScreen": "A56",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A56",
+    "role": "admin",
+    "folder": "edit_permissions_priya_sharma_chaircare_mobile",
+    "title": "Edit Permissions (Priya Sharma)",
+    "previousScreen": "A55",
+    "nextScreen": "A57",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A57",
+    "role": "admin",
+    "folder": "admin_profile_priya_sharma_chaircare_mobile",
+    "title": "Admin Profile (Priya Sharma)",
+    "previousScreen": "A56",
+    "nextScreen": "A58",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A58",
+    "role": "admin",
+    "folder": "admin_profile_system_status_chaircare_mobile",
+    "title": "System Status & Telemetry",
+    "previousScreen": "A57",
+    "nextScreen": "A59",
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  },
+  {
+    "screenId": "A59",
+    "role": "admin",
+    "folder": "admin_settings_chaircare_mobile",
+    "title": "Admin Platform Settings",
+    "previousScreen": "A58",
+    "nextScreen": null,
+    "entryPoints": [
+      "AdminDashboard",
+      "AdminDrawer"
+    ],
+    "exitPoints": [
+      "AdminDashboard"
+    ]
+  }
+]
