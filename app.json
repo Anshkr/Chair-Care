@@ -17,6 +17,7 @@
     },
     "android": {
       "package": "com.offheman.chaircare",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F7F9FB"
@@ -27,6 +28,11 @@
     },
     "plugins": [
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1f904f88-2548-4204-97cd-76bf69358c2a"
+      }
+    }
   }
 }

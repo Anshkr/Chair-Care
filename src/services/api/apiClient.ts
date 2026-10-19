@@ -35,11 +35,30 @@ const getInitialToken = (): string | null => {
   return null;
 };
 
-let currentApiBaseUrl: string = getDefaultApiBaseUrl();
+const getSavedApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const saved = window.localStorage.getItem('chaircare_api_url');
+      if (saved && saved.trim()) return saved.trim();
+    } catch {
+      // ignore
+    }
+  }
+  return getDefaultApiBaseUrl();
+};
+
+let currentApiBaseUrl: string = getSavedApiBaseUrl();
 let authToken: string | null = getInitialToken();
 
 export const setApiBaseUrl = (url: string) => {
-  currentApiBaseUrl = url;
+  currentApiBaseUrl = url.trim();
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      window.localStorage.setItem('chaircare_api_url', url.trim());
+    } catch {
+      // ignore
+    }
+  }
 };
 
 export const getApiBaseUrl = (): string => {
