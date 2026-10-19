@@ -15,13 +15,13 @@ const getDefaultApiBaseUrl = (): string => {
     return `http://${host}:5000/api/v1`;
   }
 
-  // 3. Android or Mobile physical device default (connected on same Wi-Fi)
+  // 3. Android or Mobile physical device default (HTTPS Cloudflare Tunnel)
   if (Platform.OS === 'android') {
-    return 'http://192.168.1.11:5000/api/v1';
+    return 'https://citation-powerpoint-widespread-holes.trycloudflare.com/api/v1';
   }
 
-  // 4. iOS Simulator / default local development server port 5000
-  return 'http://192.168.1.11:5000/api/v1';
+  // 4. Default development fallback
+  return 'https://citation-powerpoint-widespread-holes.trycloudflare.com/api/v1';
 };
 
 const getInitialToken = (): string | null => {
