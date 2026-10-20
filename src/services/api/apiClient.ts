@@ -9,18 +9,7 @@ const getDefaultApiBaseUrl = (): string => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // 2. On Web browser: dynamically adapt to the same hostname serving the frontend
-  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
-    const host = window.location.hostname;
-    return `http://${host}:5000/api/v1`;
-  }
-
-  // 3. Android or Mobile physical device default (Permanent Render Cloud API)
-  if (Platform.OS === 'android') {
-    return 'https://chair-care.onrender.com/api/v1';
-  }
-
-  // 4. Default fallback
+  // 2. Default to permanent Render Cloud API
   return 'https://chair-care.onrender.com/api/v1';
 };
 
@@ -36,6 +25,9 @@ const getInitialToken = (): string | null => {
 };
 
 const getSavedApiBaseUrl = (): string => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const saved = window.localStorage.getItem('chaircare_api_url');
