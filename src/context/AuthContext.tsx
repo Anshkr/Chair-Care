@@ -274,6 +274,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     authApi.logout();
     setCurrentUser(null);
     setIsAuthenticated(false);
+    setRole('customer');
     setPendingReturnRoute(null);
   };
 

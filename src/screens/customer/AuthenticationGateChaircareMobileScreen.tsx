@@ -57,10 +57,14 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
     setIsAuthenticating(true);
 
     try {
-      const result = await login(emailOrPhone, password, 'customer');
+      const result = await login(emailOrPhone, password);
       setIsAuthenticating(false);
 
       if (result.success) {
+        if (result.user?.role === 'technician' || result.user?.role === 'admin') {
+          // AuthContext automatically sets role to technician/admin, causing RootNavigator to mount their respective dashboard
+          return;
+        }
         const targetRoute = route?.params?.returnTo || pendingReturnRoute || 'BookingStep1';
         setPendingReturnRoute(null);
         if (
