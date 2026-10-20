@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -59,13 +59,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchVisible, setIsSearchVisible] = useState<boolean>(false);
 
-  useEffect(() => {
-    loadReviews();
-  }, []);
-
-  useAdminSync(navigation, loadReviews);
-
-  const loadReviews = async () => {
+  const loadReviews = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await adminApi.getReviews();
@@ -104,7 +98,13 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadReviews();
+  }, [loadReviews]);
+
+  useAdminSync(navigation, loadReviews);
 
   useEffect(() => {
     const pulse = Animated.loop(

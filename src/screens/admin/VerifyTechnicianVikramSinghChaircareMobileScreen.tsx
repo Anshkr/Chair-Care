@@ -109,6 +109,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   };
 
   const [isRejectModalVisible, setIsRejectModalVisible] = useState(false);
+  const [isDocPreviewVisible, setIsDocPreviewVisible] = useState(false);
   const [selectedRejectReason, setSelectedRejectReason] = useState('Invalid or illegible ID/Aadhaar proof');
   const [customRejectReason, setCustomRejectReason] = useState('');
 
@@ -344,10 +345,14 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
             </View>
           </View>
 
-          {/* Doc 1: Aadhaar / National ID */}
+          {/* Doc 1: Aadhaar / National ID / Uploaded Document */}
           <View style={styles.docCard}>
             <View style={styles.docCardInner}>
-              <View style={styles.docThumbnail}>
+              <TouchableOpacity
+                style={styles.docThumbnail}
+                onPress={() => setIsDocPreviewVisible(true)}
+                activeOpacity={0.8}
+              >
                 <Image
                   source={{
                     uri: idProofDocUrl,
@@ -358,7 +363,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
                 <View style={styles.docBadgeOverlay}>
                   <AppIcon name="Award" size={18} />
                 </View>
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.docMetaCol}>
                 <View style={styles.docTitleRow}>
@@ -378,12 +383,12 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
 
                 <View style={styles.docFooterRow}>
                   <TouchableOpacity
-                    onPress={() => Alert.alert(`${idProofType} Document`, `Identity Proof Document Number: ${idProofNumber}\nStatus: Audited for Age & Validity.`)}
+                    onPress={() => setIsDocPreviewVisible(true)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.viewDocLink}>View Document ↗</Text>
                   </TouchableOpacity>
-                  <Text style={styles.docFileSize}>PDF • Encrypted</Text>
+                  <Text style={styles.docFileSize}>Valid Attached ID</Text>
                 </View>
               </View>
             </View>
@@ -622,6 +627,47 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
                 <Text style={styles.modalConfirmRejectText}>Confirm Reject</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Full Document Image Preview Modal */}
+      <Modal
+        visible={isDocPreviewVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsDocPreviewVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.modalAlertBadge, { backgroundColor: 'rgba(0, 82, 54, 0.1)' }]}>
+                <AppIcon name="ShieldCheck" size={20} color="#005236" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>{idProofType}</Text>
+                <Text style={styles.modalSubtitle}>Document No: {idProofNumber}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsDocPreviewVisible(false)} style={{ padding: 4 }}>
+                <AppIcon name="X" size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flex: 1, minHeight: 280, maxHeight: 460, backgroundColor: Colors.surfaceContainerHighest, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
+              <Image
+                source={{ uri: idProofDocUrl }}
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="contain"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.modalConfirmRejectBtn, { backgroundColor: Colors.primary, marginTop: 14 }]}
+              onPress={() => setIsDocPreviewVisible(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalConfirmRejectText}>Close Document Preview</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

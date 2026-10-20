@@ -39,9 +39,9 @@ export const createApp = (): Express => {
     })
   );
 
-  // Body Parsing
-  app.use(express.json({ limit: '1mb' }));
-  app.use(express.urlencoded({ extended: true }));
+  // Body Parsing (Allow document and ID proof image/pdf uploads)
+  app.use(express.json({ limit: '25mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
   // Health handler reporting API & Database status without exposing credentials
   const healthHandler = async (req: Request, res: Response) => {

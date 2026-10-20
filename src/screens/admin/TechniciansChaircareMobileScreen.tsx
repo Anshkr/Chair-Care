@@ -54,6 +54,9 @@ interface TechRosterItem {
   ageProofDocumentUrl?: string;
   rejectionReason?: string;
   verificationStatus?: string;
+  suspensionReason?: string;
+  reviewCountText?: string;
+  suspensionCaseId?: string;
   actionLabel: string;
   actionDestination: 'profile' | 'verify' | 'suspend';
 }

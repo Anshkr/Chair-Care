@@ -22,6 +22,8 @@ export interface ChairServiceItem {
 }
 
 export interface BookingDraft {
+  id?: string;
+  trackingCode?: string;
   serviceId?: string;
   serviceCode?: string;
   serviceTitle?: string;
