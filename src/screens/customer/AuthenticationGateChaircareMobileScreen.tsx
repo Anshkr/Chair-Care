@@ -38,8 +38,6 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
   const [showPassword, setShowPassword] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [showServerConfig, setShowServerConfig] = useState(false);
-  const [customServerUrl, setCustomServerUrl] = useState(() => getApiBaseUrl());
 
   const serviceTitle = draft?.serviceTitle || 'Office Chair Repair';
   const servicePrice = draft?.estimatedTotal ? `From ₹${draft.estimatedTotal}` : 'From ₹599';
@@ -186,62 +184,8 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
           {/* Dynamic Error Banner */}
           {errorMessage && (
             <View style={styles.errorBanner}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <AppIcon name="AlertTriangle" size={16} color="#DC2626" />
-                <Text style={styles.errorBannerText}>{errorMessage}</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.changeServerBtn}
-                onPress={() => setShowServerConfig(!showServerConfig)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.changeServerBtnText}>
-                  {showServerConfig ? '▲ Hide Server Settings' : '⚙️ Change Server IP / URL'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {showServerConfig && (
-            <View style={styles.serverConfigBox}>
-              <Text style={styles.serverConfigTitle}>Backend Server Address</Text>
-              <Text style={styles.serverConfigSubtitle}>
-                Ensure PC and phone are on the same Wi-Fi, or paste your HTTPS tunnel URL.
-              </Text>
-              <TextInput
-                style={styles.serverConfigInput}
-                value={customServerUrl}
-                onChangeText={setCustomServerUrl}
-                placeholder="http://192.168.1.11:5000/api/v1"
-                placeholderTextColor={Colors.outline}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                <TouchableOpacity
-                  style={styles.saveServerBtn}
-                  onPress={() => {
-                    setApiBaseUrl(customServerUrl);
-                    setErrorMessage(null);
-                    setShowServerConfig(false);
-                    handleSignInSubmit();
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={styles.saveServerBtnText}>Save & Retry</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.resetServerBtn}
-                  onPress={() => {
-                    const defaultUrl = 'http://192.168.1.11:5000/api/v1';
-                    setCustomServerUrl(defaultUrl);
-                    setApiBaseUrl(defaultUrl);
-                  }}
-                  activeOpacity={0.75}
-                >
-                  <Text style={styles.resetServerBtnText}>Reset Default</Text>
-                </TouchableOpacity>
-              </View>
+              <AppIcon name="AlertTriangle" size={16} color="#DC2626" />
+              <Text style={styles.errorBannerText}>{errorMessage}</Text>
             </View>
           )}
 
@@ -553,6 +497,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FCA5A5',
@@ -565,71 +511,6 @@ const styles = StyleSheet.create({
     color: '#991B1B',
     flex: 1,
     fontSize: 12,
-    fontWeight: '600',
-  },
-  changeServerBtn: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  changeServerBtnText: {
-    ...Typography.labelSm,
-    color: '#DC2626',
-    fontWeight: '700',
-    fontSize: 11,
-    textDecorationLine: 'underline',
-  },
-  serverConfigBox: {
-    backgroundColor: Colors.surfaceContainerLowest,
-    borderWidth: 1.5,
-    borderColor: Colors.secondaryCobalt,
-    borderRadius: BorderRadius.md,
-    padding: 12,
-    gap: 4,
-    ...Shadows.level2,
-  },
-  serverConfigTitle: {
-    ...Typography.labelMd,
-    color: Colors.onSurface,
-    fontWeight: '700',
-  },
-  serverConfigSubtitle: {
-    ...Typography.bodySm,
-    color: Colors.onSurfaceVariant,
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  serverConfigInput: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderWidth: 1,
-    borderColor: Colors.outlineVariant,
-    borderRadius: BorderRadius.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: Colors.onSurface,
-  },
-  saveServerBtn: {
-    backgroundColor: Colors.secondaryCobalt,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.sm,
-  },
-  saveServerBtnText: {
-    ...Typography.labelSm,
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  resetServerBtn: {
-    backgroundColor: Colors.surfaceContainerHigh,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.sm,
-  },
-  resetServerBtnText: {
-    ...Typography.labelSm,
-    color: Colors.onSurface,
     fontWeight: '600',
   },
   signInForm: {

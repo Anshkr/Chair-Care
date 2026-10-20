@@ -17,11 +17,11 @@ const getDefaultApiBaseUrl = (): string => {
 
   // 3. Android or Mobile physical device default (HTTPS Cloudflare Tunnel)
   if (Platform.OS === 'android') {
-    return 'https://citation-powerpoint-widespread-holes.trycloudflare.com/api/v1';
+    return 'https://dogs-contamination-samuel-signature.trycloudflare.com/api/v1';
   }
 
   // 4. Default development fallback
-  return 'https://citation-powerpoint-widespread-holes.trycloudflare.com/api/v1';
+  return 'https://dogs-contamination-samuel-signature.trycloudflare.com/api/v1';
 };
 
 const getInitialToken = (): string | null => {
@@ -153,7 +153,7 @@ export async function apiRequest<T = any>(
     }
     return {
       success: false,
-      error: `Could not connect to ChairCare backend API at ${baseUrl}. Please ensure backend is running. (${err.message || 'Connection Refused'})`,
+      error: 'Unable to connect to ChairCare server. Please check your internet connection and try again.',
     };
   }
 }
