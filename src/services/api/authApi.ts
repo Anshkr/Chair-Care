@@ -35,6 +35,15 @@ export const authApi = {
     phone?: string;
     role?: UserRole;
     defaultAddress?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    idProofDocumentUrl?: string;
+    addressProofDocumentUrl?: string;
+    ageProofDocumentUrl?: string;
+    experienceYears?: number;
+    specializations?: string[] | string;
+    currentZone?: string;
+    vehicleInfo?: string;
   }): Promise<ApiResponse<AuthResponseData>> => {
     const res = await apiRequest<AuthResponseData>('/auth/register', {
       method: 'POST',

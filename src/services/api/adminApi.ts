@@ -30,11 +30,16 @@ export const adminApi = {
   verifyTechnician: async (
     technicianId: string,
     verificationStatus: 'verified' | 'rejected' | 'suspended',
+    rejectionReason?: string,
     suspendedReason?: string
   ): Promise<ApiResponse<any>> => {
     const res = await apiRequest(`/admin/technicians/${technicianId}/verify`, {
       method: 'PATCH',
-      body: JSON.stringify({ verificationStatus, suspendedReason }),
+      body: JSON.stringify({
+        verificationStatus,
+        rejectionReason: verificationStatus === 'rejected' ? rejectionReason : undefined,
+        suspendedReason: verificationStatus === 'suspended' ? (suspendedReason || rejectionReason) : undefined,
+      }),
     });
     if (res.success) adminSyncEmitter.notifySync();
     return res;

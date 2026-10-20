@@ -7,6 +7,15 @@ export const registerSchema = z.object({
   phone: z.string().optional().default(''),
   role: z.enum(['customer', 'technician']).default('customer'),
   defaultAddress: z.string().optional(),
+  idProofType: z.string().optional(),
+  idProofNumber: z.string().optional(),
+  idProofDocumentUrl: z.string().optional(),
+  addressProofDocumentUrl: z.string().optional(),
+  ageProofDocumentUrl: z.string().optional(),
+  experienceYears: z.union([z.number(), z.string()]).optional(),
+  specializations: z.union([z.array(z.string()), z.string()]).optional(),
+  currentZone: z.string().optional(),
+  vehicleInfo: z.string().optional(),
 });
 
 export const loginSchema = z.object({
@@ -67,6 +76,7 @@ export const adminAssignTechSchema = z.object({
 export const adminVerifyTechSchema = z.object({
   verificationStatus: z.enum(['verified', 'rejected', 'suspended', 'pending']),
   suspendedReason: z.string().optional(),
+  rejectionReason: z.string().optional(),
 });
 
 export const createSupportTicketSchema = z.object({

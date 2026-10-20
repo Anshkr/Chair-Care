@@ -4,7 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { CustomerNavigator } from './CustomerNavigator';
-import { TechnicianNavigator } from './TechnicianNavigator';
+import { TechnicianNavigator, TechnicianAuthNavigator } from './TechnicianNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { IntroNavigator } from './IntroNavigator';
 import { TechnicianLoginChaircareMobileScreen } from '../screens/technician';
@@ -57,15 +57,7 @@ export const RootNavigator: React.FC = () => {
     switch (role) {
       case 'technician':
         if (!isTechnicianAuthorized) {
-          return (
-            <TechnicianLoginChaircareMobileScreen
-              navigation={{
-                canGoBack: () => false,
-                goBack: () => {},
-                navigate: () => {},
-              }}
-            />
-          );
+          return <TechnicianAuthNavigator />;
         }
         return <TechnicianNavigator />;
 

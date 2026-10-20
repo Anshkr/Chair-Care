@@ -11,12 +11,15 @@ import {
   Animated,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { authApi } from '../../services/api/authApi';
+import { useAuth } from '../../context/AuthContext';
 
 interface SpecializationItem {
   id: string;
@@ -25,44 +28,83 @@ interface SpecializationItem {
 }
 
 const INITIAL_SPECIALIZATIONS: SpecializationItem[] = [
-  { id: 'install', label: 'Installation', selected: false },
-  { id: 'repair', label: 'Repair', selected: false },
-  { id: 'maintenance', label: 'Maintenance', selected: false },
-  { id: 'wheels', label: 'Wheel Replacement', selected: false },
-  { id: 'hydraulic', label: 'Hydraulic Replacement', selected: false },
-  { id: 'armrest', label: 'Armrest Replacement', selected: false },
-  { id: 'cleaning', label: 'Cleaning', selected: false },
-  { id: 'inspection', label: 'Inspection', selected: false },
+  { id: 'install', label: 'Installation', selected: true },
+  { id: 'repair', label: 'Mechanical Repair', selected: true },
+  { id: 'maintenance', label: 'Preventive Maintenance', selected: true },
+  { id: 'wheels', label: 'Caster & Wheel Replacement', selected: false },
+  { id: 'hydraulic', label: 'Hydraulic Gas Cylinder Strut', selected: true },
+  { id: 'armrest', label: 'Armrest & Mechanism Assembly', selected: false },
+  { id: 'cleaning', label: 'Upholstery Foam & Sanitization', selected: false },
+  { id: 'inspection', label: 'Ergonomic Calibration & Audit', selected: false },
+];
+
+const SERVICE_ZONES = [
+  'South Mumbai & Colaba',
+  'Bandra & BKC Corporate Corridor',
+  'Andheri & Western Suburbs',
+  'Powai & Central Suburbs',
+  'Navi Mumbai & Thane',
+  'Gurugram Cyber City & NCR',
+  'Bengaluru Tech Hubs',
+];
+
+const ID_PROOF_TYPES = [
+  { id: 'Aadhaar Card', label: 'Aadhaar Card (UIDAI)', hint: '12-digit number e.g. 5421 8904 1234' },
+  { id: 'PAN Card', label: 'PAN Card (Income Tax Dept)', hint: '10-character alphanumeric e.g. ABCDE1234F' },
+  { id: 'Driving License', label: 'Driving License', hint: 'DL Number with valid expiry' },
+  { id: 'Passport', label: 'Passport', hint: 'Valid Indian / International Passport' },
+];
+
+const ADDRESS_PROOF_TYPES = [
+  'Aadhaar Card (Address on reverse)',
+  'Electricity / Utility Bill (Past 3 mos)',
+  'Registered Rent Agreement',
+  'Voter ID Card',
+];
+
+const VEHICLE_TYPES = [
+  { id: 'Motorcycle / Scooter', label: 'Motorcycle / Scooter (Quick Dispatch)', icon: 'Truck' },
+  { id: 'Service Van / Car', label: 'Service Van / Car (Heavy Parts Kit)', icon: 'Box' },
+  { id: 'Public Transit', label: 'Metro / Public Transit', icon: 'Radio' },
 ];
 
 /**
  * Screen ID: T02
- * Title: Technician Onboarding / Verification
- * Reference: design-reference/technician/technician_onboarding_chaircare_mobile
+ * Title: Technician Onboarding & KYC Application
+ * Submits technician credentials and documents for mandatory Admin Panel approval.
  */
 export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
   navigation: any;
 }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
+  const { setRole } = useAuth();
 
-  // Multi-step flow: 1 = Basic Info & Specializations, 2 = Documents, 3 = Review & Submit
+  // Multi-step flow: 1 = Basic Info & Specializations, 2 = KYC & Documents, 3 = Review & Submit, 4 = Success
   const [currentStep, setCurrentStep] = useState<number>(1);
+  const [isSubmittedSuccess, setIsSubmittedSuccess] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Form State
+  // Step 1: Personal & Account Details
   const [fullName, setFullName] = useState<string>('');
   const [phone, setPhone] = useState<string>('');
   const [email, setEmail] = useState<string>('');
-  const [yearsExp, setYearsExp] = useState<number>(0);
+  const [password, setPassword] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [currentZone, setCurrentZone] = useState<string>(SERVICE_ZONES[1]);
+  const [yearsExp, setYearsExp] = useState<number>(3);
   const [specializations, setSpecializations] = useState<SpecializationItem[]>(
     INITIAL_SPECIALIZATIONS
   );
 
-  // Step 2 Document states
-  const [aadhaarAttached, setAadhaarAttached] = useState<boolean>(false);
-  const [bifmaAttached, setBifmaAttached] = useState<boolean>(false);
-  const [toolingAttached, setToolingAttached] = useState<boolean>(false);
+  // Step 2: KYC & Compliance Documents (Proof of Age & Address)
+  const [idProofType, setIdProofType] = useState<string>('Aadhaar Card');
+  const [idProofNumber, setIdProofNumber] = useState<string>('');
+  const [idProofFileName, setIdProofFileName] = useState<string>('aadhaar_card_scanned_front_back.pdf');
+  const [addressProofType, setAddressProofType] = useState<string>('Aadhaar Card (Address on reverse)');
+  const [addressProofFileName, setAddressProofFileName] = useState<string>('utility_address_proof_verified.pdf');
+  const [vehicleInfo, setVehicleInfo] = useState<string>('Motorcycle / Scooter');
 
-  // Micro-interaction button scale animation
+  // Animation
   const btnScale = useRef(new Animated.Value(1)).current;
 
   const triggerBtnPress = (callback: () => void) => {
@@ -90,7 +132,11 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
     );
   };
 
-  const selectedCount = specializations.filter((s) => s.selected).length;
+  const selectedSpecializations = specializations
+    .filter((s) => s.selected)
+    .map((s) => s.label);
+
+  const selectedCount = selectedSpecializations.length;
 
   const handleNext = () => {
     if (currentStep === 1) {
@@ -98,41 +144,203 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
         Alert.alert('Required Field', 'Please enter your legal full name.');
         return;
       }
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      if (cleanPhone.length < 10) {
+        Alert.alert('Invalid Mobile', 'Please provide a valid 10-digit mobile number for dispatch alerts.');
+        return;
+      }
+      if (!email.trim() || !email.includes('@')) {
+        Alert.alert('Invalid Email', 'Please provide a valid professional email address.');
+        return;
+      }
+      if (!password || password.length < 6) {
+        Alert.alert('Password Requirement', 'Password must be at least 6 characters long.');
+        return;
+      }
       if (selectedCount === 0) {
         Alert.alert(
           'Specializations Required',
-          'Please select at least one service specialization domain.'
+          'Please select at least one chair service specialization.'
         );
         return;
       }
       triggerBtnPress(() => setCurrentStep(2));
     } else if (currentStep === 2) {
+      if (!idProofNumber.trim()) {
+        Alert.alert(
+          'KYC Document Number Required',
+          `Please enter your official ${idProofType} number (e.g. 12-digit Aadhaar UID or 10-digit PAN).`
+        );
+        return;
+      }
       triggerBtnPress(() => setCurrentStep(3));
-    } else {
-      triggerBtnPress(() => {
-        navigation.navigate('TechnicianMain');
+    } else if (currentStep === 3) {
+      handleSubmitApplication();
+    }
+  };
+
+  const handleSubmitApplication = async () => {
+    try {
+      setIsSubmitting(true);
+
+      const res = await authApi.register({
+        name: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim().toLowerCase(),
+        password: password,
+        role: 'technician',
+        idProofType: idProofType,
+        idProofNumber: idProofNumber.trim(),
+        idProofDocumentUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=600&auto=format&fit=crop',
+        addressProofDocumentUrl: 'https://images.unsplash.com/photo-1554415707-9e4c019a0a03?q=80&w=600&auto=format&fit=crop',
+        ageProofDocumentUrl: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=600&auto=format&fit=crop',
+        experienceYears: yearsExp,
+        specializations: selectedSpecializations,
+        currentZone: currentZone,
+        vehicleInfo: vehicleInfo,
       });
+
+      setIsSubmitting(false);
+
+      if (res.error) {
+        Alert.alert('Submission Error', res.error || 'Failed to submit registration application.');
+        return;
+      }
+
+      // Transition to success state
+      setIsSubmittedSuccess(true);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      Alert.alert('Connection Error', err.message || 'Unable to connect to registration server.');
     }
   };
 
   const handleBack = () => {
+    if (isSubmittedSuccess) {
+      navigation.navigate('TechnicianLogin');
+      return;
+    }
     if (currentStep > 1) {
       setCurrentStep((prev) => prev - 1);
     } else {
       if (navigation.canGoBack()) {
         navigation.goBack();
       } else {
-        navigation.navigate('TechnicianMain');
+        navigation.navigate('TechnicianLogin');
       }
     }
   };
 
-  const handleChangePhoto = () => {
-    Alert.alert(
-      'Profile Photo',
-      'Photo selection dialog opened. Using current verified technician portrait.'
+  // SUCCESS STATE AFTER SUBMITTING KYC FOR ADMIN APPROVAL
+  if (isSubmittedSuccess) {
+    return (
+      <ScreenContainer hasPadding={false}>
+        <View style={[styles.stickyHeader, { paddingTop: Math.max(insets.top, 12) + 4 }]}>
+          <View style={styles.headerTopRow}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.navigate('TechnicianLogin')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.backArrow}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Application Status</Text>
+            <View style={[styles.stepBadge, { backgroundColor: '#e6f4ea' }]}>
+              <Text style={[styles.stepBadgeText, { color: '#137333' }]}>DISPATCHED</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView
+          style={styles.scrollContainer}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(insets.bottom, 16) + 40 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.successCardCenter}>
+            <View style={styles.successIconBubble}>
+              <AppIcon name="Clock" size={36} color="#005236" />
+            </View>
+
+            <View style={styles.pendingTagBadge}>
+              <View style={styles.pulsingDotYellow} />
+              <Text style={styles.pendingTagText}>PENDING ADMIN APPROVAL</Text>
+            </View>
+
+            <Text style={styles.successMainTitle}>Application Submitted</Text>
+            <Text style={styles.successSubTitle}>
+              Thank you, <Text style={{ fontWeight: '700', color: Colors.onSurface }}>{fullName}</Text>! Your technician application and KYC documents have been securely transmitted to the ChairCare Admin Panel.
+            </Text>
+
+            <View style={styles.adminReviewNoticeBox}>
+              <View style={styles.noticeHeaderRow}>
+                <AppIcon name="ShieldCheck" size={20} color={Colors.primary} />
+                <Text style={styles.noticeHeaderTitle}>Why is admin approval required?</Text>
+              </View>
+              <Text style={styles.noticeBodyText}>
+                As part of ChairCare's trust and safety protocol, an administrator will manually inspect your:
+              </Text>
+              <View style={styles.noticeBulletRow}>
+                <Text style={styles.bulletSymbol}>•</Text>
+                <Text style={styles.bulletText}>Proof of Age & Identity ({idProofType}: {idProofNumber})</Text>
+              </View>
+              <View style={styles.noticeBulletRow}>
+                <Text style={styles.bulletSymbol}>•</Text>
+                <Text style={styles.bulletText}>Proof of Address ({addressProofType})</Text>
+              </View>
+              <View style={styles.noticeBulletRow}>
+                <Text style={styles.bulletSymbol}>•</Text>
+                <Text style={styles.bulletText}>Seating repair experience & service corridor ({currentZone})</Text>
+              </View>
+              <Text style={[styles.noticeBodyText, { marginTop: 10, fontWeight: '600', color: Colors.primary }]}>
+                Turnaround Time: Applications are reviewed by the admin within 24 hours. You cannot enter the Technician Dashboard until verified.
+              </Text>
+            </View>
+
+            <View style={styles.credentialSummaryCard}>
+              <Text style={styles.credSummaryTitle}>Your Registered Credentials</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Mobile Phone</Text>
+                <Text style={styles.summaryValue}>{phone}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Email</Text>
+                <Text style={styles.summaryValue}>{email}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Assigned Zone</Text>
+                <Text style={styles.summaryValue}>{currentZone}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Document Verified</Text>
+                <Text style={styles.summaryValue}>{idProofType}</Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <TouchableOpacity
+              style={styles.actionPrimaryBtn}
+              onPress={() => navigation.navigate('TechnicianLogin')}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.actionPrimaryBtnText}>Go to Technician Sign In</Text>
+              <Text style={styles.actionBtnArrow}>→</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionSecondaryBtn}
+              onPress={() => setRole('customer')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.actionSecondaryBtnText}>Switch to Customer Portal</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </ScreenContainer>
     );
-  };
+  }
 
   return (
     <ScreenContainer hasPadding={false}>
@@ -153,7 +361,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
             <Text style={styles.backArrow}>←</Text>
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>Technician Setup</Text>
+          <Text style={styles.headerTitle}>Technician Registration</Text>
 
           <View style={styles.stepBadge}>
             <Text style={styles.stepBadgeText}>Step {currentStep} of 3</Text>
@@ -182,164 +390,177 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
         style={styles.scrollContainer}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom, 16) + 100 },
+          { paddingBottom: Math.max(insets.bottom, 16) + 110 },
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* ================= STEP 1: Basic Info & Specializations ================= */}
         {currentStep === 1 && (
           <>
-            {/* Title & Context Card */}
             <View style={styles.titleSection}>
               <View style={styles.pulseHeaderRow}>
                 <View style={styles.pulsingDot} />
                 <Text style={styles.monoCategoryTag}>
-                  ERGONOMIC PRECISION FIELD FORCE
+                  FIELD TECHNICIAN ONBOARDING
                 </Text>
               </View>
               <Text style={styles.mainHeadline}>
-                Complete Your Technician Profile
+                Create Technician Account
               </Text>
               <Text style={styles.subHeadline}>
-                Add your professional details so corporate facilities and
-                home-office customers can review your verified engineering
-                credentials.
+                Join ChairCare's verified field force. Accounts require administrative approval of age and address verification documents before dashboard activation.
               </Text>
             </View>
 
-            {/* Verification Status Warning / Banner */}
+            {/* Approval Notice Banner */}
             <View style={styles.verificationBanner}>
               <View style={styles.bannerLeftAccent} />
               <View style={styles.bannerContent}>
                 <View style={styles.bannerTopRow}>
                   <View style={styles.bannerTitleGroup}>
-                    <AppIcon name="Clock" size={18} />
+                    <AppIcon name="ShieldCheck" size={18} color={Colors.primary} />
                     <Text style={styles.bannerTitle}>
-                      Verification Status: Pending
+                      Admin Approval Process
                     </Text>
                   </View>
                   <View style={styles.queuePill}>
-                    <Text style={styles.queuePillText}>Queue #412</Text>
+                    <Text style={styles.queuePillText}>Mandatory KYC</Text>
                   </View>
                 </View>
                 <Text style={styles.bannerBody}>
-                  ChairCare verifies technical certifications and background
-                  credentials prior to live dispatch authorization. Standard
-                  audit turnaround is 24–48 hours.
+                  Technician accounts are NOT directly activated. In Step 2, you will submit Aadhaar or PAN card proof of age and address for Admin verification.
                 </Text>
-
-                {/* Preview Mini Pills */}
-                <View style={styles.miniPillsRow}>
-                  <View style={styles.miniPill}>
-                    <AppIcon name="Check" size={18} />
-                    <Text style={styles.miniPillText}>Aadhaar / ID Card</Text>
-                  </View>
-                  <View style={styles.miniPill}>
-                    <AppIcon name="Check" size={18} />
-                    <Text style={styles.miniPillText}>BIFMA Level-3 Cert</Text>
-                  </View>
-                </View>
               </View>
             </View>
 
-            {/* Form Section 1: Profile Photo Card */}
+            {/* Profile Avatar Block */}
             <View style={styles.formCardCenter}>
               <View style={styles.avatarWrapper}>
                 <View style={styles.avatarRing}>
-                  <BrandLogo size={100} rounded={true} />
-                </View>
-                <TouchableOpacity
-                  style={styles.cameraFloatingBtn}
-                  onPress={handleChangePhoto}
-                  activeOpacity={0.8}
-                  accessibilityLabel="Take photo"
-                >
-                  <AppIcon name="Camera" size={18} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.photoActionCol}>
-                <TouchableOpacity
-                  style={styles.changePhotoBtn}
-                  onPress={handleChangePhoto}
-                  activeOpacity={0.7}
-                >
-                  <AppIcon name="Upload" size={18} />
-                  <Text style={styles.changePhotoBtnText}>
-                    Change Profile Photo
-                  </Text>
-                </TouchableOpacity>
-                <View style={styles.photoNoteRow}>
-                  <AppIcon name="Info" size={18} />
-                  <Text style={styles.photoNoteText}>
-                    Professional photo in clean technician attire
-                  </Text>
+                  <BrandLogo size={90} rounded={true} />
                 </View>
               </View>
+              <Text style={styles.avatarNoteText}>
+                Registered Field Technician Profile
+              </Text>
             </View>
 
-            {/* Form Section 2: Basic Details */}
+            {/* Personal Details Form */}
             <View style={styles.formCard}>
               <View style={styles.sectionHeaderRow}>
-                <Text style={styles.sectionTitle}>Basic Engineering Details</Text>
+                <Text style={styles.sectionTitle}>Profile & Login Credentials</Text>
                 <Text style={styles.sectionMonoTag}>SEC_01</Text>
               </View>
 
-              {/* Full Name */}
+              {/* Full Legal Name */}
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>
-                  Full Name <Text style={styles.requiredStar}>*</Text>
+                  Full Legal Name (as on ID proof) <Text style={styles.requiredStar}>*</Text>
                 </Text>
                 <View style={styles.inputWrapper}>
                   <TextInput
                     style={styles.textInput}
                     value={fullName}
                     onChangeText={setFullName}
-                    placeholder="Enter your legal full name"
+                    placeholder="e.g. Rahul Sharma"
                     placeholderTextColor={Colors.outline}
                   />
-                  <Text style={styles.inputEndIcon}>🪪</Text>
+                  <AppIcon name="User" size={18} color={Colors.onSurfaceVariant} />
                 </View>
               </View>
 
-              {/* Phone Number with Verified Check Badge */}
+              {/* Mobile Number */}
               <View style={styles.inputGroup}>
-                <View style={styles.inputLabelBetween}>
-                  <Text style={styles.inputLabel}>
-                    Registered Mobile Number{' '}
-                    <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <View style={styles.verifiedOtpPill}>
-                    <AppIcon name="Check" size={18} />
-                    <Text style={styles.verifiedOtpText}>OTP Verified</Text>
-                  </View>
-                </View>
-                <View style={[styles.inputWrapper, styles.readOnlyInput]}>
+                <Text style={styles.inputLabel}>
+                  Mobile Number (Dispatch & OTP) <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
                   <TextInput
-                    style={[styles.textInput, styles.readOnlyText]}
+                    style={styles.textInput}
                     value={phone}
-                    editable={false}
+                    onChangeText={setPhone}
+                    placeholder="+91 98765 43210"
+                    placeholderTextColor={Colors.outline}
+                    keyboardType="phone-pad"
                   />
-                  <View style={styles.verifiedSealBadge}>
-                    <AppIcon name="Check" size={18} />
-                  </View>
+                  <AppIcon name="Phone" size={18} color={Colors.onSurfaceVariant} />
                 </View>
               </View>
 
               {/* Professional Email Address */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Professional Email Address</Text>
+                <Text style={styles.inputLabel}>
+                  Email Address <Text style={styles.requiredStar}>*</Text>
+                </Text>
                 <View style={styles.inputWrapper}>
                   <TextInput
                     style={styles.textInput}
                     value={email}
                     onChangeText={setEmail}
-                    placeholder="name@company.com"
+                    placeholder="technician@domain.com"
                     placeholderTextColor={Colors.outline}
                     keyboardType="email-address"
                     autoCapitalize="none"
                   />
-                  <AppIcon name="Mail" size={18} />
+                  <AppIcon name="Mail" size={18} color={Colors.onSurfaceVariant} />
                 </View>
+              </View>
+
+              {/* Account Password */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>
+                  Create Password (min 6 characters) <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder="Enter secure password"
+                    placeholderTextColor={Colors.outline}
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    activeOpacity={0.7}
+                  >
+                    <AppIcon
+                      name={showPassword ? 'EyeOff' : 'Eye'}
+                      size={18}
+                      color={Colors.onSurfaceVariant}
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Primary Service Zone */}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Primary Dispatch Corridor</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.zoneScroll}>
+                  {SERVICE_ZONES.map((zone) => {
+                    const isSelected = currentZone === zone;
+                    return (
+                      <TouchableOpacity
+                        key={zone}
+                        style={[
+                          styles.zoneChip,
+                          isSelected && styles.zoneChipSelected,
+                        ]}
+                        onPress={() => setCurrentZone(zone)}
+                        activeOpacity={0.7}
+                      >
+                        <Text
+                          style={[
+                            styles.zoneChipText,
+                            isSelected && styles.zoneChipTextSelected,
+                          ]}
+                        >
+                          {zone}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
               {/* Years of Experience Stepper */}
@@ -350,9 +571,8 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
                 <View style={styles.stepperContainer}>
                   <TouchableOpacity
                     style={styles.stepperBtn}
-                    onPress={() => setYearsExp((prev) => Math.max(1, prev - 1))}
+                    onPress={() => setYearsExp((prev) => Math.max(0, prev - 1))}
                     activeOpacity={0.7}
-                    accessibilityLabel="Decrease experience"
                   >
                     <Text style={styles.stepperBtnText}>−</Text>
                   </TouchableOpacity>
@@ -364,9 +584,8 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
 
                   <TouchableOpacity
                     style={styles.stepperBtn}
-                    onPress={() => setYearsExp((prev) => Math.min(35, prev + 1))}
+                    onPress={() => setYearsExp((prev) => Math.min(30, prev + 1))}
                     activeOpacity={0.7}
-                    accessibilityLabel="Increase experience"
                   >
                     <Text style={styles.stepperBtnText}>+</Text>
                   </TouchableOpacity>
@@ -374,13 +593,13 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
               </View>
             </View>
 
-            {/* Form Section 3: Service Specializations */}
+            {/* Specializations Card */}
             <View style={styles.formCard}>
               <View style={styles.specHeaderRow}>
                 <View style={styles.specHeaderLeft}>
                   <Text style={styles.sectionTitle}>Service Specializations</Text>
                   <Text style={styles.specSub}>
-                    Select all domains you are qualified to diagnose and repair.
+                    Select all chair mechanical tasks you are qualified to perform.
                   </Text>
                 </View>
                 <View style={styles.specBadge}>
@@ -390,7 +609,6 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
                 </View>
               </View>
 
-              {/* Selectable multi-choice chips */}
               <View style={styles.chipsWrap}>
                 {specializations.map((spec) => {
                   const isSelected = spec.selected;
@@ -428,170 +646,278 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
                   );
                 })}
               </View>
-
-              {/* Trust & Quality Micro-Metric Note */}
-              <View style={styles.trustNoteCard}>
-                <View style={styles.trustIconPod}>
-                  <AppIcon name="ShieldCheck" size={18} />
-                </View>
-                <Text style={styles.trustNoteText}>
-                  High accuracy profile info ensures priority algorithm routing
-                  for premium enterprise Herman Miller & Steelcase warranty
-                  tickets.
-                </Text>
-              </View>
             </View>
           </>
         )}
 
+        {/* ================= STEP 2: KYC & Compliance Documents ================= */}
         {currentStep === 2 && (
           <>
-            {/* Step 2: Document Verification */}
             <View style={styles.titleSection}>
               <View style={styles.pulseHeaderRow}>
                 <View style={styles.pulsingDot} />
                 <Text style={styles.monoCategoryTag}>
-                  COMPLIANCE & ACCREDITATIONS
+                  MANDATORY KYC & AGE VERIFICATION
                 </Text>
               </View>
               <Text style={styles.mainHeadline}>
-                Upload Engineering Documents
+                Upload Proof of Age & Address
               </Text>
               <Text style={styles.subHeadline}>
-                Provide proof of identity and technical accreditations for field
-                dispatch authorization.
+                Please provide government-issued identity (Aadhaar or PAN) and proof of address. The ChairCare Admin Panel will examine these before authorizing live dispatch.
               </Text>
             </View>
 
-            {/* Document 1: Aadhaar */}
+            {/* Document 1: Proof of Identity & Age */}
             <View style={styles.formCard}>
               <View style={styles.docHeaderRow}>
                 <View style={styles.docInfoCol}>
-                  <Text style={styles.docTitle}>Govt. ID Proof (Aadhaar / Passport)</Text>
+                  <Text style={styles.docTitle}>1. Proof of Identity & Age</Text>
                   <Text style={styles.docDesc}>
-                    National identity verification with official address match.
+                    Valid Govt. ID proving age (min 18 yrs) and legal identity.
                   </Text>
                 </View>
                 <View style={styles.docVerifiedPill}>
-                  <Text style={styles.docVerifiedText}>VERIFIED</Text>
+                  <Text style={styles.docVerifiedText}>REQUIRED</Text>
                 </View>
               </View>
+
+              {/* ID Proof Type Selector Chips */}
+              <Text style={styles.subFieldLabel}>Select Identity Document Type:</Text>
+              <View style={styles.typeSelectorRow}>
+                {ID_PROOF_TYPES.map((typeObj) => {
+                  const isSelected = idProofType === typeObj.id;
+                  return (
+                    <TouchableOpacity
+                      key={typeObj.id}
+                      style={[
+                        styles.typeChip,
+                        isSelected && styles.typeChipSelected,
+                      ]}
+                      onPress={() => setIdProofType(typeObj.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.typeChipText,
+                          isSelected && styles.typeChipTextSelected,
+                        ]}
+                      >
+                        {typeObj.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Document Number Input */}
+              <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                <Text style={styles.inputLabel}>
+                  {idProofType} Number <Text style={styles.requiredStar}>*</Text>
+                </Text>
+                <View style={styles.inputWrapper}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={idProofNumber}
+                    onChangeText={setIdProofNumber}
+                    placeholder={
+                      idProofType === 'Aadhaar Card'
+                        ? 'Enter 12-digit Aadhaar UID (e.g. 5421 8904 1234)'
+                        : idProofType === 'PAN Card'
+                        ? 'Enter 10-char PAN (e.g. ABCDE1234F)'
+                        : `Enter ${idProofType} Number`
+                    }
+                    placeholderTextColor={Colors.outline}
+                    autoCapitalize="characters"
+                  />
+                  <AppIcon name="ShieldCheck" size={18} color={Colors.primary} />
+                </View>
+              </View>
+
+              {/* File Attachment Card */}
               <View style={styles.docFileRow}>
-                <AppIcon name="FileText" size={18} />
+                <AppIcon name="FileText" size={20} color={Colors.primary} />
                 <View style={styles.fileNameCol}>
-                  <Text style={styles.fileNameText}>aadhaar_verified_front_back.pdf</Text>
-                  <Text style={styles.fileSizeText}>2.4 MB • Encrypted</Text>
+                  <Text style={styles.fileNameText}>{idProofFileName}</Text>
+                  <Text style={styles.fileSizeText}>Scanned Front & Back • 2.4 MB</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.reuploadBtn}
-                  onPress={() => Alert.alert('Document Updated', 'Aadhaar copy refreshed.')}
+                  onPress={() => Alert.alert('Document Attached', 'Default scanned KYC file verified.')}
                 >
-                  <Text style={styles.reuploadText}>Replace</Text>
+                  <Text style={styles.reuploadText}>Attached ✓</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Document 2: BIFMA */}
+            {/* Document 2: Proof of Address */}
             <View style={styles.formCard}>
               <View style={styles.docHeaderRow}>
                 <View style={styles.docInfoCol}>
-                  <Text style={styles.docTitle}>BIFMA Level-3 Certification</Text>
+                  <Text style={styles.docTitle}>2. Proof of Address</Text>
                   <Text style={styles.docDesc}>
-                    Ergonomic seating mechanics, pneumatic diagnostics & safety certification.
+                    Valid official document verifying residential address in service zone.
                   </Text>
                 </View>
                 <View style={styles.docActivePill}>
-                  <Text style={styles.docActiveText}>ACTIVE</Text>
+                  <Text style={styles.docActiveText}>REQUIRED</Text>
                 </View>
               </View>
+
+              <Text style={styles.subFieldLabel}>Select Address Document Type:</Text>
+              <View style={styles.typeSelectorRow}>
+                {ADDRESS_PROOF_TYPES.map((type) => {
+                  const isSelected = addressProofType === type;
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.typeChip,
+                        isSelected && styles.typeChipSelected,
+                      ]}
+                      onPress={() => setAddressProofType(type)}
+                      activeOpacity={0.7}
+                    >
+                      <Text
+                        style={[
+                          styles.typeChipText,
+                          isSelected && styles.typeChipTextSelected,
+                        ]}
+                      >
+                        {type}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <View style={styles.docFileRow}>
-                <AppIcon name="Award" size={18} />
+                <AppIcon name="MapPin" size={20} color={Colors.secondary} />
                 <View style={styles.fileNameCol}>
-                  <Text style={styles.fileNameText}>bifma_level3_cert_2024.pdf</Text>
-                  <Text style={styles.fileSizeText}>1.8 MB • Certified</Text>
+                  <Text style={styles.fileNameText}>{addressProofFileName}</Text>
+                  <Text style={styles.fileSizeText}>Utility / Residence Proof • 1.8 MB</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.reuploadBtn}
-                  onPress={() => Alert.alert('Document Updated', 'BIFMA certificate refreshed.')}
+                  onPress={() => Alert.alert('Address Proof', 'Address document attached.')}
                 >
-                  <Text style={styles.reuploadText}>Replace</Text>
+                  <Text style={styles.reuploadText}>Attached ✓</Text>
                 </TouchableOpacity>
               </View>
             </View>
 
-            {/* Document 3: Field Tooling Kit */}
+            {/* Mobility / Vehicle Info */}
             <View style={styles.formCard}>
-              <View style={styles.docHeaderRow}>
-                <View style={styles.docInfoCol}>
-                  <Text style={styles.docTitle}>Tooling Kit & Torque Calibration</Text>
-                  <Text style={styles.docDesc}>
-                    Calibration log of torque wrenches and pneumatic extraction tools.
-                  </Text>
-                </View>
-                <View style={styles.docPendingPill}>
-                  <Text style={styles.docPendingText}>ATTACHED</Text>
-                </View>
-              </View>
-              <View style={styles.docFileRow}>
-                <AppIcon name="Settings" size={18} />
-                <View style={styles.fileNameCol}>
-                  <Text style={styles.fileNameText}>torque_calibration_sheet_q4.pdf</Text>
-                  <Text style={styles.fileSizeText}>950 KB • Valid till 2027</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.reuploadBtn}
-                  onPress={() => Alert.alert('Document Updated', 'Calibration sheet re-attached.')}
-                >
-                  <Text style={styles.reuploadText}>Replace</Text>
-                </TouchableOpacity>
+              <Text style={styles.docTitle}>3. Mode of Field Transit</Text>
+              <Text style={styles.docDesc}>
+                Select how you will travel to customer locations for chair servicing.
+              </Text>
+              <View style={{ gap: 8, marginTop: 10 }}>
+                {VEHICLE_TYPES.map((veh) => {
+                  const isSelected = vehicleInfo === veh.id;
+                  return (
+                    <TouchableOpacity
+                      key={veh.id}
+                      style={[
+                        styles.vehicleSelectRow,
+                        isSelected && styles.vehicleSelectRowSelected,
+                      ]}
+                      onPress={() => setVehicleInfo(veh.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.radioCircle, isSelected && styles.radioCircleSelected]}>
+                        {isSelected && <View style={styles.radioInnerDot} />}
+                      </View>
+                      <Text style={[styles.vehicleLabel, isSelected && styles.vehicleLabelSelected]}>
+                        {veh.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           </>
         )}
 
+        {/* ================= STEP 3: Review & Submit to Admin Panel ================= */}
         {currentStep === 3 && (
           <>
-            {/* Step 3: Verification Review & Dispatch Authorization */}
             <View style={styles.titleSection}>
               <View style={styles.pulseHeaderRow}>
-                <View style={styles.pulsingDotGreen} />
-                <Text style={styles.monoCategoryTagGreen}>
-                  DISPATCH AUDIT READY
+                <View style={styles.pulsingDot} />
+                <Text style={styles.monoCategoryTag}>
+                  FINAL VERIFICATION REVIEW
                 </Text>
               </View>
               <Text style={styles.mainHeadline}>
-                Profile Ready for Deployment
+                Review & Submit to Admin
               </Text>
               <Text style={styles.subHeadline}>
-                Your technician profile and BIFMA certifications are registered in the dispatch queue.
+                Confirm your application details before sending to the ChairCare Operations Administrator for review.
               </Text>
             </View>
 
+            {/* Critical Admin Review Mandate Warning */}
+            <View style={styles.mandateWarningCard}>
+              <View style={styles.mandateHeaderRow}>
+                <AppIcon name="AlertTriangle" size={22} color="#ba1a1a" />
+                <Text style={styles.mandateTitle}>Admin Approval Policy</Text>
+              </View>
+              <Text style={styles.mandateBody}>
+                Your technician account will <Text style={{ fontWeight: '700' }}>NOT</Text> be activated automatically. The ChairCare Admin Panel will review your Aadhaar/PAN, age proof, and address details. You will only be granted access to the Technician Dashboard after admin approval.
+              </Text>
+            </View>
+
+            {/* Summary Details */}
             <View style={styles.formCardCenter}>
               <View style={styles.bigCheckPod}>
-                <AppIcon name="ShieldCheck" size={28} />
+                <AppIcon name="ShieldCheck" size={28} color={Colors.primary} />
               </View>
-              <Text style={styles.auditStatusTitle}>Audit Queue #412</Text>
+              <Text style={styles.auditStatusTitle}>Application Summary</Text>
               <Text style={styles.auditStatusSub}>
-                Authorized for Herman Miller, Steelcase & Haworth corporate warranty repairs.
+                Ready for administrative audit & background check.
               </Text>
 
               <View style={styles.summaryTable}>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Technician</Text>
+                  <Text style={styles.summaryLabel}>Technician Name</Text>
                   <Text style={styles.summaryValue}>{fullName}</Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Mobile</Text>
+                  <Text style={styles.summaryLabel}>Mobile Number</Text>
                   <Text style={styles.summaryValue}>{phone}</Text>
                 </View>
                 <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Email</Text>
+                  <Text style={styles.summaryValue}>{email}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Service Zone</Text>
+                  <Text style={styles.summaryValue}>{currentZone}</Text>
+                </View>
+                <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Experience</Text>
-                  <Text style={styles.summaryValue}>{yearsExp} Years Active</Text>
+                  <Text style={styles.summaryValue}>{yearsExp} Years</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>ID / Age Proof</Text>
+                  <Text style={styles.summaryValue}>{idProofType}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>ID Number</Text>
+                  <Text style={styles.summaryValue}>{idProofNumber}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Address Proof</Text>
+                  <Text style={styles.summaryValue}>{addressProofType}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Transit Mode</Text>
+                  <Text style={styles.summaryValue}>{vehicleInfo}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Specializations</Text>
-                  <Text style={styles.summaryValue}>{selectedCount} Domains</Text>
+                  <Text style={styles.summaryValue}>{selectedCount} Selected</Text>
                 </View>
               </View>
             </View>
@@ -608,25 +934,31 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       >
         <Animated.View style={{ transform: [{ scale: btnScale }] }}>
           <TouchableOpacity
-            style={styles.continueBtn}
+            style={[styles.continueBtn, isSubmitting && { opacity: 0.7 }]}
             onPress={handleNext}
             activeOpacity={0.85}
+            disabled={isSubmitting}
           >
+            {isSubmitting ? (
+              <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />
+            ) : null}
             <Text style={styles.continueBtnText}>
               {currentStep === 1
-                ? 'Continue to Documents (Step 2)'
+                ? 'Continue to KYC Documents (Step 2)'
                 : currentStep === 2
-                ? 'Submit Verification (Step 3)'
-                : 'Go to Technician Dashboard'}
+                ? 'Review Application (Step 3)'
+                : isSubmitting
+                ? 'Submitting to Admin Panel...'
+                : 'Submit Application for Admin Review'}
             </Text>
-            <Text style={styles.continueBtnArrow}>→</Text>
+            {!isSubmitting && <Text style={styles.continueBtnArrow}>→</Text>}
           </TouchableOpacity>
         </Animated.View>
 
         <View style={styles.footerNoteRow}>
-          <AppIcon name="Lock" size={18} />
+          <AppIcon name="Lock" size={16} color={Colors.onSurfaceVariant} />
           <Text style={styles.footerProtocolText}>
-            ChairCare Pro Field Protocol v4.2
+            ChairCare Enterprise Technician Compliance Protocol v4.2
           </Text>
         </View>
       </View>
@@ -690,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: Colors.secondaryContainer,
+    backgroundColor: Colors.primary,
     borderRadius: 3,
   },
   scrollContainer: {
@@ -713,57 +1045,48 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.secondaryContainer,
+    backgroundColor: Colors.primary,
   },
-  pulsingDotGreen: {
+  pulsingDotYellow: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.tertiaryEmerald,
+    backgroundColor: '#b06000',
   },
   monoCategoryTag: {
     ...Typography.labelMono,
-    color: Colors.secondaryContainer,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-  },
-  monoCategoryTagGreen: {
-    ...Typography.labelMono,
-    color: Colors.tertiaryEmerald,
+    color: Colors.primary,
     fontWeight: '700',
     letterSpacing: 0.8,
   },
   mainHeadline: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     color: Colors.onSurface,
-    lineHeight: 32,
+    lineHeight: 30,
     letterSpacing: -0.5,
   },
   subHeadline: {
-    ...Typography.bodyMd,
+    ...Typography.bodyMedium,
     color: Colors.onSurfaceVariant,
     lineHeight: 20,
   },
   verificationBanner: {
     backgroundColor: Colors.surfaceContainer,
     borderRadius: BorderRadius.xl,
+    flexDirection: 'row',
     overflow: 'hidden',
-    position: 'relative',
-    ...Shadows.level1,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
   },
   bannerLeftAccent: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 5,
-    backgroundColor: Colors.outlineVariant,
+    width: 6,
+    backgroundColor: Colors.primary,
   },
   bannerContent: {
-    padding: 16,
-    paddingLeft: 18,
-    gap: 8,
+    flex: 1,
+    padding: 14,
+    gap: 6,
   },
   bannerTopRow: {
     flexDirection: 'row',
@@ -775,147 +1098,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  pendingIcon: {
-    fontSize: 16,
-  },
   bannerTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     color: Colors.onSurface,
   },
   queuePill: {
-    backgroundColor: Colors.surfaceContainerHigh,
+    backgroundColor: Colors.surfaceContainerHighest,
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 2,
     borderRadius: BorderRadius.full,
   },
   queuePillText: {
-    ...Typography.labelMono,
     fontSize: 11,
-    color: Colors.onSurfaceVariant,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: Colors.primary,
   },
   bannerBody: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
     lineHeight: 18,
   },
-  miniPillsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 4,
-    paddingTop: 8,
-    backgroundColor: Colors.surfaceContainerLow,
-    padding: 8,
-    borderRadius: BorderRadius.lg,
-  },
-  miniPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.surfaceContainerLowest,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.md,
-    ...Shadows.level1,
-  },
-  verifiedCheckIcon: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: Colors.tertiaryEmerald,
-  },
-  miniPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.onSurface,
-  },
   formCardCenter: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: BorderRadius.xl,
-    padding: 20,
+    padding: 16,
     alignItems: 'center',
-    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
     ...Shadows.level1,
   },
   avatarWrapper: {
     position: 'relative',
-    marginTop: 4,
+    marginBottom: 8,
   },
   avatarRing: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    backgroundColor: Colors.surfaceContainerHigh,
-    borderWidth: 4,
-    borderColor: Colors.surfaceContainerLowest,
-    overflow: 'hidden',
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.level2,
+    padding: 4,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: Colors.primary,
   },
-  cameraFloatingBtn: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.secondaryContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...Shadows.level2,
-  },
-  cameraIcon: {
-    fontSize: 16,
-  },
-  photoActionCol: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  changePhotoBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.secondaryFixed,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.full,
-  },
-  uploadIcon: {
-    fontSize: 14,
-  },
-  changePhotoBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.onSecondaryFixed,
-  },
-  photoNoteRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  infoIcon: {
-    fontSize: 13,
-  },
-  photoNoteText: {
+  avatarNoteText: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
+    fontWeight: '600',
   },
   formCard: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: BorderRadius.xl,
     padding: 16,
-    gap: 16,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
     ...Shadows.level1,
+    gap: 14,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.outlineHairline,
-    paddingBottom: 8,
+    marginBottom: 4,
   },
   sectionTitle: {
     fontSize: 16,
@@ -924,349 +1165,383 @@ const styles = StyleSheet.create({
   },
   sectionMonoTag: {
     ...Typography.labelMono,
-    fontSize: 11,
-    color: Colors.onSurfaceVariant,
-    fontWeight: '600',
+    fontSize: 10,
+    color: Colors.outline,
   },
   inputGroup: {
     gap: 6,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    color: Colors.onSurfaceVariant,
-  },
-  inputLabelBetween: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    color: Colors.onSurface,
   },
   requiredStar: {
-    color: Colors.error,
-  },
-  verifiedOtpPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  verifiedCheckMark: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: Colors.tertiaryEmerald,
-  },
-  verifiedOtpText: {
-    ...Typography.labelMono,
-    fontSize: 11,
+    color: '#ba1a1a',
     fontWeight: '700',
-    color: Colors.tertiaryEmerald,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surfaceContainerLow,
+    backgroundColor: Colors.surfaceContainer,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: 12,
+    height: 48,
     borderWidth: 1,
-    borderColor: 'transparent',
-  },
-  readOnlyInput: {
-    backgroundColor: Colors.surfaceContainerHigh,
+    borderColor: Colors.outlineHairline,
   },
   textInput: {
     flex: 1,
-    height: 44,
     fontSize: 14,
     color: Colors.onSurface,
-    fontWeight: '500',
   },
-  readOnlyText: {
-    color: Colors.onSurface,
-    fontWeight: '600',
+  zoneScroll: {
+    marginTop: 4,
   },
-  inputEndIcon: {
-    fontSize: 16,
-    marginLeft: 8,
+  zoneChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainer,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
   },
-  verifiedSealBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: Colors.tertiaryEmerald,
-    justifyContent: 'center',
-    alignItems: 'center',
+  zoneChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
-  sealCheck: {
-    color: '#ffffff',
+  zoneChipText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  zoneChipTextSelected: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceContainerLow,
-    padding: 6,
+    backgroundColor: Colors.surfaceContainer,
     borderRadius: BorderRadius.lg,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
   },
   stepperBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: BorderRadius.md,
-    backgroundColor: Colors.surfaceContainerLowest,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerHighest,
     justifyContent: 'center',
     alignItems: 'center',
-    ...Shadows.level1,
   },
   stepperBtnText: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '700',
     color: Colors.onSurface,
   },
   stepperValueGroup: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
+    alignItems: 'center',
   },
   stepperNumber: {
-    fontSize: 24,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.onSurface,
   },
   stepperLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 11,
     color: Colors.onSurfaceVariant,
+    fontWeight: '600',
   },
   specHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
   },
   specHeaderLeft: {
     flex: 1,
-    gap: 2,
   },
   specSub: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
+    marginTop: 2,
   },
   specBadge: {
-    backgroundColor: Colors.secondaryContainer,
-    paddingHorizontal: 10,
+    backgroundColor: Colors.secondaryFixed,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
   specBadgeText: {
-    ...Typography.labelMono,
     fontSize: 11,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: Colors.onSecondaryFixed,
   },
   chipsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-    paddingTop: 4,
+    marginTop: 6,
   },
   chipBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.full,
     borderWidth: 1,
-  },
-  chipSelected: {
-    backgroundColor: Colors.secondaryContainer,
-    borderColor: Colors.secondaryContainer,
-    ...Shadows.level1,
+    gap: 6,
   },
   chipUnselected: {
-    backgroundColor: Colors.surfaceContainerLow,
-    borderColor: 'transparent',
+    backgroundColor: Colors.surfaceContainer,
+    borderColor: Colors.outlineHairline,
+  },
+  chipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   chipIcon: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  chipIconSelected: {
-    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
   chipIconUnselected: {
-    color: Colors.outline,
+    color: Colors.onSurfaceVariant,
+  },
+  chipIconSelected: {
+    color: '#ffffff',
   },
   chipLabel: {
     fontSize: 12,
     fontWeight: '600',
   },
-  chipLabelSelected: {
-    color: '#FFFFFF',
-  },
   chipLabelUnselected: {
     color: Colors.onSurface,
   },
-  trustNoteCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surfaceContainerLow,
-    padding: 10,
-    borderRadius: BorderRadius.lg,
-    marginTop: 4,
-  },
-  trustIconPod: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.secondaryFixed,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  trustShieldIcon: {
-    fontSize: 16,
-  },
-  trustNoteText: {
-    flex: 1,
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    lineHeight: 16,
+  chipLabelSelected: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   docHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 8,
   },
   docInfoCol: {
     flex: 1,
-    gap: 2,
   },
   docTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: Colors.onSurface,
   },
   docDesc: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
+    marginTop: 2,
     lineHeight: 16,
   },
   docVerifiedPill: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: 'rgba(0, 82, 54, 0.1)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
   docVerifiedText: {
-    ...Typography.labelMono,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#065F46',
+    color: '#005236',
   },
   docActivePill: {
-    backgroundColor: Colors.secondaryFixed,
+    backgroundColor: 'rgba(0, 82, 54, 0.1)',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: BorderRadius.full,
   },
   docActiveText: {
-    ...Typography.labelMono,
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.onSecondaryFixed,
+    color: '#005236',
   },
-  docPendingPill: {
-    backgroundColor: Colors.surfaceContainerHigh,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: BorderRadius.full,
-  },
-  docPendingText: {
-    ...Typography.labelMono,
-    fontSize: 10,
+  subFieldLabel: {
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.onSurfaceVariant,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  typeSelectorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  typeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainer,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  typeChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  typeChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  typeChipTextSelected: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   docFileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    backgroundColor: Colors.surfaceContainerLow,
-    padding: 10,
+    backgroundColor: Colors.surfaceContainer,
     borderRadius: BorderRadius.lg,
-  },
-  fileIcon: {
-    fontSize: 20,
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
   },
   fileNameCol: {
     flex: 1,
   },
   fileNameText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: Colors.onSurface,
   },
   fileSizeText: {
     fontSize: 11,
     color: Colors.onSurfaceVariant,
+    marginTop: 2,
   },
   reuploadBtn: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: Colors.surfaceContainerHighest,
     paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.md,
-    ...Shadows.level1,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
   },
   reuploadText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.secondaryContainer,
+    color: '#005236',
   },
-  bigCheckPod: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: Colors.secondaryFixed,
+  vehicleSelectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.lg,
+    padding: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  vehicleSelectRowSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(0, 82, 54, 0.05)',
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: Colors.outline,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  bigCheckIcon: {
-    fontSize: 32,
+  radioCircleSelected: {
+    borderColor: Colors.primary,
+  },
+  radioInnerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+  },
+  vehicleLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  vehicleLabelSelected: {
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  mandateWarningCard: {
+    backgroundColor: 'rgba(186, 26, 26, 0.08)',
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(186, 26, 26, 0.25)',
+    gap: 8,
+  },
+  mandateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mandateTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#ba1a1a',
+  },
+  mandateBody: {
+    fontSize: 13,
+    color: Colors.onSurface,
+    lineHeight: 19,
+  },
+  bigCheckPod: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(0, 82, 54, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   auditStatusTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: Colors.onSurface,
   },
   auditStatusSub: {
-    fontSize: 13,
+    fontSize: 12,
     color: Colors.onSurfaceVariant,
     textAlign: 'center',
-    lineHeight: 18,
+    marginTop: 4,
+    marginBottom: 12,
   },
   summaryTable: {
     width: '100%',
-    backgroundColor: Colors.surfaceContainerLow,
-    borderRadius: BorderRadius.lg,
-    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineHairline,
+    paddingTop: 10,
     gap: 8,
-    marginTop: 8,
   },
   summaryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 3,
   },
   summaryLabel: {
     fontSize: 12,
     color: Colors.onSurfaceVariant,
+    fontWeight: '500',
   },
   summaryValue: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     color: Colors.onSurface,
+    maxWidth: '60%',
+    textAlign: 'right',
   },
   stickyFooter: {
     position: 'absolute',
@@ -1278,43 +1553,178 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.outlineHairline,
     paddingHorizontal: 16,
     paddingTop: 12,
-    zIndex: 40,
-    ...Shadows.level3,
   },
   continueBtn: {
-    width: '100%',
-    height: 52,
-    backgroundColor: Colors.primaryContainer,
-    borderRadius: BorderRadius.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingVertical: 14,
     ...Shadows.level2,
   },
   continueBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: Colors.onPrimary,
+    color: '#ffffff',
+    letterSpacing: -0.2,
   },
   continueBtnArrow: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: Colors.onPrimary,
+    color: '#ffffff',
+    marginLeft: 8,
   },
   footerNoteRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
-    marginTop: 6,
-  },
-  lockIcon: {
-    fontSize: 11,
+    gap: 6,
+    marginTop: 8,
   },
   footerProtocolText: {
-    ...Typography.labelMono,
     fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '500',
+  },
+
+  // Success Screen Styles
+  successCardCenter: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 24,
+    padding: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+    ...Shadows.level2,
+    gap: 12,
+  },
+  successIconBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(0, 82, 54, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  pendingTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(176, 96, 0, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  pendingTagText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#b06000',
+    letterSpacing: 0.5,
+  },
+  successMainTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    textAlign: 'center',
+  },
+  successSubTitle: {
+    fontSize: 13,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    lineHeight: 19,
+    paddingHorizontal: 8,
+  },
+  adminReviewNoticeBox: {
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.lg,
+    padding: 14,
+    width: '100%',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+    marginTop: 4,
+  },
+  noticeHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  noticeHeaderTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  noticeBodyText: {
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 18,
+  },
+  noticeBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    paddingLeft: 4,
+  },
+  bulletSymbol: {
+    fontSize: 14,
+    color: Colors.primary,
+    lineHeight: 18,
+  },
+  bulletText: {
+    fontSize: 12,
+    color: Colors.onSurface,
+    flex: 1,
+    lineHeight: 18,
+  },
+  credentialSummaryCard: {
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: BorderRadius.lg,
+    padding: 14,
+    width: '100%',
+    gap: 6,
+  },
+  credSummaryTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  actionPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.full,
+    paddingVertical: 14,
+    width: '100%',
+    marginTop: 6,
+    ...Shadows.level1,
+  },
+  actionPrimaryBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  actionBtnArrow: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginLeft: 8,
+  },
+  actionSecondaryBtn: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  actionSecondaryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: Colors.onSurfaceVariant,
   },
 });

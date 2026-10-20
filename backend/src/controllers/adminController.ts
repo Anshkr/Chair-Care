@@ -255,6 +255,14 @@ export const getAllTechnicians = async (
       tp.current_zone,
       tp.vehicle_info,
       tp.today_earnings,
+      tp.id_proof_type,
+      tp.id_proof_number,
+      tp.id_proof_document_url,
+      tp.address_proof_document_url,
+      tp.age_proof_document_url,
+      tp.rejection_reason,
+      tp.experience_years,
+      tp.specializations,
       (
         SELECT COUNT(*) 
         FROM service_requests sr 
@@ -312,6 +320,14 @@ export const getAllTechnicians = async (
         zone: r.current_zone,
         vehicleInfo: r.vehicle_info,
         todayEarnings: Number(r.today_earnings || 0),
+        idProofType: r.id_proof_type || 'aadhaar',
+        idProofNumber: r.id_proof_number || '',
+        idProofDocumentUrl: r.id_proof_document_url || '',
+        addressProofDocumentUrl: r.address_proof_document_url || '',
+        ageProofDocumentUrl: r.age_proof_document_url || '',
+        rejectionReason: r.rejection_reason || null,
+        experienceYears: Number(r.experience_years || 2),
+        specializations: r.specializations || 'Repair, Maintenance',
         createdAt: r.created_at,
       };
     }),
@@ -338,9 +354,17 @@ export const getTechnicianDetails = async (
       tp.is_online,
       tp.verification_status,
       tp.suspended_reason,
+      tp.rejection_reason,
       tp.current_zone,
       tp.vehicle_info,
-      tp.today_earnings
+      tp.today_earnings,
+      tp.id_proof_type,
+      tp.id_proof_number,
+      tp.id_proof_document_url,
+      tp.address_proof_document_url,
+      tp.age_proof_document_url,
+      tp.experience_years,
+      tp.specializations
      FROM users u
      JOIN technician_profiles tp ON u.id = tp.user_id
      WHERE u.id::text = $1 OR u.email = $1;`,
@@ -436,8 +460,16 @@ export const getTechnicianDetails = async (
       dutyState,
       verificationStatus: tech.verification_status,
       suspendedReason: tech.suspended_reason,
+      rejectionReason: tech.rejection_reason,
       zone: tech.current_zone || 'Delhi NCR Hub',
       vehicleInfo: tech.vehicle_info || 'Mobile Van #CC-04',
+      idProofType: tech.id_proof_type || 'aadhaar',
+      idProofNumber: tech.id_proof_number || '',
+      idProofDocumentUrl: tech.id_proof_document_url || '',
+      addressProofDocumentUrl: tech.address_proof_document_url || '',
+      ageProofDocumentUrl: tech.age_proof_document_url || '',
+      experienceYears: Number(tech.experience_years || 2),
+      specializations: tech.specializations || 'Repair, Hydraulic Tuning',
       createdAt: tech.created_at,
       currentJob: activeJob
         ? {
@@ -487,30 +519,66 @@ export const verifyTechnician = async (
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const { verificationStatus, suspendedReason } = req.body;
+  const { verificationStatus, rejectionReason, suspendedReason } = req.body;
   const adminId = req.user?.userId;
+
+  const validStatus = ['verified', 'rejected', 'suspended', 'pending'].includes(verificationStatus)
+    ? verificationStatus
+    : 'verified';
 
   await query(
     `UPDATE technician_profiles
      SET verification_status = $1,
-         suspended_reason = COALESCE($2, suspended_reason),
+         rejection_reason = CASE WHEN $1 = 'rejected' THEN COALESCE($2, rejection_reason, 'Verification criteria not met') ELSE rejection_reason END,
+         suspended_reason = CASE WHEN $1 = 'suspended' THEN COALESCE($3, suspended_reason, 'Account suspended by admin') ELSE suspended_reason END,
+         reviewed_by = $4,
+         reviewed_at = NOW(),
          updated_at = NOW()
-     WHERE user_id = $3;`,
-    [verificationStatus, suspendedReason || null, id]
+     WHERE user_id = $5;`,
+    [validStatus, rejectionReason || null, suspendedReason || null, adminId || null, id]
   );
+
+  // Send an in-app notification to the technician informing them of the admin decision
+  try {
+    const notifyTitle =
+      validStatus === 'verified'
+        ? 'Account Approved & Activated!'
+        : validStatus === 'rejected'
+        ? 'Partner Application Rejected'
+        : 'Partner Account Status Updated';
+
+    const notifyBody =
+      validStatus === 'verified'
+        ? 'Congratulations! Your ChairCare partner credentials and KYC documents have been reviewed and approved. You may now access the technician dashboard.'
+        : validStatus === 'rejected'
+        ? `Your partner application was reviewed and not approved. Reason: ${rejectionReason || 'Document verification criteria not met'}.`
+        : `Your account status was set to ${validStatus}.`;
+
+    await query(
+      `INSERT INTO notifications (user_id, title, body, type, is_read)
+       VALUES ($1, $2, $3, 'account_status', FALSE);`,
+      [id, notifyTitle, notifyBody]
+    );
+  } catch {
+    // Notification fallback
+  }
 
   // Log admin action
   if (adminId) {
-    await query(
-      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
-       VALUES ($1, 'VERIFY_TECHNICIAN', 'technician', $2, $3);`,
-      [adminId, id, JSON.stringify({ verificationStatus, suspendedReason })]
-    );
+    try {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'VERIFY_TECHNICIAN', 'technician', $2, $3);`,
+        [adminId, id, JSON.stringify({ verificationStatus: validStatus, rejectionReason, suspendedReason })]
+      );
+    } catch {
+      // Activity log fallback
+    }
   }
 
   res.json({
     success: true,
-    message: `Technician verification status updated to ${verificationStatus}.`,
+    message: `Technician verification status updated to ${validStatus}.`,
   });
 };
 

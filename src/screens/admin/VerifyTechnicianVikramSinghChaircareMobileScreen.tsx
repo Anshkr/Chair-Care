@@ -11,6 +11,7 @@ import {
   Linking,
   Platform,
   Alert,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
@@ -45,6 +46,17 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   const avatarUrl =
     passedTech?.avatarUrl ||
     'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop';
+
+  // Dynamic KYC and Identity Proof attributes
+  const idProofType = passedTech?.idProofType || 'National Identity (Aadhaar)';
+  const idProofNumber = passedTech?.idProofNumber || 'UID: •••• •••• 4912';
+  const idProofDocUrl =
+    passedTech?.idProofDocumentUrl ||
+    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=300&auto=format&fit=crop';
+  const addressProofDocUrl =
+    passedTech?.addressProofDocumentUrl ||
+    'https://images.unsplash.com/photo-1554415707-9e4c019a0a03?q=80&w=300&auto=format&fit=crop';
+  const rejectionReason = passedTech?.rejectionReason;
 
   const [auditNotes, setAuditNotes] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -96,44 +108,59 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
     }
   };
 
-  const handleReject = () => {
-    Alert.alert(
-      'Reject Application?',
-      `Are you sure you want to reject ${techName}'s application? This action will notify the candidate.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject Application',
-          style: 'destructive',
-          onPress: async () => {
-            const targetId = passedId || passedTech?.id || 'tech-03';
-            try {
-              const res = await adminApi.verifyTechnician(targetId, 'rejected', 'Verification rejected by administrator');
-              if (res.error) {
-                Alert.alert('Rejection Error', res.error || 'Failed to update technician status.');
-                return;
-              }
-              if (navigation) {
-                navigation.navigate('TechnicianActionConfirmed', {
-                  actionType: 'reject',
-                  actionTitle: 'Technician Application Rejected',
-                  technicianId: targetId,
-                  technician: {
-                    ...passedTech,
-                    id: targetId,
-                    name: techName,
-                    status: 'rejected',
-                    isVerified: false,
-                  },
-                });
-              }
-            } catch (err: any) {
-              Alert.alert('Connection Error', err.message || 'Unable to communicate with backend.');
-            }
+  const [isRejectModalVisible, setIsRejectModalVisible] = useState(false);
+  const [selectedRejectReason, setSelectedRejectReason] = useState('Invalid or illegible ID/Aadhaar proof');
+  const [customRejectReason, setCustomRejectReason] = useState('');
+
+  const REJECT_REASONS = [
+    'Invalid or illegible ID/Aadhaar/PAN proof',
+    'Address proof mismatch or unverifiable address',
+    'Age verification requirement not met (minimum 18 years)',
+    'Incomplete documentation or missing certification',
+    'Service domain credentials not verified',
+    'Other (specified below)',
+  ];
+
+  const handleRejectPrompt = () => {
+    setIsRejectModalVisible(true);
+  };
+
+  const confirmRejection = async () => {
+    const finalReason =
+      selectedRejectReason.includes('Other') && customRejectReason.trim()
+        ? customRejectReason.trim()
+        : selectedRejectReason;
+
+    setIsRejectModalVisible(false);
+    const targetId = passedId || passedTech?.id || 'tech-03';
+    try {
+      const res = await adminApi.verifyTechnician(targetId, 'rejected', finalReason);
+      if (res.error) {
+        Alert.alert('Rejection Error', res.error || 'Failed to update technician status.');
+        return;
+      }
+      if (navigation) {
+        navigation.navigate('TechnicianActionConfirmed', {
+          actionType: 'reject',
+          actionTitle: 'Technician Application Rejected',
+          technicianId: targetId,
+          technician: {
+            ...passedTech,
+            id: targetId,
+            name: techName,
+            status: 'rejected',
+            isVerified: false,
+            rejectionReason: finalReason,
           },
-        },
-      ]
-    );
+        });
+      }
+    } catch (err: any) {
+      Alert.alert('Connection Error', err.message || 'Unable to communicate with backend.');
+    }
+  };
+
+  const handleReject = () => {
+    handleRejectPrompt();
   };
 
   const handleRequestInfo = () => {
@@ -323,7 +350,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
               <View style={styles.docThumbnail}>
                 <Image
                   source={{
-                    uri: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=300&auto=format&fit=crop',
+                    uri: idProofDocUrl,
                   }}
                   style={styles.docThumbImg}
                   resizeMode="cover"
@@ -335,28 +362,28 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
 
               <View style={styles.docMetaCol}>
                 <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitleText}>National Identity (Aadhaar)</Text>
+                  <Text style={styles.docTitleText}>{idProofType}</Text>
                   <AppIcon name="Check" size={18} />
                 </View>
                 <View style={styles.ocrTagRow}>
                   <View style={styles.ocrPill}>
                     <View style={styles.blueMiniDot} />
-                    <Text style={styles.ocrText}>OCR SCANNED</Text>
+                    <Text style={styles.ocrText}>KYC VERIFIED</Text>
                   </View>
-                  <Text style={styles.docIdNumber}>UID: •••• •••• 4912</Text>
+                  <Text style={styles.docIdNumber}>{idProofNumber}</Text>
                 </View>
                 <Text style={styles.docDescriptionText} numberOfLines={1}>
-                  Name and facial biometric matched against National Portal database.
+                  Official government identity proof and verified age record.
                 </Text>
 
                 <View style={styles.docFooterRow}>
                   <TouchableOpacity
-                    onPress={() => Alert.alert('Aadhaar Document', 'Biometric & OCR scan audit valid: UID 4912.')}
+                    onPress={() => Alert.alert(`${idProofType} Document`, `Identity Proof Document Number: ${idProofNumber}\nStatus: Audited for Age & Validity.`)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.viewDocLink}>View Document ↗</Text>
                   </TouchableOpacity>
-                  <Text style={styles.docFileSize}>PDF • 1.8 MB</Text>
+                  <Text style={styles.docFileSize}>PDF • Encrypted</Text>
                 </View>
               </View>
             </View>
@@ -368,7 +395,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
               <View style={styles.docThumbnail}>
                 <Image
                   source={{
-                    uri: 'https://images.unsplash.com/photo-1554415707-9e4c019a0a03?q=80&w=300&auto=format&fit=crop',
+                    uri: addressProofDocUrl,
                   }}
                   style={styles.docThumbImg}
                   resizeMode="cover"
@@ -380,28 +407,28 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
 
               <View style={styles.docMetaCol}>
                 <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitleText}>Address Proof (Utility Bill)</Text>
+                  <Text style={styles.docTitleText}>Proof of Address</Text>
                   <AppIcon name="Check" size={18} />
                 </View>
                 <View style={styles.ocrTagRow}>
                   <View style={styles.ocrPill}>
                     <View style={styles.blueMiniDot} />
-                    <Text style={styles.ocrText}>GEO MATCHED</Text>
+                    <Text style={styles.ocrText}>ZONE MATCHED</Text>
                   </View>
-                  <Text style={styles.docIdNumber}>DHBVN • JUL 2024</Text>
+                  <Text style={styles.docIdNumber}>{corridor}</Text>
                 </View>
                 <Text style={styles.docAddressMatched} numberOfLines={1}>
-                  Sector 14, Gurugram, Haryana 122001
+                  Verified residential and service corridor location.
                 </Text>
 
                 <View style={styles.docFooterRow}>
                   <TouchableOpacity
-                    onPress={() => Alert.alert('Address Proof', 'Utility bill address matched to Gurugram corridor.')}
+                    onPress={() => Alert.alert('Address Proof Document', `Corridor: ${corridor}\nVerified document on file with match to service zone.`)}
                     activeOpacity={0.7}
                   >
                     <Text style={styles.viewDocLink}>View Document ↗</Text>
                   </TouchableOpacity>
-                  <Text style={styles.docFileSize}>JPG • 3.2 MB</Text>
+                  <Text style={styles.docFileSize}>PDF • Valid</Text>
                 </View>
               </View>
             </View>
@@ -510,6 +537,94 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Reject Application Modal with Reason Selection */}
+      <Modal
+        visible={isRejectModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsRejectModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalAlertBadge}>
+                <AppIcon name="AlertTriangle" size={20} color="#ba1a1a" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Reject Application</Text>
+                <Text style={styles.modalSubtitle}>
+                  Select reason for rejecting {techName}'s application
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={styles.reasonListScroll} showsVerticalScrollIndicator={false}>
+              {REJECT_REASONS.map((reason) => {
+                const isSelected = selectedRejectReason === reason;
+                return (
+                  <TouchableOpacity
+                    key={reason}
+                    style={[
+                      styles.reasonOptionBtn,
+                      isSelected && styles.reasonOptionBtnSelected,
+                    ]}
+                    onPress={() => setSelectedRejectReason(reason)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.radioCircle,
+                        isSelected && styles.radioCircleSelected,
+                      ]}
+                    >
+                      {isSelected && <View style={styles.radioInnerDot} />}
+                    </View>
+                    <Text
+                      style={[
+                        styles.reasonOptionText,
+                        isSelected && styles.reasonOptionTextSelected,
+                      ]}
+                    >
+                      {reason}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              {selectedRejectReason.includes('Other') && (
+                <TextInput
+                  style={styles.customReasonInput}
+                  placeholder="Specify custom rejection reason..."
+                  placeholderTextColor={Colors.outline}
+                  value={customRejectReason}
+                  onChangeText={setCustomRejectReason}
+                  multiline
+                  numberOfLines={2}
+                />
+              )}
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsRejectModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalConfirmRejectBtn}
+                onPress={confirmRejection}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmRejectText}>Confirm Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -518,6 +633,132 @@ const styles = StyleSheet.create({
   screenContainer: {
     flex: 1,
     backgroundColor: Colors.surface,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: 20,
+    padding: 20,
+    width: '100%',
+    maxWidth: 420,
+    maxHeight: '80%',
+    ...Shadows.level3,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  modalAlertBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(186, 26, 26, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalTitle: {
+    ...Typography.titleMedium,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  modalSubtitle: {
+    ...Typography.bodySmall,
+    color: Colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  reasonListScroll: {
+    maxHeight: 250,
+    marginVertical: 8,
+  },
+  reasonOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: BorderRadius.md,
+    marginBottom: 6,
+    backgroundColor: Colors.surfaceContainer,
+  },
+  reasonOptionBtnSelected: {
+    backgroundColor: 'rgba(186, 26, 26, 0.08)',
+    borderWidth: 1,
+    borderColor: '#ba1a1a',
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: Colors.outline,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioCircleSelected: {
+    borderColor: '#ba1a1a',
+  },
+  radioInnerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#ba1a1a',
+  },
+  reasonOptionText: {
+    ...Typography.bodyMedium,
+    color: Colors.onSurface,
+    flex: 1,
+  },
+  reasonOptionTextSelected: {
+    fontWeight: '700',
+    color: '#ba1a1a',
+  },
+  customReasonInput: {
+    backgroundColor: Colors.surfaceContainerHigh,
+    borderRadius: BorderRadius.md,
+    padding: 12,
+    ...Typography.bodyMedium,
+    color: Colors.onSurface,
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainerHigh,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancelBtnText: {
+    ...Typography.labelLarge,
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  modalConfirmRejectBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.full,
+    backgroundColor: '#ba1a1a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalConfirmRejectText: {
+    ...Typography.labelLarge,
+    fontWeight: '700',
+    color: '#ffffff',
   },
   headerContainer: {
     flexDirection: 'row',

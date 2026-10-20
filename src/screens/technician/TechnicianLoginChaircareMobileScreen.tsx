@@ -46,7 +46,22 @@ export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }>
       const res = await login(cleanIdentity, cleanPassword, 'technician');
       setLoading(false);
       if (!res.success) {
-        Alert.alert('Authentication Failed', res.error || 'Invalid technician credentials.');
+        const err = res.error || '';
+        if (err.includes('pending admin approval') || err.includes('reviewing your')) {
+          Alert.alert(
+            'Application Pending Admin Approval',
+            'Your partner account has been registered, but is currently awaiting review by the ChairCare Admin Team.\n\nOnce an administrator reviews and approves your KYC documents (Aadhaar/PAN and Address Proof), you will be able to access the Technician Dashboard.',
+            [{ text: 'Understood' }]
+          );
+        } else if (err.includes('rejected')) {
+          Alert.alert(
+            'Application Rejected',
+            err,
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert('Authentication Failed', res.error || 'Invalid technician credentials.');
+        }
       }
     } catch (err: any) {
       setLoading(false);
@@ -228,6 +243,32 @@ export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }>
             variant="outline"
             onPress={handleSignIn}
           />
+
+          <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: Colors.outlineHairline, alignItems: 'center' }}>
+            <Text style={{ ...Typography.bodySm, color: Colors.onSurfaceVariant, marginBottom: 8 }}>
+              New Service Technician or Partner?
+            </Text>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('TechnicianOnboarding')}
+              style={{
+                backgroundColor: '#0F172A',
+                paddingVertical: 12,
+                paddingHorizontal: 20,
+                borderRadius: BorderRadius.md,
+                width: '100%',
+                alignItems: 'center',
+                flexDirection: 'row',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+              activeOpacity={0.85}
+            >
+              <AppIcon name="UserPlus" size={16} color="#FFFFFF" />
+              <Text style={{ ...Typography.labelMd, color: '#FFFFFF', fontWeight: '700' }}>
+                Join as Partner • Submit KYC Documents
+              </Text>
+            </TouchableOpacity>
+          </View>
         </PrecisionCard>
 
         {/* Verification & Onboarding Link */}

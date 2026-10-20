@@ -173,3 +173,20 @@ export const TechnicianNavigator: React.FC = () => {
     </Stack.Navigator>
   );
 };
+
+const AuthStack = createNativeStackNavigator();
+
+export const TechnicianAuthNavigator: React.FC = () => {
+  return (
+    <AuthStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: 'slide_from_right',
+      }}
+      initialRouteName="TechnicianLogin"
+    >
+      <AuthStack.Screen name="TechnicianLogin" component={TechnicianLoginChaircareMobileScreen} />
+      <AuthStack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingChaircareMobileScreen} />
+    </AuthStack.Navigator>
+  );
+};

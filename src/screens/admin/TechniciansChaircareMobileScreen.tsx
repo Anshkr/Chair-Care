@@ -45,9 +45,15 @@ interface TechRosterItem {
   indicatorDotColor: string;
   metaTags: string[];
   skills: string[];
-  reviewCountText?: string;
-  suspensionReason?: string;
-  suspensionCaseId?: string;
+  phone?: string;
+  email?: string;
+  idProofType?: string;
+  idProofNumber?: string;
+  idProofDocumentUrl?: string;
+  addressProofDocumentUrl?: string;
+  ageProofDocumentUrl?: string;
+  rejectionReason?: string;
+  verificationStatus?: string;
   actionLabel: string;
   actionDestination: 'profile' | 'verify' | 'suspend';
 }
@@ -140,18 +146,28 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
           return {
             id: t.id,
             name: t.name,
+            phone: t.phone,
+            email: t.email,
             initials,
             isVerified: t.verificationStatus === 'verified',
             corridorLocation: t.zone || 'Central Delhi / NCR',
             rating: t.rating || 5.0,
             completedJobsCount: t.completedJobs || 0,
+            experienceYears: t.experienceYears || 0,
+            idProofType: t.idProofType,
+            idProofNumber: t.idProofNumber,
+            idProofDocumentUrl: t.idProofDocumentUrl,
+            addressProofDocumentUrl: t.addressProofDocumentUrl,
+            ageProofDocumentUrl: t.ageProofDocumentUrl,
+            rejectionReason: t.rejectionReason,
+            verificationStatus: t.verificationStatus,
             status,
             statusLabel,
             statusBadgeVariant,
             accentColor,
             indicatorDotColor,
             metaTags: [t.vehicleInfo || 'Mobile Van', `${t.completedJobs || 0} Jobs`],
-            skills: ['Repair', 'Maintenance', 'Hydraulics'],
+            skills: Array.isArray(t.specializations) && t.specializations.length > 0 ? t.specializations : ['Repair', 'Maintenance', 'Hydraulics'],
             reviewCountText: `${t.completedJobs || 0} completed orders`,
             actionLabel,
             actionDestination,
