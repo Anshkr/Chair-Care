@@ -43,3 +43,7 @@ coverage/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Local Executables & Tools
+tools/
+*.exe
