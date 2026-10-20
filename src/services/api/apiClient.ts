@@ -15,13 +15,13 @@ const getDefaultApiBaseUrl = (): string => {
     return `http://${host}:5000/api/v1`;
   }
 
-  // 3. Android or Mobile physical device default (HTTPS Cloudflare Tunnel)
+  // 3. Android or Mobile physical device default (Permanent Render Cloud API)
   if (Platform.OS === 'android') {
-    return 'https://dogs-contamination-samuel-signature.trycloudflare.com/api/v1';
+    return 'https://chair-care.onrender.com/api/v1';
   }
 
-  // 4. Default development fallback
-  return 'https://dogs-contamination-samuel-signature.trycloudflare.com/api/v1';
+  // 4. Default fallback
+  return 'https://chair-care.onrender.com/api/v1';
 };
 
 const getInitialToken = (): string | null => {
