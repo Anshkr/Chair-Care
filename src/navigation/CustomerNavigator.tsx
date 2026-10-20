@@ -29,6 +29,7 @@ import {
   NotificationsChaircareMobileScreen,
   CustomerProfileChaircareMobileScreen,
 } from '../screens/customer';
+import { TechnicianOnboardingChaircareMobileScreen } from '../screens/technician';
 import { useAuth } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
@@ -158,6 +159,7 @@ export const CustomerNavigator: React.FC = () => {
         options={{ presentation: 'transparentModal', animation: 'fade' }}
       />
       <Stack.Screen name="CustomerRegistration" component={CustomerRegistrationChaircareMobileScreen} />
+      <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingChaircareMobileScreen} />
       <Stack.Screen name="BookingStep1" component={BookingStep1SelectServiceChaircareMobileScreen} />
       <Stack.Screen name="BookingStep2" component={BookingStep2DescribeProblemChaircareMobileScreen} />
       <Stack.Screen name="BookingStep3" component={BookingStep3ServiceLocationChaircareMobileScreen} />

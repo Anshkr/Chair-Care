@@ -217,7 +217,11 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
 
   const handleBack = () => {
     if (isSubmittedSuccess) {
-      navigation.navigate('TechnicianLogin');
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        navigation.navigate('CustomerMain');
+      }
       return;
     }
     if (currentStep > 1) {
@@ -226,7 +230,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       if (navigation.canGoBack()) {
         navigation.goBack();
       } else {
-        navigation.navigate('TechnicianLogin');
+        navigation.navigate('CustomerMain');
       }
     }
   };
@@ -239,7 +243,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
           <View style={styles.headerTopRow}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => navigation.navigate('TechnicianLogin')}
+              onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate('CustomerMain'))}
               activeOpacity={0.7}
             >
               <Text style={styles.backArrow}>←</Text>
@@ -322,10 +326,10 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
             {/* Action Buttons */}
             <TouchableOpacity
               style={styles.actionPrimaryBtn}
-              onPress={() => navigation.navigate('TechnicianLogin')}
+              onPress={() => navigation.navigate('AuthenticationGate')}
               activeOpacity={0.85}
             >
-              <Text style={styles.actionPrimaryBtnText}>Go to Technician Sign In</Text>
+              <Text style={styles.actionPrimaryBtnText}>Go to Sign In</Text>
               <Text style={styles.actionBtnArrow}>→</Text>
             </TouchableOpacity>
 

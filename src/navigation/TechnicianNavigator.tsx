@@ -5,7 +5,6 @@ import { AppIcon } from '../components/common/AppIcon';
 import { Colors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import {
-  TechnicianLoginChaircareMobileScreen,
   TechnicianOnboardingChaircareMobileScreen,
   TechnicianDashboardChaircareMobileScreen,
   TechnicianAvailabilityChaircareMobileScreen,
@@ -147,7 +146,6 @@ export const TechnicianNavigator: React.FC = () => {
       initialRouteName="TechnicianMain"
     >
       <Stack.Screen name="TechnicianMain" component={TechnicianTabs} />
-      <Stack.Screen name="TechnicianLogin" component={TechnicianLoginChaircareMobileScreen} />
       <Stack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingChaircareMobileScreen} />
       <Stack.Screen name="TechnicianAvailability" component={TechnicianAvailabilityChaircareMobileScreen} />
       <Stack.Screen name="JobRequestDetails" component={JobRequestDetailsChaircareMobileScreen} />
@@ -171,22 +169,5 @@ export const TechnicianNavigator: React.FC = () => {
       <Stack.Screen name="TechnicianJobHistory" component={TechnicianJobHistoryChaircareMobileScreen} />
       <Stack.Screen name="JobHistory" component={TechnicianJobHistoryChaircareMobileScreen} />
     </Stack.Navigator>
-  );
-};
-
-const AuthStack = createNativeStackNavigator();
-
-export const TechnicianAuthNavigator: React.FC = () => {
-  return (
-    <AuthStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        animation: 'slide_from_right',
-      }}
-      initialRouteName="TechnicianLogin"
-    >
-      <AuthStack.Screen name="TechnicianLogin" component={TechnicianLoginChaircareMobileScreen} />
-      <AuthStack.Screen name="TechnicianOnboarding" component={TechnicianOnboardingChaircareMobileScreen} />
-    </AuthStack.Navigator>
   );
 };

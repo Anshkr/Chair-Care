@@ -86,11 +86,18 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
     }
   };
 
-  const handleCreateAccount = () => {
-    // Navigate directly to registration screen with return route preserved
+  const handleCreateCustomerAccount = () => {
     navigation.navigate('CustomerRegistration', {
       returnTo: route?.params?.returnTo || pendingReturnRoute,
     });
+  };
+
+  const handleJoinAsTechnician = () => {
+    navigation.navigate('TechnicianOnboarding');
+  };
+
+  const handleCreateAccount = () => {
+    handleCreateCustomerAccount();
   };
 
   const handleDismiss = () => {
@@ -260,6 +267,29 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
                 )}
               </TouchableOpacity>
 
+              {/* Account Creation Options in Sign In Mode */}
+              <View style={styles.createAccountSection}>
+                <Text style={styles.createAccountHeading}>NEW TO CHAIRCARE?</Text>
+                <View style={styles.createAccountRow}>
+                  <TouchableOpacity
+                    style={styles.createCustomerSubBtn}
+                    onPress={handleCreateCustomerAccount}
+                    activeOpacity={0.7}
+                  >
+                    <AppIcon name="User" size={14} color={Colors.primary} />
+                    <Text style={styles.createCustomerSubText}>Customer Account</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.createTechSubBtn}
+                    onPress={handleJoinAsTechnician}
+                    activeOpacity={0.7}
+                  >
+                    <AppIcon name="Wrench" size={14} color="#005236" />
+                    <Text style={styles.createTechSubText}>Technician Partner (KYC)</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               <TouchableOpacity
                 style={styles.switchModeBtn}
                 onPress={() => {
@@ -287,14 +317,24 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
                 <Text style={styles.signInBtnText}>Sign In with Phone or Email</Text>
               </TouchableOpacity>
 
-              {/* Action 2: Create Account -> Navigates to real Registration Screen */}
+              {/* Action 2: Create Customer Account */}
               <TouchableOpacity
                 style={styles.signUpBtn}
-                onPress={handleCreateAccount}
+                onPress={handleCreateCustomerAccount}
                 activeOpacity={0.85}
               >
                 <AppIcon name="User" size={18} color={Colors.onSurface} />
-                <Text style={styles.signUpBtnText}>Create New Account</Text>
+                <Text style={styles.signUpBtnText}>Create Customer Account</Text>
+              </TouchableOpacity>
+
+              {/* Action 3: Join as Technician Partner */}
+              <TouchableOpacity
+                style={styles.techPartnerBtn}
+                onPress={handleJoinAsTechnician}
+                activeOpacity={0.85}
+              >
+                <AppIcon name="Wrench" size={16} color="#005236" />
+                <Text style={styles.techPartnerBtnText}>Join as Technician Partner (Submit KYC)</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -600,6 +640,80 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  techPartnerBtn: {
+    height: 48,
+    backgroundColor: 'rgba(0, 82, 54, 0.08)',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 82, 54, 0.25)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    ...Shadows.level1,
+  },
+  techPartnerBtnText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    color: '#005236',
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  createAccountSection: {
+    alignItems: 'center',
+    paddingVertical: 8,
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineHairline,
+    marginTop: 4,
+  },
+  createAccountHeading: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: Colors.outline,
+    letterSpacing: 0.8,
+  },
+  createAccountRow: {
+    flexDirection: 'row',
+    gap: 8,
+    width: '100%',
+  },
+  createCustomerSubBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  createCustomerSubText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  createTechSubBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: 'rgba(0, 82, 54, 0.06)',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 82, 54, 0.2)',
+  },
+  createTechSubText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#005236',
   },
   separatorContainer: {
     flexDirection: 'row',

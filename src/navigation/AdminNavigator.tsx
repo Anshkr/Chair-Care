@@ -102,7 +102,6 @@ export const AdminNavigator: React.FC = () => {
       initialRouteName="AdminMain"
     >
       <Stack.Screen name="AdminMain" component={AdminTabs} />
-      <Stack.Screen name="SuperAdminLogin" component={AdminScreens.SuperAdminLoginChaircareMobileScreen} />
       <Stack.Screen name="AdminDashboard" component={AdminTabs} />
       <Stack.Screen name="LiveOperationsOverview" component={AdminScreens.LiveOperationsOverviewChaircareMobileScreen} />
       <Stack.Screen name="ServiceRequests" component={AdminScreens.ServiceRequestsChaircareMobileScreen} />

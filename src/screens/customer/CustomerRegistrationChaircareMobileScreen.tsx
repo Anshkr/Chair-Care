@@ -344,6 +344,24 @@ export const CustomerRegistrationChaircareMobileScreen: React.FC<{
                 <Text style={styles.signInLink}>Sign In</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Technician partner registration prompt */}
+            <TouchableOpacity
+              style={styles.techPartnerCard}
+              onPress={() => navigation.navigate('TechnicianOnboarding')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.techPartnerLeft}>
+                <View style={styles.techIconBubble}>
+                  <AppIcon name="Wrench" size={16} color="#005236" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.techPartnerTitle}>Are you a Service Technician?</Text>
+                  <Text style={styles.techPartnerSub}>Submit KYC (Aadhaar/PAN) for Admin Verification</Text>
+                </View>
+              </View>
+              <Text style={styles.techPartnerArrow}>→</Text>
+            </TouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -555,5 +573,48 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.secondaryCobalt,
     textDecorationLine: 'underline',
+  },
+  techPartnerCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 82, 54, 0.06)',
+    borderRadius: BorderRadius.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 82, 54, 0.2)',
+    marginTop: 8,
+  },
+  techPartnerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  techIconBubble: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 82, 54, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  techPartnerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  techPartnerSub: {
+    fontSize: 11,
+    color: '#005236',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  techPartnerArrow: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#005236',
+    marginLeft: 8,
   },
 });

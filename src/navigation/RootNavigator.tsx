@@ -4,11 +4,9 @@ import { View, StyleSheet } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { CustomerNavigator } from './CustomerNavigator';
-import { TechnicianNavigator, TechnicianAuthNavigator } from './TechnicianNavigator';
+import { TechnicianNavigator } from './TechnicianNavigator';
 import { AdminNavigator } from './AdminNavigator';
 import { IntroNavigator } from './IntroNavigator';
-import { TechnicianLoginChaircareMobileScreen } from '../screens/technician';
-import { SuperAdminLoginChaircareMobileScreen } from '../screens/admin';
 import { DevRoleSwitcher } from '../components/dev/DevRoleSwitcher';
 import { Colors } from '../constants/theme';
 import { hasSeenIntro, markIntroAsSeen, resetIntroSeen } from '../utils/introStorage';
@@ -53,32 +51,17 @@ export const RootNavigator: React.FC = () => {
       return <IntroNavigator onFinishIntro={handleFinishIntro} />;
     }
 
-    // Role-based navigation guarding and isolation
-    switch (role) {
-      case 'technician':
-        if (!isTechnicianAuthorized) {
-          return <TechnicianAuthNavigator />;
-        }
-        return <TechnicianNavigator />;
-
-      case 'admin':
-        if (!isAdminAuthorized) {
-          return (
-            <SuperAdminLoginChaircareMobileScreen
-              navigation={{
-                canGoBack: () => false,
-                goBack: () => {},
-                navigate: () => {},
-              }}
-            />
-          );
-        }
-        return <AdminNavigator />;
-
-      case 'customer':
-      default:
-        return <CustomerNavigator />;
+    // Role-based portal routing: only activated once authenticated with corresponding role
+    if (isAdminAuthorized) {
+      return <AdminNavigator />;
     }
+
+    if (isTechnicianAuthorized) {
+      return <TechnicianNavigator />;
+    }
+
+    // Single source of truth: all login and account creation starts in the customer portal
+    return <CustomerNavigator />;
   };
 
   return (
