@@ -1,5 +1,6 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -40,18 +41,21 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   const [techData, setTechData] = useState<any>(passedTech || null);
   const [isLoading, setIsLoading] = useState<boolean>(!passedTech);
 
-  useEffect(() => {
-    if (targetId) {
-      adminApi.getTechnicianDetails(targetId)
-        .then((res) => {
-          if (res.success && res.data) {
-            setTechData(res.data);
-          }
-        })
-        .catch((err) => console.warn('Could not load technician details:', err))
-        .finally(() => setIsLoading(false));
-    }
-  }, [targetId]);
+  // Always refresh technician details from database on screen focus
+  useFocusEffect(
+    useCallback(() => {
+      if (targetId) {
+        adminApi.getTechnicianDetails(targetId)
+          .then((res) => {
+            if (res.success && res.data) {
+              setTechData(res.data);
+            }
+          })
+          .catch((err) => console.warn('Could not load technician details:', err))
+          .finally(() => setIsLoading(false));
+      }
+    }, [targetId])
+  );
 
   // Real technician attributes from database with no dummy fallbacks
   const techName = techData?.name || passedTech?.name || 'Technician Applicant';

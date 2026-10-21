@@ -22,6 +22,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { authApi } from '../../services/api/authApi';
 import { useAuth } from '../../context/AuthContext';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
 const KYC_DOCUMENT_TYPES = [
   { id: 'Aadhaar Card', label: 'Aadhaar Card', placeholder: 'Enter 12-digit Aadhaar UID (e.g. 5421 8904 1234)' },
@@ -101,9 +102,10 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const mime = asset.mimeType || 'image/jpeg';
-        const dataUrl = asset.base64
-          ? `data:${mime};base64,${asset.base64}`
-          : asset.uri;
+        let dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUrl.startsWith('data:') && asset.uri) {
+          dataUrl = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
 
         setDocUri(asset.uri);
         setDocDataUrl(dataUrl);
@@ -136,9 +138,10 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const asset = result.assets[0];
         const mime = asset.mimeType || 'image/jpeg';
-        const dataUrl = asset.base64
-          ? `data:${mime};base64,${asset.base64}`
-          : asset.uri;
+        let dataUrl = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUrl.startsWith('data:') && asset.uri) {
+          dataUrl = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
 
         setDocUri(asset.uri);
         setDocDataUrl(dataUrl);
@@ -167,8 +170,13 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
         const isPdf = asset.name?.toLowerCase().endsWith('.pdf') || asset.mimeType?.includes('pdf');
         const mime = asset.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg');
 
+        let dataUrl = asset.uri;
+        if (asset.uri) {
+          dataUrl = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+
         setDocUri(asset.uri);
-        setDocDataUrl(asset.uri);
+        setDocDataUrl(dataUrl);
         setDocName(asset.name || 'document.pdf');
         setDocMime(mime);
         setDocSize(asset.size ? `${(asset.size / 1024).toFixed(0)} KB` : 'Document Attached');
@@ -249,7 +257,10 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
     try {
       setIsSubmitting(true);
 
-      const finalDocumentUrl = docDataUrl || docUri || '';
+      let finalDocumentUrl = docDataUrl || docUri || '';
+      if (finalDocumentUrl && !finalDocumentUrl.startsWith('data:')) {
+        finalDocumentUrl = await fileUriToBase64DataUrl(finalDocumentUrl, docMime || 'image/jpeg');
+      }
 
       const res = await authApi.register({
         name: fullName.trim(),

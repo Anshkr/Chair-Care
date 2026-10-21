@@ -18,8 +18,9 @@ import * as DocumentPicker from 'expo-document-picker';
 import { AppIcon } from '../../components/common/AppIcon';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { Colors } from '../../constants/theme';
-import { useAuth } from '../../context/AuthContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { useAuth } from '../../context/AuthContext';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
 const DOCUMENT_TYPES = [
   'Aadhaar Card',
@@ -206,10 +207,15 @@ export const TechnicianAccountStatusScreen: React.FC<{
 
     try {
       setIsSubmitting(true);
+      let finalDocUrl = attachedDoc.uri;
+      if (finalDocUrl && !finalDocUrl.startsWith('data:')) {
+        finalDocUrl = await fileUriToBase64DataUrl(finalDocUrl, attachedDoc.type || 'application/pdf');
+      }
+
       const res = await technicianApi.updateProfile({
         idProofType: selectedDocType,
         idProofNumber: docNumber.trim(),
-        idProofDocumentUrl: attachedDoc.uri,
+        idProofDocumentUrl: finalDocUrl,
       });
 
       if (!res.success) {
