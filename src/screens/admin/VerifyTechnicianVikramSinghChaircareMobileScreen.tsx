@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,28 +35,41 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   const insets = useSafeAreaInsets();
   const passedTech = route?.params?.technician;
   const passedId = route?.params?.technicianId;
+  const targetId = passedId || passedTech?.id;
 
-  // Selected technician details with fallback to canonical Vikram Singh Stitch reference
-  const techName = passedTech?.name || 'Vikram Singh';
-  const techIdTag = passedTech?.code || '#TK-8820';
-  const experienceYears = passedTech?.experienceYears || 4;
-  const phone = passedTech?.phone || '+91 98765 43210';
-  const email = passedTech?.email || 'vikram.singh@ergomech.in';
-  const corridor = passedTech?.corridorLocation || 'Gurugram • Faridabad';
-  const avatarUrl =
-    passedTech?.avatarUrl ||
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=400&auto=format&fit=crop';
+  const [techData, setTechData] = useState<any>(passedTech || null);
+  const [isLoading, setIsLoading] = useState<boolean>(!passedTech);
 
-  // Dynamic KYC and Identity Proof attributes
-  const idProofType = passedTech?.idProofType || 'National Identity (Aadhaar)';
-  const idProofNumber = passedTech?.idProofNumber || 'UID: •••• •••• 4912';
-  const idProofDocUrl =
-    passedTech?.idProofDocumentUrl ||
-    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?q=80&w=300&auto=format&fit=crop';
-  const addressProofDocUrl =
-    passedTech?.addressProofDocumentUrl ||
-    'https://images.unsplash.com/photo-1554415707-9e4c019a0a03?q=80&w=300&auto=format&fit=crop';
-  const rejectionReason = passedTech?.rejectionReason;
+  useEffect(() => {
+    if (targetId) {
+      adminApi.getTechnicianDetails(targetId)
+        .then((res) => {
+          if (res.success && res.data) {
+            setTechData(res.data);
+          }
+        })
+        .catch((err) => console.warn('Could not load technician details:', err))
+        .finally(() => setIsLoading(false));
+    }
+  }, [targetId]);
+
+  // Real technician attributes from database with no dummy fallbacks
+  const techName = techData?.name || passedTech?.name || 'Technician Applicant';
+  const techIdTag = techData?.id
+    ? `#TK-${techData.id.substring(0, 5).toUpperCase()}`
+    : passedTech?.code || '#TK-NEW';
+  const phone = techData?.phone || passedTech?.phone || 'Not provided';
+  const email = techData?.email || passedTech?.email || 'Not provided';
+  const avatarUrl = techData?.avatarUrl || passedTech?.avatarUrl || '';
+  const idProofType = techData?.idProofType || passedTech?.idProofType || 'Aadhaar / Govt ID';
+  const idProofNumber = techData?.idProofNumber || passedTech?.idProofNumber || 'Not provided';
+  const idProofDocUrl = techData?.idProofDocumentUrl || passedTech?.idProofDocumentUrl || '';
+  const verificationStatus = techData?.verificationStatus || passedTech?.verificationStatus || 'pending';
+  const rejectionReason = techData?.rejectionReason || passedTech?.rejectionReason;
+  const reuploadNotes = techData?.reuploadNotes || passedTech?.reuploadNotes;
+  const appliedDate = techData?.createdAt
+    ? new Date(techData.createdAt).toLocaleDateString()
+    : 'Recently';
 
   const [auditNotes, setAuditNotes] = useState<string>('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -80,10 +93,15 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
     });
   };
 
+  const currentTargetId = techData?.id || passedId || passedTech?.id;
+
   const handleApprove = async () => {
-    const targetId = passedId || passedTech?.id || 'tech-03';
+    if (!currentTargetId) {
+      Alert.alert('Error', 'No technician ID available to approve.');
+      return;
+    }
     try {
-      const res = await adminApi.verifyTechnician(targetId, 'verified');
+      const res = await adminApi.verifyTechnician(currentTargetId, 'verified');
       if (res.error) {
         Alert.alert('Verification Error', res.error || 'Failed to update technician verification status.');
         return;
@@ -92,10 +110,10 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         navigation.navigate('TechnicianActionConfirmed', {
           actionType: 'approve',
           actionTitle: 'Technician Verified & Onboarded',
-          technicianId: targetId,
+          technicianId: currentTargetId,
           technician: {
             ...passedTech,
-            id: targetId,
+            id: currentTargetId,
             name: techName,
             status: 'online',
             isVerified: true,
@@ -139,15 +157,18 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   };
 
   const confirmRejection = async () => {
+    if (!currentTargetId) {
+      Alert.alert('Error', 'No technician ID available to reject.');
+      return;
+    }
     const finalReason =
       selectedRejectReason.includes('Other') && customRejectReason.trim()
         ? customRejectReason.trim()
         : selectedRejectReason;
 
     setIsRejectModalVisible(false);
-    const targetId = passedId || passedTech?.id || 'tech-03';
     try {
-      const res = await adminApi.verifyTechnician(targetId, 'rejected', finalReason);
+      const res = await adminApi.verifyTechnician(currentTargetId, 'rejected', finalReason);
       if (res.error) {
         Alert.alert('Rejection Error', res.error || 'Failed to update technician status.');
         return;
@@ -156,10 +177,10 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         navigation.navigate('TechnicianActionConfirmed', {
           actionType: 'reject',
           actionTitle: 'Technician Application Rejected',
-          technicianId: targetId,
+          technicianId: currentTargetId,
           technician: {
             ...passedTech,
-            id: targetId,
+            id: currentTargetId,
             name: techName,
             status: 'rejected',
             isVerified: false,
@@ -173,16 +194,19 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   };
 
   const confirmReuploadRequest = async () => {
+    if (!currentTargetId) {
+      Alert.alert('Error', 'No technician ID available.');
+      return;
+    }
     const finalNote =
       selectedReuploadReason.includes('Other') && customReuploadNote.trim()
         ? customReuploadNote.trim()
         : selectedReuploadReason + (customReuploadNote.trim() ? ` - ${customReuploadNote.trim()}` : '');
 
     setIsReuploadModalVisible(false);
-    const targetId = passedId || passedTech?.id || 'tech-03';
     try {
       const res = await adminApi.verifyTechnician(
-        targetId,
+        currentTargetId,
         'reupload_requested',
         undefined,
         undefined,
@@ -257,48 +281,145 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* 2. Applicant Summary Card */}
+        {/* Verification Status Banner */}
+        {verificationStatus === 'pending' && (
+          <View style={[styles.statusBanner, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
+            <AppIcon name="Clock" size={20} color="#d97706" />
+            <View style={styles.statusBannerContent}>
+              <Text style={[styles.statusBannerTitle, { color: '#b45309' }]}>
+                Application Awaiting Review
+              </Text>
+              <Text style={styles.statusBannerSub}>
+                Review the submitted identification document below and approve, reject, or request a re-upload.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {verificationStatus === 'reupload_requested' && (
+          <View style={[styles.statusBanner, { backgroundColor: '#eff6ff', borderColor: Colors.secondaryCobalt }]}>
+            <AppIcon name="UploadCloud" size={20} color={Colors.secondaryCobalt} />
+            <View style={styles.statusBannerContent}>
+              <Text style={[styles.statusBannerTitle, { color: Colors.secondaryCobalt }]}>
+                Re-upload Requested
+              </Text>
+              <Text style={styles.statusBannerSub}>
+                {reuploadNotes ? `Notice sent: "${reuploadNotes}"` : 'Technician was notified to upload an updated document.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {verificationStatus === 'rejected' && (
+          <View style={[styles.statusBanner, { backgroundColor: '#fef2f2', borderColor: '#ba1a1a' }]}>
+            <AppIcon name="AlertTriangle" size={20} color="#ba1a1a" />
+            <View style={styles.statusBannerContent}>
+              <Text style={[styles.statusBannerTitle, { color: '#ba1a1a' }]}>
+                Application Rejected
+              </Text>
+              <Text style={styles.statusBannerSub}>
+                {rejectionReason ? `Reason: "${rejectionReason}"` : 'This technician application was rejected.'}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {verificationStatus === 'verified' && (
+          <View style={[styles.statusBanner, { backgroundColor: '#f0fdf4', borderColor: '#005236' }]}>
+            <AppIcon name="CheckCircle" size={20} color="#005236" />
+            <View style={styles.statusBannerContent}>
+              <Text style={[styles.statusBannerTitle, { color: '#005236' }]}>
+                Technician Verified & Active
+              </Text>
+              <Text style={styles.statusBannerSub}>
+                Applicant credentials validated. This technician can receive dispatched customer bookings.
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* 1. Applicant Summary Card */}
         <View style={styles.card}>
           <View style={styles.applicantTopRow}>
             <View style={styles.applicantProfileLeft}>
               <View style={styles.applicantAvatarBox}>
-                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+                {avatarUrl ? (
+                  <Image source={{ uri: avatarUrl }} style={styles.avatarImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.avatarInitialsBox}>
+                    <Text style={styles.avatarInitialsText}>
+                      {(techName || 'TC')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .join('')
+                        .substring(0, 2)
+                        .toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               <View style={styles.applicantNameCol}>
                 <View style={styles.nameRow}>
                   <Text style={styles.applicantNameTitle}>{techName}</Text>
-                  <AppIcon name="ShieldCheck" size={18} />
+                  {verificationStatus === 'verified' && (
+                    <AppIcon name="CheckCircle" size={18} color="#005236" />
+                  )}
                 </View>
                 <View style={styles.subMetaRow}>
-                  <Text style={styles.techIdMono}>Tech ID: {techIdTag}</Text>
+                  <Text style={styles.techIdMono}>ID: {techIdTag}</Text>
                   <Text style={styles.metaDot}>•</Text>
-                  <Text style={styles.expText}>{experienceYears} yrs exp</Text>
+                  <Text style={styles.expText}>Role: Service Technician</Text>
                 </View>
               </View>
             </View>
 
-            <View style={styles.pendingAuditBadge}>
-              <View style={styles.pulsingBlueDot} />
-              <Text style={styles.pendingAuditText}>Pending Audit</Text>
-            </View>
-          </View>
-
-          {/* Quick Metrics Strip */}
-          <View style={styles.quickMetricsStrip}>
-            <View style={styles.metricItemCol}>
-              <Text style={styles.metricLabelMono}>APPLICATION QUEUE</Text>
-              <Text style={styles.metricValueBold}>Applied 2 hrs ago</Text>
-            </View>
-            <View style={styles.metricItemCol}>
-              <Text style={styles.metricLabelMono}>SERVICE CORRIDOR</Text>
-              <Text style={styles.metricValueBold} numberOfLines={1}>
-                {corridor}
+            <View style={[
+              styles.pendingAuditBadge,
+              verificationStatus === 'verified'
+                ? { backgroundColor: 'rgba(0, 82, 54, 0.1)', borderColor: '#005236' }
+                : verificationStatus === 'rejected'
+                ? { backgroundColor: 'rgba(186, 26, 26, 0.1)', borderColor: '#ba1a1a' }
+                : verificationStatus === 'reupload_requested'
+                ? { backgroundColor: 'rgba(2, 132, 199, 0.1)', borderColor: Colors.secondaryCobalt }
+                : { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: '#d97706' }
+            ]}>
+              <Text style={[
+                styles.pendingAuditText,
+                verificationStatus === 'verified'
+                  ? { color: '#005236' }
+                  : verificationStatus === 'rejected'
+                  ? { color: '#ba1a1a' }
+                  : verificationStatus === 'reupload_requested'
+                  ? { color: Colors.secondaryCobalt }
+                  : { color: '#b45309' }
+              ]}>
+                {verificationStatus === 'verified'
+                  ? 'Verified'
+                  : verificationStatus === 'rejected'
+                  ? 'Rejected'
+                  : verificationStatus === 'reupload_requested'
+                  ? 'Re-upload Req.'
+                  : 'Pending Review'}
               </Text>
             </View>
           </View>
 
-          {/* Contact & Coverage Triggers */}
+          {/* Registration Date & Service Zone */}
+          <View style={styles.quickMetricsStrip}>
+            <View style={styles.metricItemCol}>
+              <Text style={styles.metricLabelMono}>REGISTERED ON</Text>
+              <Text style={styles.metricValueBold}>{appliedDate}</Text>
+            </View>
+            <View style={styles.metricItemCol}>
+              <Text style={styles.metricLabelMono}>OPERATIONAL ZONE</Text>
+              <Text style={styles.metricValueBold} numberOfLines={1}>
+                {techData?.zone || 'Delhi NCR'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Contact Details */}
           <View style={styles.contactListCol}>
             <TouchableOpacity style={styles.contactTriggerItem} onPress={handleCall} activeOpacity={0.7}>
               <View style={styles.contactItemLeft}>
@@ -306,7 +427,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
                   <AppIcon name="Phone" size={18} />
                 </View>
                 <View>
-                  <Text style={styles.contactTriggerLabel}>DIRECT CONTACT</Text>
+                  <Text style={styles.contactTriggerLabel}>PHONE NUMBER</Text>
                   <Text style={styles.contactTriggerValue}>{phone}</Text>
                 </View>
               </View>
@@ -325,240 +446,123 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
               </View>
               <AppIcon name="ChevronRight" size={20} />
             </TouchableOpacity>
-
-            <View style={styles.radiusItem}>
-              <View style={styles.contactIconRoundBlue}>
-                <AppIcon name="Radio" size={18} />
-              </View>
-              <View>
-                <Text style={styles.contactTriggerLabel}>OPERATIONAL RADIUS</Text>
-                <Text style={styles.contactTriggerValue}>12 km dispatch zone coverage</Text>
-              </View>
-            </View>
           </View>
         </View>
 
-        {/* 3. Declared Ergonomic Competencies Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.sectionHeadline}>Declared Specializations</Text>
-            <View style={styles.skillCountPill}>
-              <Text style={styles.skillCountText}>5 AUDITED SKILLS</Text>
-            </View>
-          </View>
-          <Text style={styles.sectionDescription}>
-            Validated mechanical focus areas for field servicing & hydraulic repairs.
-          </Text>
-
-          <View style={styles.skillsPillsWrap}>
-            <View style={styles.skillPill}>
-              <AppIcon name="Wrench" size={18} />
-              <Text style={styles.skillPillText}>Repair</Text>
-            </View>
-            <View style={styles.skillPill}>
-              <AppIcon name="Settings" size={18} />
-              <Text style={styles.skillPillText}>Maintenance</Text>
-            </View>
-            <View style={styles.skillPill}>
-              <AppIcon name="Wrench" size={14} color={Colors.onSurfaceVariant} />
-              <Text style={styles.skillPillText}>Installation</Text>
-            </View>
-            <View style={styles.skillPill}>
-              <AppIcon name="Disc" size={14} color={Colors.onSurfaceVariant} />
-              <Text style={styles.skillPillText}>Wheel & Base Replacement</Text>
-            </View>
-            <View style={styles.skillPill}>
-              <AppIcon name="Wrench" size={14} color={Colors.onSurfaceVariant} />
-              <Text style={styles.skillPillText}>Pneumatic Gas Struts</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 4. Audited Compliance Documents */}
+        {/* 2. Submitted Government ID Document Card (REAL DATA ONLY) */}
         <View style={styles.documentsBlock}>
           <View style={styles.docHeaderRow}>
             <View>
-              <Text style={styles.sectionHeadline}>Audited Documents</Text>
+              <Text style={styles.sectionHeadline}>Submitted Identity Document</Text>
               <Text style={styles.docSubtitle}>
-                All uploads parsed with optical character validation
+                Official identity proof uploaded by technician during registration
               </Text>
             </View>
-            <View style={styles.compliantBadge}>
-              <Text style={styles.compliantBadgeText}>3 / 3 COMPLIANT</Text>
+            <View style={[
+              styles.compliantBadge,
+              { backgroundColor: idProofDocUrl ? 'rgba(0, 82, 54, 0.1)' : 'rgba(186, 26, 26, 0.1)' }
+            ]}>
+              <Text style={[
+                styles.compliantBadgeText,
+                { color: idProofDocUrl ? '#005236' : '#ba1a1a' }
+              ]}>
+                {idProofDocUrl ? 'DOCUMENT ATTACHED' : 'MISSING ATTACHMENT'}
+              </Text>
             </View>
           </View>
 
-          {/* Doc 1: Aadhaar / National ID / Uploaded Document */}
           <View style={styles.docCard}>
             <View style={styles.docCardInner}>
-              <TouchableOpacity
-                style={styles.docThumbnail}
-                onPress={() => setIsDocPreviewVisible(true)}
-                activeOpacity={0.8}
-              >
-                <Image
-                  source={{
-                    uri: idProofDocUrl,
-                  }}
-                  style={styles.docThumbImg}
-                  resizeMode="cover"
-                />
-                <View style={styles.docBadgeOverlay}>
-                  <AppIcon name="Award" size={18} />
+              {idProofDocUrl ? (
+                <TouchableOpacity
+                  style={styles.docThumbnail}
+                  onPress={() => setIsDocPreviewVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  {idProofDocUrl.startsWith('data:application/pdf') || idProofDocUrl.toLowerCase().endsWith('.pdf') ? (
+                    <View style={styles.pdfThumbnailBox}>
+                      <AppIcon name="FileText" size={28} color={Colors.secondaryCobalt} />
+                      <Text style={styles.pdfThumbnailLabel}>PDF</Text>
+                    </View>
+                  ) : (
+                    <Image
+                      source={{ uri: idProofDocUrl }}
+                      style={styles.docThumbImg}
+                      resizeMode="cover"
+                    />
+                  )}
+                  <View style={styles.docBadgeOverlay}>
+                    <AppIcon name="Award" size={14} color="#ffffff" />
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={[styles.docThumbnail, styles.noDocThumbnail]}>
+                  <AppIcon name="AlertCircle" size={24} color={Colors.outline} />
                 </View>
-              </TouchableOpacity>
+              )}
 
               <View style={styles.docMetaCol}>
                 <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitleText}>{idProofType}</Text>
-                  <AppIcon name="Check" size={18} />
+                  <Text style={styles.docTitleText}>{idProofType || 'Government ID'}</Text>
+                  {idProofDocUrl ? (
+                    <AppIcon name="CheckCircle" size={18} color="#005236" />
+                  ) : (
+                    <AppIcon name="AlertTriangle" size={18} color="#ba1a1a" />
+                  )}
                 </View>
+
                 <View style={styles.ocrTagRow}>
                   <View style={styles.ocrPill}>
                     <View style={styles.blueMiniDot} />
-                    <Text style={styles.ocrText}>KYC VERIFIED</Text>
+                    <Text style={styles.ocrText}>ID NUMBER</Text>
                   </View>
-                  <Text style={styles.docIdNumber}>{idProofNumber}</Text>
+                  <Text style={styles.docIdNumber}>{idProofNumber || 'Not provided'}</Text>
                 </View>
-                <Text style={styles.docDescriptionText} numberOfLines={1}>
-                  Official government identity proof and verified age record.
+
+                <Text style={styles.docDescriptionText}>
+                  Applicant uploaded this credential for identity and address verification.
                 </Text>
 
-                <View style={styles.docFooterRow}>
-                  <TouchableOpacity
-                    onPress={() => setIsDocPreviewVisible(true)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.viewDocLink}>View Document ↗</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.docFileSize}>Valid Attached ID</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Doc 2: Address Proof */}
-          <View style={styles.docCard}>
-            <View style={styles.docCardInner}>
-              <View style={styles.docThumbnail}>
-                <Image
-                  source={{
-                    uri: addressProofDocUrl,
-                  }}
-                  style={styles.docThumbImg}
-                  resizeMode="cover"
-                />
-                <View style={styles.docBadgeOverlay}>
-                  <AppIcon name="Receipt" size={14} color={Colors.secondary} />
-                </View>
-              </View>
-
-              <View style={styles.docMetaCol}>
-                <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitleText}>Proof of Address</Text>
-                  <AppIcon name="Check" size={18} />
-                </View>
-                <View style={styles.ocrTagRow}>
-                  <View style={styles.ocrPill}>
-                    <View style={styles.blueMiniDot} />
-                    <Text style={styles.ocrText}>ZONE MATCHED</Text>
+                {idProofDocUrl ? (
+                  <View style={styles.docFooterRow}>
+                    <TouchableOpacity
+                      onPress={() => setIsDocPreviewVisible(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.viewDocLink}>View Document ↗</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.docFileSize}>Attached Document</Text>
                   </View>
-                  <Text style={styles.docIdNumber}>{corridor}</Text>
-                </View>
-                <Text style={styles.docAddressMatched} numberOfLines={1}>
-                  Verified residential and service corridor location.
-                </Text>
-
-                <View style={styles.docFooterRow}>
-                  <TouchableOpacity
-                    onPress={() => Alert.alert('Address Proof Document', `Corridor: ${corridor}\nVerified document on file with match to service zone.`)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.viewDocLink}>View Document ↗</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.docFileSize}>PDF • Valid</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Doc 3: BIFMA Certification */}
-          <View style={styles.docCard}>
-            <View style={styles.docCardInner}>
-              <View style={styles.docThumbnail}>
-                <Image
-                  source={{
-                    uri: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=300&auto=format&fit=crop',
-                  }}
-                  style={styles.docThumbImg}
-                  resizeMode="cover"
-                />
-                <View style={styles.docBadgeOverlay}>
-                  <AppIcon name="Award" size={18} />
-                </View>
-              </View>
-
-              <View style={styles.docMetaCol}>
-                <View style={styles.docTitleRow}>
-                  <Text style={styles.docTitleText}>BIFMA Level-2 Mechanic</Text>
-                  <AppIcon name="Check" size={18} />
-                </View>
-                <View style={styles.ocrTagRow}>
-                  <View style={styles.validThruPill}>
-                    <Text style={styles.validThruText}>VALID THROUGH 2026</Text>
-                  </View>
-                  <Text style={styles.docIdNumber}>#CERT-ERGO-9941</Text>
-                </View>
-                <Text style={styles.docDescriptionText} numberOfLines={1}>
-                  Office Ergonomics Seating Standards & Safety Calibration.
-                </Text>
-
-                <View style={styles.docFooterRow}>
-                  <TouchableOpacity
-                    onPress={() => Alert.alert('BIFMA Certificate', 'Level 2 Mechanic certification valid until Dec 2026.')}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.viewDocLink}>View Certificate ↗</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.docFileSize}>PDF • 890 KB</Text>
-                </View>
+                ) : (
+                  <Text style={styles.missingDocWarning}>
+                    No document file uploaded. You can request a re-upload below.
+                  </Text>
+                )}
               </View>
             </View>
           </View>
         </View>
 
-        {/* 5. Administrative Audit Notes Section */}
+        {/* 3. Administrative Review Notes */}
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.noteTitleRow}>
               <AppIcon name="FileText" size={18} />
-              <Text style={styles.sectionHeadline}>Verification Notes</Text>
+              <Text style={styles.sectionHeadline}>Admin Review Notes</Text>
             </View>
             <Text style={styles.internalUseText}>INTERNAL USE ONLY</Text>
           </View>
 
-          {/* Automated Pre-Check Passed Box */}
-          <View style={styles.preCheckBox}>
-            <AppIcon name="Check" size={18} />
-            <Text style={styles.preCheckText}>
-              <Text style={styles.boldText}>Automated Pre-Check Passed:</Text> Criminal background verified clear via ThirdWatch API. Previous employment verified with ErgoFit Systems (2020–2023).
-            </Text>
-          </View>
-
-          <Text style={styles.auditorLabel}>AUDITOR LOG / DISCRETIONARY NOTES</Text>
+          <Text style={styles.auditorLabel}>OPERATIONAL / VERIFICATION REMARKS</Text>
           <TextInput
             style={styles.auditorTextarea}
-            placeholder="Add specific operational notes, field kit allocation notes, or dispatch priority tags..."
+            placeholder="Add specific operational notes, field allocation remarks, or dispatch priority tags..."
             placeholderTextColor={Colors.outline}
             value={auditNotes}
             onChangeText={setAuditNotes}
             multiline
             numberOfLines={3}
           />
-          <View style={styles.auditorFooter}>
-            <Text style={styles.auditorSignature}>Auditor: S. Raman (Lead Ops)</Text>
-            <Text style={styles.autoSavingText}>Auto-saving</Text>
-          </View>
         </View>
       </ScrollView>
 
@@ -783,11 +787,27 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
             </View>
 
             <View style={{ flex: 1, minHeight: 280, maxHeight: 460, backgroundColor: Colors.surfaceContainerHighest, borderRadius: 12, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' }}>
-              <Image
-                source={{ uri: idProofDocUrl }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="contain"
-              />
+              {idProofDocUrl && (idProofDocUrl.startsWith('data:application/pdf') || idProofDocUrl.toLowerCase().endsWith('.pdf')) ? (
+                <View style={{ alignItems: 'center', padding: 24 }}>
+                  <AppIcon name="FileText" size={54} color={Colors.secondaryCobalt} />
+                  <Text style={{ ...Typography.titleMedium, fontWeight: '700', color: Colors.secondaryCobalt, marginTop: 12 }}>
+                    PDF Document Attached
+                  </Text>
+                  <Text style={{ ...Typography.bodySm, color: Colors.onSurfaceVariant, marginTop: 4, textAlign: 'center' }}>
+                    {idProofType}: {idProofNumber}
+                  </Text>
+                </View>
+              ) : idProofDocUrl ? (
+                <Image
+                  source={{ uri: idProofDocUrl }}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <Text style={{ ...Typography.bodyMedium, color: Colors.outline }}>
+                  No document attached
+                </Text>
+              )}
             </View>
 
             <TouchableOpacity
@@ -1037,6 +1057,30 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     gap: 12,
   },
+  statusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: BorderRadius.xl,
+    borderWidth: 1.5,
+    ...Shadows.level1,
+  },
+  statusBannerContent: {
+    flex: 1,
+  },
+  statusBannerTitle: {
+    ...Typography.titleMedium,
+    fontSize: 14.5,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  statusBannerSub: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16,
+  },
   card: {
     backgroundColor: Colors.surfaceContainerLowest,
     borderRadius: BorderRadius.xl,
@@ -1061,6 +1105,19 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceContainer,
+  },
+  avatarInitialsBox: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitialsText: {
+    ...Typography.titleMedium,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.secondaryCobalt,
   },
   avatarImage: {
     width: '100%',
@@ -1306,6 +1363,32 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: Colors.surfaceContainerHigh,
+  },
+  pdfThumbnailBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: BorderRadius.md,
+  },
+  pdfThumbnailLabel: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.secondaryCobalt,
+    marginTop: 2,
+  },
+  noDocThumbnail: {
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  missingDocWarning: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#ba1a1a',
+    marginTop: 4,
   },
   docThumbImg: {
     width: '100%',

@@ -74,9 +74,10 @@ export const adminAssignTechSchema = z.object({
 });
 
 export const adminVerifyTechSchema = z.object({
-  verificationStatus: z.enum(['verified', 'rejected', 'suspended', 'pending']),
+  verificationStatus: z.enum(['verified', 'rejected', 'suspended', 'pending', 'reupload_requested']),
   suspendedReason: z.string().optional(),
   rejectionReason: z.string().optional(),
+  reuploadNotes: z.string().optional(),
 });
 
 export const createSupportTicketSchema = z.object({

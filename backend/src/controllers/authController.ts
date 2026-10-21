@@ -60,17 +60,17 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 
   // Create associated profile
   if (userRole === 'technician') {
-    const idType = idProofType || 'aadhaar';
+    const idType = idProofType || 'Aadhaar Card';
     const idNum = (idProofNumber || '').trim();
     const idDoc = idProofDocumentUrl || '';
     const addrDoc = addressProofDocumentUrl || '';
     const ageDoc = ageProofDocumentUrl || addrDoc;
-    const exp = typeof experienceYears === 'number' ? experienceYears : Number(experienceYears || 2);
+    const exp = typeof experienceYears === 'number' ? experienceYears : Number(experienceYears || 0);
     const specs = Array.isArray(specializations)
       ? specializations.join(', ')
-      : specializations || 'Repair, Hydraulic Tuning, Precision Diagnostics';
+      : (specializations || '').trim();
     const zone = (currentZone || 'Delhi NCR').trim();
-    const vehicle = (vehicleInfo || 'Two Wheeler').trim();
+    const vehicle = (vehicleInfo || '').trim();
 
     await query(
       `INSERT INTO technician_profiles (

@@ -106,10 +106,26 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
 
           if (t.verificationStatus === 'pending') {
             status = 'pending';
-            statusLabel = 'Pending Verification';
+            statusLabel = 'Pending Review';
+            statusBadgeVariant = 'pending';
+            accentColor = '#f59e0b';
+            indicatorDotColor = '#d97706';
+            actionLabel = 'Review Application';
+            actionDestination = 'verify';
+          } else if (t.verificationStatus === 'reupload_requested') {
+            status = 'pending';
+            statusLabel = 'Re-upload Requested';
             statusBadgeVariant = 'pending';
             accentColor = Colors.secondaryCobalt;
             indicatorDotColor = Colors.secondaryCobalt;
+            actionLabel = 'Review Re-upload';
+            actionDestination = 'verify';
+          } else if (t.verificationStatus === 'rejected') {
+            status = 'suspended';
+            statusLabel = 'Application Rejected';
+            statusBadgeVariant = 'suspended';
+            accentColor = '#ba1a1a';
+            indicatorDotColor = '#ba1a1a';
             actionLabel = 'Review Application';
             actionDestination = 'verify';
           } else if (t.verificationStatus === 'suspended') {
@@ -163,14 +179,15 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
             addressProofDocumentUrl: t.addressProofDocumentUrl,
             ageProofDocumentUrl: t.ageProofDocumentUrl,
             rejectionReason: t.rejectionReason,
+            reuploadNotes: t.reuploadNotes,
             verificationStatus: t.verificationStatus,
             status,
             statusLabel,
             statusBadgeVariant,
             accentColor,
             indicatorDotColor,
-            metaTags: [t.vehicleInfo || 'Mobile Van', `${t.completedJobs || 0} Jobs`],
-            skills: Array.isArray(t.specializations) && t.specializations.length > 0 ? t.specializations : ['Repair', 'Maintenance', 'Hydraulics'],
+            metaTags: [t.vehicleInfo || 'Field Tech', `${t.completedJobs || 0} Jobs`],
+            skills: Array.isArray(t.specializations) && t.specializations.length > 0 ? t.specializations : ['Repair', 'Maintenance'],
             reviewCountText: `${t.completedJobs || 0} completed orders`,
             actionLabel,
             actionDestination,
@@ -235,11 +252,17 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
   };
 
 
+  const pendingReviewTechs = useMemo(() => {
+    return technicians.filter(
+      (t) => t.verificationStatus === 'pending' || t.verificationStatus === 'reupload_requested'
+    );
+  }, [technicians]);
+
   const totalFleet = technicians.length;
   const onlineCount = technicians.filter((t) => t.status === 'online').length;
   const doingJobCount = technicians.filter((t) => t.status === 'doing_job').length;
   const offlineCount = technicians.filter((t) => t.status === 'offline').length;
-  const pendingCount = technicians.filter((t) => t.status === 'pending').length;
+  const pendingCount = pendingReviewTechs.length;
   const suspendedCount = technicians.filter((t) => t.status === 'suspended').length;
 
   const filteredTechnicians = useMemo(() => {
@@ -514,17 +537,23 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.filterTabPill, selectedTab === 'pending' && styles.filterTabPillActive]}
+            style={[
+              styles.filterTabPill,
+              selectedTab === 'pending' && styles.filterTabPillActive,
+              pendingCount > 0 && selectedTab !== 'pending' && styles.filterTabPillAlert,
+            ]}
             onPress={() => setSelectedTab('pending')}
             activeOpacity={0.8}
           >
+            {pendingCount > 0 && selectedTab !== 'pending' && <View style={styles.tabAlertDot} />}
             <Text
               style={[
                 styles.filterTabText,
                 selectedTab === 'pending' && styles.filterTabTextActive,
+                pendingCount > 0 && selectedTab !== 'pending' && styles.filterTabTextAlert,
               ]}
             >
-              Pending ({pendingCount})
+              Needs Review ({pendingCount})
             </Text>
           </TouchableOpacity>
 
@@ -547,6 +576,93 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
           </TouchableOpacity>
         </ScrollView>
 
+        {/* Highlighted Review Queue Section for Non-Accepted Technicians */}
+        {pendingReviewTechs.length > 0 && selectedTab !== 'pending' && (
+          <View style={styles.reviewQueueBlock}>
+            <View style={styles.reviewQueueHeader}>
+              <View style={styles.reviewQueueTitleGroup}>
+                <View style={styles.alertIconPulseBox}>
+                  <AppIcon name="AlertCircle" size={18} color="#d97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.reviewHeadingWithBadge}>
+                    <Text style={styles.reviewQueueHeadline}>Awaiting Review</Text>
+                    <View style={styles.pendingCountBadge}>
+                      <Text style={styles.pendingCountText}>{pendingReviewTechs.length} Action Needed</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.reviewQueueSubtext}>
+                    Non-accepted technicians requiring document review or re-upload decision
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedTab('pending')}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.reviewQueueViewAllLink}>View in Tab →</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.reviewQueueCardsWrap}>
+              {pendingReviewTechs.map((tech) => (
+                <View key={tech.id} style={styles.reviewQueueCard}>
+                  <View style={styles.reviewCardTop}>
+                    <View style={styles.reviewCardInitials}>
+                      <Text style={styles.reviewInitialsText}>{tech.initials}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.reviewTechName} numberOfLines={1}>{tech.name}</Text>
+                      <Text style={styles.reviewTechContact} numberOfLines={1}>{tech.phone || tech.email}</Text>
+                    </View>
+                    <View style={[
+                      styles.reviewStatusBadge,
+                      tech.verificationStatus === 'reupload_requested'
+                        ? { backgroundColor: '#eff6ff', borderColor: Colors.secondaryCobalt }
+                        : { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }
+                    ]}>
+                      <Text style={[
+                        styles.reviewStatusText,
+                        tech.verificationStatus === 'reupload_requested'
+                          ? { color: Colors.secondaryCobalt }
+                          : { color: '#b45309' }
+                      ]}>
+                        {tech.verificationStatus === 'reupload_requested' ? 'Re-upload' : 'Pending Review'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.reviewDocRow}>
+                    <AppIcon name="FileText" size={13} color={Colors.onSurfaceVariant} />
+                    <Text style={styles.reviewDocText} numberOfLines={1}>
+                      {tech.idProofType || 'Government ID'}: {tech.idProofNumber || 'ID on file'}
+                    </Text>
+                    {tech.idProofDocumentUrl ? (
+                      <View style={styles.docAttachedPill}>
+                        <Text style={styles.docAttachedText}>Doc Attached</Text>
+                      </View>
+                    ) : (
+                      <View style={[styles.docAttachedPill, { backgroundColor: '#fee2e2' }]}>
+                        <Text style={[styles.docAttachedText, { color: '#ba1a1a' }]}>No Doc</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.reviewActionButton}
+                    onPress={() => handleActionClick(tech)}
+                    activeOpacity={0.85}
+                  >
+                    <AppIcon name="ShieldCheck" size={15} color="#ffffff" />
+                    <Text style={styles.reviewActionBtnText}>Review & Verify Application</Text>
+                    <Text style={styles.reviewActionBtnArrow}>→</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* 5. Technician Fleet List Cards */}
         <View style={styles.technicianRosterCol}>
           {isLoading ? (
@@ -563,11 +679,29 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
             </View>
           ) : (
             filteredTechnicians.map((tech) => (
-              <View key={tech.id} style={styles.technicianCard}>
+              <View
+                key={tech.id}
+                style={[
+                  styles.technicianCard,
+                  (tech.verificationStatus === 'pending' || tech.verificationStatus === 'reupload_requested') &&
+                    styles.technicianCardPendingReview,
+                ]}
+              >
                 {/* Left accent bar */}
                 <View
                   style={[styles.cardAccentBar, { backgroundColor: tech.accentColor }]}
                 />
+
+                {(tech.verificationStatus === 'pending' || tech.verificationStatus === 'reupload_requested') && (
+                  <View style={styles.cardReviewAlertBanner}>
+                    <AppIcon name="AlertCircle" size={13} color="#b45309" />
+                    <Text style={styles.cardReviewAlertText}>
+                      {tech.verificationStatus === 'reupload_requested'
+                        ? 'Re-upload requested — review technician submission'
+                        : 'Action required: Review & verify government document'}
+                    </Text>
+                  </View>
+                )}
 
                 {/* Header Info */}
                 <TouchableOpacity
@@ -1873,5 +2007,209 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.6,
+  },
+  filterTabPillAlert: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  tabAlertDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#d97706',
+    marginRight: 5,
+  },
+  filterTabTextAlert: {
+    color: '#b45309',
+    fontWeight: '700',
+  },
+  reviewQueueBlock: {
+    marginHorizontal: Spacing.md,
+    marginBottom: 16,
+    backgroundColor: '#fffbeb',
+    borderRadius: BorderRadius.xl,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    ...Shadows.level2,
+  },
+  reviewQueueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  reviewQueueTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  alertIconPulseBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewHeadingWithBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reviewQueueHeadline: {
+    ...Typography.titleMedium,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  pendingCountBadge: {
+    backgroundColor: '#d97706',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  pendingCountText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  reviewQueueSubtext: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: '#b45309',
+    marginTop: 2,
+  },
+  reviewQueueViewAllLink: {
+    ...Typography.labelMd,
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.secondaryCobalt,
+  },
+  reviewQueueCardsWrap: {
+    gap: 10,
+  },
+  reviewQueueCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: BorderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    ...Shadows.level1,
+  },
+  reviewCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  reviewCardInitials: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewInitialsText: {
+    ...Typography.titleSmall,
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#92400e',
+  },
+  reviewTechName: {
+    ...Typography.titleMedium,
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  reviewTechContact: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    marginTop: 1,
+  },
+  reviewStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.xs,
+    borderWidth: 1,
+  },
+  reviewStatusText: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  reviewDocRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
+    marginBottom: 10,
+  },
+  reviewDocText: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurface,
+    flex: 1,
+  },
+  docAttachedPill: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.xs,
+  },
+  docAttachedText: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#15803d',
+  },
+  reviewActionButton: {
+    backgroundColor: Colors.secondaryCobalt,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  reviewActionBtnText: {
+    ...Typography.labelLarge,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  reviewActionBtnArrow: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  technicianCardPendingReview: {
+    borderWidth: 1.5,
+    borderColor: '#f59e0b',
+    backgroundColor: '#fffdfa',
+  },
+  cardReviewAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.sm,
+    marginBottom: 8,
+  },
+  cardReviewAlertText: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b45309',
   },
 });
