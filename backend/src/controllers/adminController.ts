@@ -524,73 +524,83 @@ export const verifyTechnician = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
-  const { id } = req.params;
-  const { verificationStatus, rejectionReason, suspendedReason, reuploadNotes } = req.body;
-  const adminId = req.user?.userId;
-
-  const validStatus = ['verified', 'rejected', 'suspended', 'pending', 'reupload_requested'].includes(verificationStatus)
-    ? verificationStatus
-    : 'verified';
-
-  await query(
-    `UPDATE technician_profiles
-     SET verification_status = $1,
-         rejection_reason = CASE WHEN $1 = 'rejected' THEN COALESCE($2, rejection_reason, 'Verification criteria not met') ELSE rejection_reason END,
-         reupload_notes = CASE WHEN $1 = 'reupload_requested' THEN COALESCE($3, reupload_notes, 'Please re-upload your document') ELSE reupload_notes END,
-         suspended_reason = CASE WHEN $1 = 'suspended' THEN COALESCE($4, suspended_reason, 'Account suspended by admin') ELSE suspended_reason END,
-         reviewed_by = $5,
-         reviewed_at = NOW(),
-         updated_at = NOW()
-     WHERE user_id = $6;`,
-    [validStatus, rejectionReason || null, reuploadNotes || null, suspendedReason || null, adminId || null, id]
-  );
-
-  // Send an in-app notification to the technician informing them of the admin decision
   try {
-    const notifyTitle =
-      validStatus === 'verified'
-        ? 'Account Approved & Activated!'
-        : validStatus === 'rejected'
-        ? 'Partner Application Rejected'
-        : validStatus === 'reupload_requested'
-        ? 'Document Re-upload Required'
-        : 'Partner Account Status Updated';
+    const { id } = req.params;
+    const { verificationStatus, rejectionReason, suspendedReason, reuploadNotes } = req.body;
+    const adminId = req.user?.userId;
 
-    const notifyBody =
-      validStatus === 'verified'
-        ? 'Congratulations! Your ChairCare partner credentials and KYC documents have been reviewed and approved. You may now access the technician dashboard.'
-        : validStatus === 'rejected'
-        ? `Your partner application was reviewed and not approved. Reason: ${rejectionReason || 'Document verification criteria not met'}. Please call Customer Care if you wish to appeal.`
-        : validStatus === 'reupload_requested'
-        ? `Admin has requested you to re-upload your document. Reason: ${reuploadNotes || 'Please upload a clear, legible copy of your valid ID'}.`
-        : `Your account status was set to ${validStatus}.`;
+    const validStatus = ['verified', 'rejected', 'suspended', 'pending', 'reupload_requested'].includes(verificationStatus)
+      ? verificationStatus
+      : 'verified';
+
+    const validAdminUuid =
+      adminId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(adminId)
+        ? adminId
+        : null;
 
     await query(
-      `INSERT INTO notifications (user_id, title, body, type, is_read)
-       VALUES ($1, $2, $3, 'account_status', FALSE);`,
-      [id, notifyTitle, notifyBody]
+      `UPDATE technician_profiles
+       SET verification_status = $1::varchar,
+           rejection_reason = CASE WHEN $1::varchar = 'rejected' THEN COALESCE($2::text, rejection_reason, 'Verification criteria not met') ELSE rejection_reason END,
+           reupload_notes = CASE WHEN $1::varchar = 'reupload_requested' THEN COALESCE($3::text, reupload_notes, 'Please re-upload your document') ELSE reupload_notes END,
+           suspended_reason = CASE WHEN $1::varchar = 'suspended' THEN COALESCE($4::text, suspended_reason, 'Account suspended by admin') ELSE suspended_reason END,
+           reviewed_by = $5,
+           reviewed_at = NOW(),
+           updated_at = NOW()
+       WHERE user_id = $6;`,
+      [validStatus, rejectionReason || null, reuploadNotes || null, suspendedReason || null, validAdminUuid, id]
     );
-  } catch {
-    // Notification fallback
-  }
 
-  // Log admin action
-  if (adminId) {
+    // Send an in-app notification to the technician informing them of the admin decision
     try {
+      const notifyTitle =
+        validStatus === 'verified'
+          ? 'Account Approved & Activated!'
+          : validStatus === 'rejected'
+          ? 'Partner Application Rejected'
+          : validStatus === 'reupload_requested'
+          ? 'Document Re-upload Required'
+          : 'Partner Account Status Updated';
+
+      const notifyBody =
+        validStatus === 'verified'
+          ? 'Congratulations! Your ChairCare partner credentials and KYC documents have been reviewed and approved. You may now access the technician dashboard.'
+          : validStatus === 'rejected'
+          ? `Your partner application was reviewed and not approved. Reason: ${rejectionReason || 'Document verification criteria not met'}. Please call Customer Care if you wish to appeal.`
+          : validStatus === 'reupload_requested'
+          ? `Admin has requested you to re-upload your document. Reason: ${reuploadNotes || 'Please upload a clear, legible copy of your valid ID'}.`
+          : `Your account status was set to ${validStatus}.`;
+
       await query(
-        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
-         VALUES ($1, 'VERIFY_TECHNICIAN', 'technician', $2, $3);`,
-        [adminId, id, JSON.stringify({ verificationStatus: validStatus, rejectionReason, suspendedReason })]
+        `INSERT INTO notifications (user_id, title, body, type, is_read)
+         VALUES ($1, $2, $3, 'account_status', FALSE);`,
+        [id, notifyTitle, notifyBody]
       );
     } catch {
-      // Activity log fallback
+      // Notification fallback
     }
-  }
 
-  res.json({
-    success: true,
-    message: `Technician verification status updated to ${validStatus}.`,
-  });
+    // Log admin action
+    if (validAdminUuid) {
+      try {
+        await query(
+          `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+           VALUES ($1, 'VERIFY_TECHNICIAN', 'technician', $2, $3);`,
+          [validAdminUuid, id, JSON.stringify({ verificationStatus: validStatus, rejectionReason, suspendedReason, reuploadNotes })]
+        );
+      } catch {
+        // Activity log fallback
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Technician verification status updated to ${validStatus}.`,
+    });
+  } catch (err: any) {
+    console.error('Failed to verify technician:', err);
+    res.status(500).json({ success: false, error: err.message || 'Failed to update technician verification status.' });
+  }
 };
 
 export const assignTechnician = async (
