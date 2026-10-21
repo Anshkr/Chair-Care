@@ -261,6 +261,7 @@ export const getAllTechnicians = async (
       tp.address_proof_document_url,
       tp.age_proof_document_url,
       tp.rejection_reason,
+      tp.reupload_notes,
       tp.experience_years,
       tp.specializations,
       (
@@ -326,6 +327,7 @@ export const getAllTechnicians = async (
         addressProofDocumentUrl: r.address_proof_document_url || '',
         ageProofDocumentUrl: r.age_proof_document_url || '',
         rejectionReason: r.rejection_reason || null,
+        reuploadNotes: r.reupload_notes || null,
         experienceYears: Number(r.experience_years || 2),
         specializations: r.specializations || 'Repair, Maintenance',
         createdAt: r.created_at,
@@ -363,6 +365,9 @@ export const getTechnicianDetails = async (
       tp.id_proof_document_url,
       tp.address_proof_document_url,
       tp.age_proof_document_url,
+      tp.rejection_reason,
+      tp.reupload_notes,
+      tp.suspended_reason,
       tp.experience_years,
       tp.specializations
      FROM users u
@@ -461,6 +466,7 @@ export const getTechnicianDetails = async (
       verificationStatus: tech.verification_status,
       suspendedReason: tech.suspended_reason,
       rejectionReason: tech.rejection_reason,
+      reuploadNotes: tech.reupload_notes || null,
       zone: tech.current_zone || 'Delhi NCR Hub',
       vehicleInfo: tech.vehicle_info || 'Mobile Van #CC-04',
       idProofType: tech.id_proof_type || 'aadhaar',
@@ -519,10 +525,10 @@ export const verifyTechnician = async (
   res: Response
 ): Promise<void> => {
   const { id } = req.params;
-  const { verificationStatus, rejectionReason, suspendedReason } = req.body;
+  const { verificationStatus, rejectionReason, suspendedReason, reuploadNotes } = req.body;
   const adminId = req.user?.userId;
 
-  const validStatus = ['verified', 'rejected', 'suspended', 'pending'].includes(verificationStatus)
+  const validStatus = ['verified', 'rejected', 'suspended', 'pending', 'reupload_requested'].includes(verificationStatus)
     ? verificationStatus
     : 'verified';
 
@@ -530,12 +536,13 @@ export const verifyTechnician = async (
     `UPDATE technician_profiles
      SET verification_status = $1,
          rejection_reason = CASE WHEN $1 = 'rejected' THEN COALESCE($2, rejection_reason, 'Verification criteria not met') ELSE rejection_reason END,
-         suspended_reason = CASE WHEN $1 = 'suspended' THEN COALESCE($3, suspended_reason, 'Account suspended by admin') ELSE suspended_reason END,
-         reviewed_by = $4,
+         reupload_notes = CASE WHEN $1 = 'reupload_requested' THEN COALESCE($3, reupload_notes, 'Please re-upload your document') ELSE reupload_notes END,
+         suspended_reason = CASE WHEN $1 = 'suspended' THEN COALESCE($4, suspended_reason, 'Account suspended by admin') ELSE suspended_reason END,
+         reviewed_by = $5,
          reviewed_at = NOW(),
          updated_at = NOW()
-     WHERE user_id = $5;`,
-    [validStatus, rejectionReason || null, suspendedReason || null, adminId || null, id]
+     WHERE user_id = $6;`,
+    [validStatus, rejectionReason || null, reuploadNotes || null, suspendedReason || null, adminId || null, id]
   );
 
   // Send an in-app notification to the technician informing them of the admin decision
@@ -545,13 +552,17 @@ export const verifyTechnician = async (
         ? 'Account Approved & Activated!'
         : validStatus === 'rejected'
         ? 'Partner Application Rejected'
+        : validStatus === 'reupload_requested'
+        ? 'Document Re-upload Required'
         : 'Partner Account Status Updated';
 
     const notifyBody =
       validStatus === 'verified'
         ? 'Congratulations! Your ChairCare partner credentials and KYC documents have been reviewed and approved. You may now access the technician dashboard.'
         : validStatus === 'rejected'
-        ? `Your partner application was reviewed and not approved. Reason: ${rejectionReason || 'Document verification criteria not met'}.`
+        ? `Your partner application was reviewed and not approved. Reason: ${rejectionReason || 'Document verification criteria not met'}. Please call Customer Care if you wish to appeal.`
+        : validStatus === 'reupload_requested'
+        ? `Admin has requested you to re-upload your document. Reason: ${reuploadNotes || 'Please upload a clear, legible copy of your valid ID'}.`
         : `Your account status was set to ${validStatus}.`;
 
     await query(

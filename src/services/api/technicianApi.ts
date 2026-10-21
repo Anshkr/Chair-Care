@@ -65,6 +65,9 @@ export const technicianApi = {
     specializations?: string[];
     experienceYears?: number;
     avatarUrl?: string;
+    idProofType?: string;
+    idProofNumber?: string;
+    idProofDocumentUrl?: string;
   }): Promise<ApiResponse<any>> => {
     const res = await apiRequest('/technician/profile', {
       method: 'PUT',

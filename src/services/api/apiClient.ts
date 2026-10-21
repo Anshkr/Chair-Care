@@ -78,6 +78,7 @@ export const getApiAuthToken = (): string | null => {
 
 export interface ApiResponse<T = any> {
   success: boolean;
+  status?: number;
   message?: string;
   data?: T;
   error?: string;
@@ -129,13 +130,20 @@ export async function apiRequest<T = any>(
     }
 
     if (!response.ok) {
+      if (response.status === 401) {
+        setApiAuthToken(null);
+      }
       return {
         success: false,
+        status: response.status,
         error: data?.error || data?.message || `Request failed with status ${response.status}`,
       };
     }
 
-    return data as ApiResponse<T>;
+    return {
+      ...(data as ApiResponse<T>),
+      status: response.status,
+    };
   } catch (err: any) {
     if (err.name === 'AbortError') {
       return {

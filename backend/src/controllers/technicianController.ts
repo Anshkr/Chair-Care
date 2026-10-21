@@ -592,6 +592,8 @@ export const getProfile = async (
     `SELECT 
       u.id, u.name, u.email, u.phone, u.avatar_url,
       tp.rating, tp.completed_jobs_count, tp.is_online, tp.verification_status,
+      tp.rejection_reason, tp.reupload_notes,
+      tp.id_proof_type, tp.id_proof_number, tp.id_proof_document_url,
       tp.current_zone, tp.vehicle_info, tp.specializations, tp.experience_years, tp.today_earnings
      FROM users u
      JOIN technician_profiles tp ON u.id = tp.user_id
@@ -617,6 +619,11 @@ export const getProfile = async (
       completedJobsCount: Number(row.completed_jobs_count || 0),
       isOnline: row.is_online,
       verificationStatus: row.verification_status,
+      rejectionReason: row.rejection_reason || null,
+      reuploadNotes: row.reupload_notes || null,
+      idProofType: row.id_proof_type || 'aadhaar',
+      idProofNumber: row.id_proof_number || '',
+      idProofDocumentUrl: row.id_proof_document_url || '',
       currentZone: row.current_zone || 'Central Area',
       vehicleInfo: row.vehicle_info || 'Mobile Tool Van',
       specializations: row.specializations || 'Hydraulic Tuning, Multi-Angle Tilt Lock, Herman Miller & Steelcase',
@@ -643,6 +650,9 @@ export const updateTechnicianProfile = async (
     specializations,
     experienceYears,
     avatarUrl,
+    idProofType,
+    idProofNumber,
+    idProofDocumentUrl,
   } = req.body;
 
   if (name !== undefined || avatarUrl !== undefined) {
@@ -655,6 +665,26 @@ export const updateTechnicianProfile = async (
       [
         name !== undefined ? name.trim() : null,
         avatarUrl !== undefined ? (avatarUrl.trim() === '' ? '__REMOVE__' : avatarUrl.trim()) : null,
+        technicianId,
+      ]
+    );
+  }
+
+  // If technician is re-uploading document, reset status to 'pending' and clear reupload_notes
+  if (idProofDocumentUrl !== undefined || idProofNumber !== undefined || idProofType !== undefined) {
+    await query(
+      `UPDATE technician_profiles
+       SET id_proof_type = COALESCE($1, id_proof_type),
+           id_proof_number = COALESCE($2, id_proof_number),
+           id_proof_document_url = COALESCE($3, id_proof_document_url),
+           verification_status = 'pending',
+           reupload_notes = NULL,
+           updated_at = NOW()
+       WHERE user_id = $4;`,
+      [
+        idProofType !== undefined ? idProofType.trim() : null,
+        idProofNumber !== undefined ? idProofNumber.trim() : null,
+        idProofDocumentUrl !== undefined ? idProofDocumentUrl.trim() : null,
         technicianId,
       ]
     );

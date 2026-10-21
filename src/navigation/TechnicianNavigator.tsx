@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { AppIcon } from '../components/common/AppIcon';
 import { Colors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
+import { technicianApi } from '../services/api';
 import {
   TechnicianOnboardingChaircareMobileScreen,
   TechnicianDashboardChaircareMobileScreen,
@@ -24,6 +26,7 @@ import {
   TechnicianProfileChaircareMobileScreen,
   TechnicianNotificationsChaircareMobileScreen,
   TechnicianJobHistoryChaircareMobileScreen,
+  TechnicianAccountStatusScreen,
 } from '../screens/technician';
 
 const Tab = createBottomTabNavigator();
@@ -137,6 +140,41 @@ const EarningsRedirectScreen: React.FC<{ navigation: any; route: any }> = ({ nav
 };
 
 export const TechnicianNavigator: React.FC = () => {
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+
+  const checkStatus = useCallback(async () => {
+    try {
+      const res = await technicianApi.getProfile();
+      if (res.success && res.data) {
+        setStatus(res.data.verificationStatus || 'pending');
+      } else {
+        setStatus('pending');
+      }
+    } catch {
+      setStatus('pending');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkStatus();
+  }, [checkStatus]);
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.surface }}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  // If not verified ('pending', 'rejected', 'reupload_requested'), show TechnicianAccountStatusScreen
+  if (status !== 'verified') {
+    return <TechnicianAccountStatusScreen onApproved={() => setStatus('verified')} />;
+  }
+
   return (
     <Stack.Navigator
       screenOptions={{

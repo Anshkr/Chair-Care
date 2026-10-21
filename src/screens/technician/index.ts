@@ -18,3 +18,4 @@ export * from './TechnicianChatChaircareMobileScreen';
 export * from './TechnicianProfileChaircareMobileScreen';
 export * from './TechnicianNotificationsChaircareMobileScreen';
 export * from './TechnicianJobHistoryChaircareMobileScreen';
+export * from './TechnicianAccountStatusScreen';

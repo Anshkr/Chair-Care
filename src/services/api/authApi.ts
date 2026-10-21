@@ -1,4 +1,4 @@
-import { apiRequest, setApiAuthToken, ApiResponse } from './apiClient';
+import { apiRequest, setApiAuthToken, getApiAuthToken, ApiResponse } from './apiClient';
 import { UserRole } from '../../types/models';
 
 export interface AuthResponseData {
@@ -60,6 +60,13 @@ export const authApi = {
   },
 
   getMe: async (): Promise<ApiResponse<any>> => {
+    const token = getApiAuthToken();
+    if (!token) {
+      return {
+        success: false,
+        error: 'No active session token',
+      };
+    }
     return apiRequest('/auth/me');
   },
 

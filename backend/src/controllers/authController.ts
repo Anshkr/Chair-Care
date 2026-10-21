@@ -202,43 +202,12 @@ export const login = async (req: Request, res: Response): Promise<void> => {
   } else if (user.role === 'technician') {
     const techRes = await query(
       `SELECT rating, completed_jobs_count, is_online, verification_status,
-              rejection_reason, suspended_reason, current_zone, vehicle_info, today_earnings,
+              rejection_reason, reupload_notes, suspended_reason, current_zone, vehicle_info, today_earnings,
               id_proof_type, id_proof_number, id_proof_document_url, address_proof_document_url
        FROM technician_profiles WHERE user_id = $1;`,
       [user.id]
     );
     profileData = techRes.rows[0] || null;
-
-    // Strict Admin Approval Enforcement
-    const verificationStatus = profileData?.verification_status || 'pending';
-    if (verificationStatus === 'pending') {
-      res.status(403).json({
-        success: false,
-        error:
-          'Your technician account is pending admin approval. The ChairCare Admin Team is reviewing your submitted KYC documents (Aadhaar/PAN and Address Proof). You will be granted access once approved.',
-        verificationStatus: 'pending',
-      });
-      return;
-    }
-    if (verificationStatus === 'rejected') {
-      const reason = profileData?.rejection_reason || 'Document verification criteria not met';
-      res.status(403).json({
-        success: false,
-        error: `Your technician application was rejected by the admin. Reason: ${reason}. Please contact partner support for assistance.`,
-        verificationStatus: 'rejected',
-        rejectionReason: reason,
-      });
-      return;
-    }
-    if (verificationStatus === 'suspended') {
-      const reason = profileData?.suspended_reason || 'Policy and compliance review required';
-      res.status(403).json({
-        success: false,
-        error: `Your partner account has been suspended by the admin. Reason: ${reason}. Please contact operations.`,
-        verificationStatus: 'suspended',
-      });
-      return;
-    }
   }
 
   const payload: AuthTokenPayload = {
@@ -296,7 +265,10 @@ export const getMe = async (req: AuthenticatedRequest, res: Response): Promise<v
     profileData = custProfile.rows[0] || null;
   } else if (user.role === 'technician') {
     const techProfile = await query(
-      `SELECT rating, completed_jobs_count, is_online, verification_status, current_zone, vehicle_info, today_earnings
+      `SELECT rating, completed_jobs_count, is_online, verification_status,
+              rejection_reason, reupload_notes, suspended_reason,
+              id_proof_type, id_proof_number, id_proof_document_url,
+              current_zone, vehicle_info, today_earnings
        FROM technician_profiles WHERE user_id = $1;`,
       [user.id]
     );

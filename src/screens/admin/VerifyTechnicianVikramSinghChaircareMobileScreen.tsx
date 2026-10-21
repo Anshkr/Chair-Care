@@ -109,9 +109,12 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   };
 
   const [isRejectModalVisible, setIsRejectModalVisible] = useState(false);
+  const [isReuploadModalVisible, setIsReuploadModalVisible] = useState(false);
   const [isDocPreviewVisible, setIsDocPreviewVisible] = useState(false);
-  const [selectedRejectReason, setSelectedRejectReason] = useState('Invalid or illegible ID/Aadhaar proof');
+  const [selectedRejectReason, setSelectedRejectReason] = useState('Invalid or illegible ID/Aadhaar/PAN proof');
   const [customRejectReason, setCustomRejectReason] = useState('');
+  const [selectedReuploadReason, setSelectedReuploadReason] = useState('Uploaded document image is blurry or illegible');
+  const [customReuploadNote, setCustomReuploadNote] = useState('');
 
   const REJECT_REASONS = [
     'Invalid or illegible ID/Aadhaar/PAN proof',
@@ -120,6 +123,15 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
     'Incomplete documentation or missing certification',
     'Service domain credentials not verified',
     'Other (specified below)',
+  ];
+
+  const REUPLOAD_REASONS = [
+    'Uploaded document image is blurry or illegible',
+    'Document number does not match submitted ID photo',
+    'Document is expired or unverified',
+    'Uploaded wrong document type',
+    'Corners or crucial identity details are cut off',
+    'Other specific requirement (specified below)',
   ];
 
   const handleRejectPrompt = () => {
@@ -160,12 +172,43 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
     }
   };
 
+  const confirmReuploadRequest = async () => {
+    const finalNote =
+      selectedReuploadReason.includes('Other') && customReuploadNote.trim()
+        ? customReuploadNote.trim()
+        : selectedReuploadReason + (customReuploadNote.trim() ? ` - ${customReuploadNote.trim()}` : '');
+
+    setIsReuploadModalVisible(false);
+    const targetId = passedId || passedTech?.id || 'tech-03';
+    try {
+      const res = await adminApi.verifyTechnician(
+        targetId,
+        'reupload_requested',
+        undefined,
+        undefined,
+        finalNote
+      );
+      if (res.error) {
+        Alert.alert('Request Error', res.error || 'Failed to send re-upload request.');
+        return;
+      }
+      showToast(`Re-upload request sent to ${techName}.`);
+      if (navigation?.canGoBack()) {
+        navigation.goBack();
+      } else if (navigation) {
+        navigation.navigate('Technicians');
+      }
+    } catch (err: any) {
+      Alert.alert('Connection Error', err.message || 'Unable to communicate with backend.');
+    }
+  };
+
   const handleReject = () => {
     handleRejectPrompt();
   };
 
   const handleRequestInfo = () => {
-    showToast(`SMS request sent to ${techName} to supply document clarification.`);
+    setIsReuploadModalVisible(true);
   };
 
   return (
@@ -625,6 +668,92 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
                 activeOpacity={0.8}
               >
                 <Text style={styles.modalConfirmRejectText}>Confirm Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Re-upload Document Request Modal */}
+      <Modal
+        visible={isReuploadModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsReuploadModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={[styles.modalAlertBadge, { backgroundColor: '#eff6ff' }]}>
+                <AppIcon name="UploadCloud" size={20} color={Colors.secondaryCobalt} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Request Document Re-upload</Text>
+                <Text style={styles.modalSubtitle}>
+                  Specify why {techName} needs to re-upload their document
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={styles.reasonListScroll} showsVerticalScrollIndicator={false}>
+              {REUPLOAD_REASONS.map((reason) => {
+                const isSelected = selectedReuploadReason === reason;
+                return (
+                  <TouchableOpacity
+                    key={reason}
+                    style={[
+                      styles.reasonOptionBtn,
+                      isSelected && styles.reasonOptionBtnSelected,
+                    ]}
+                    onPress={() => setSelectedReuploadReason(reason)}
+                    activeOpacity={0.7}
+                  >
+                    <View
+                      style={[
+                        styles.radioCircle,
+                        isSelected && styles.radioCircleSelected,
+                      ]}
+                    >
+                      {isSelected && <View style={styles.radioInnerDot} />}
+                    </View>
+                    <Text
+                      style={[
+                        styles.reasonOptionText,
+                        isSelected && styles.reasonOptionTextSelected,
+                      ]}
+                    >
+                      {reason}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+
+              <TextInput
+                style={styles.customReasonInput}
+                placeholder="Additional instructions or notes for technician..."
+                placeholderTextColor={Colors.outline}
+                value={customReuploadNote}
+                onChangeText={setCustomReuploadNote}
+                multiline
+                numberOfLines={2}
+              />
+            </ScrollView>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsReuploadModalVisible(false)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalConfirmRejectBtn, { backgroundColor: Colors.secondaryCobalt }]}
+                onPress={confirmReuploadRequest}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalConfirmRejectText}>Send Request</Text>
               </TouchableOpacity>
             </View>
           </View>
