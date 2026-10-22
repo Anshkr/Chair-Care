@@ -25,6 +25,7 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { customerApi, serviceApi, notificationApi } from '../../services/api';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
 import { PressableScale } from '../../animations/PressableScale';
 import { FadeIn } from '../../animations/FadeIn';
@@ -247,19 +248,19 @@ export const ServicesAvailableChaircareMobileScreen: React.FC<{
         setActiveRequest(null);
         await loadActiveRequest();
       } else {
-        const errorMsg = res.error || 'Could not cancel request.';
+        const errorMsg = sanitizeUserErrorMessage(res.error) || 'Could not cancel request. Please try again.';
         if (Platform.OS === 'web') {
           window.alert(errorMsg);
         } else {
-          Alert.alert('Unable to cancel', errorMsg);
+          Alert.alert('Unable to Cancel', errorMsg);
         }
       }
     } catch (err: any) {
-      const errorMsg = err.message || 'Could not cancel request.';
+      const errorMsg = sanitizeUserErrorMessage(err) || 'Could not cancel request. Please try again.';
       if (Platform.OS === 'web') {
         window.alert(errorMsg);
       } else {
-        Alert.alert('Error', errorMsg);
+        Alert.alert('Unable to Cancel', errorMsg);
       }
     } finally {
       setIsCancelling(false);

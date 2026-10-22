@@ -16,6 +16,7 @@ import { PrecisionButton } from '../../components/common/PrecisionButton';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 export const SuperAdminLoginChaircareMobileScreen: React.FC<{ navigation: any }> = ({
   navigation,
@@ -42,11 +43,11 @@ export const SuperAdminLoginChaircareMobileScreen: React.FC<{ navigation: any }>
       const res = await login(email, password, 'admin');
       setLoading(false);
       if (!res.success) {
-        Alert.alert('Authentication Failed', res.error || 'Invalid credentials.');
+        Alert.alert('Authentication Failed', sanitizeUserErrorMessage(res.error) || 'Invalid administrator credentials. Please check your email and password.');
       }
     } catch (err: any) {
       setLoading(false);
-      Alert.alert('Error', err.message || 'Unable to authenticate.');
+      Alert.alert('Authentication Failed', sanitizeUserErrorMessage(err) || 'Unable to authenticate. Please check your credentials and try again.');
     }
   };
 

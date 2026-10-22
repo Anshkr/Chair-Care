@@ -21,6 +21,7 @@ import { BrandLogo } from '../../components/common/BrandLogo';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { authApi } from '../../services/api/authApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
@@ -115,7 +116,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       }
     } catch (err: any) {
       setIsPickingFile(false);
-      Alert.alert('Gallery Error', err.message || 'Unable to open device image gallery.');
+      Alert.alert('Gallery Error', sanitizeUserErrorMessage(err) || 'Unable to open device image gallery.');
     }
   };
 
@@ -151,7 +152,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       }
     } catch (err: any) {
       setIsPickingFile(false);
-      Alert.alert('Camera Error', err.message || 'Unable to access device camera.');
+      Alert.alert('Camera Error', sanitizeUserErrorMessage(err) || 'Unable to access device camera.');
     }
   };
 
@@ -183,7 +184,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       }
     } catch (err: any) {
       setIsPickingFile(false);
-      Alert.alert('File Picker Error', err.message || 'Unable to access document storage.');
+      Alert.alert('File Picker Error', sanitizeUserErrorMessage(err) || 'Unable to access document storage.');
     }
   };
 
@@ -278,7 +279,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       setIsSubmitting(false);
 
       if (res.error) {
-        Alert.alert('Submission Error', res.error || 'Failed to submit registration application.');
+        Alert.alert('Registration Issue', sanitizeUserErrorMessage(res.error) || 'Please verify the details and try again.');
         return;
       }
 
@@ -286,7 +287,7 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       setIsSubmittedSuccess(true);
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert('Connection Error', err.message || 'Unable to connect to registration server.');
+      Alert.alert('Registration Issue', sanitizeUserErrorMessage(err) || 'Unable to submit your application. Please check your connection and try again.');
     }
   };
 

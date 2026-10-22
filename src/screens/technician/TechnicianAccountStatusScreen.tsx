@@ -19,6 +19,7 @@ import { AppIcon } from '../../components/common/AppIcon';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { Colors } from '../../constants/theme';
 import { technicianApi } from '../../services/api/technicianApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
@@ -117,7 +118,7 @@ export const TechnicianAccountStatusScreen: React.FC<{
         });
       }
     } catch (err: any) {
-      Alert.alert('Attachment Error', err.message || 'Could not pick photo.');
+      Alert.alert('Attachment Error', sanitizeUserErrorMessage(err) || 'Could not pick photo. Please try again.');
     }
   };
 
@@ -147,7 +148,7 @@ export const TechnicianAccountStatusScreen: React.FC<{
         });
       }
     } catch (err: any) {
-      Alert.alert('Attachment Error', err.message || 'Could not launch camera.');
+      Alert.alert('Attachment Error', sanitizeUserErrorMessage(err) || 'Could not launch camera. Please try again.');
     }
   };
 
@@ -191,7 +192,7 @@ export const TechnicianAccountStatusScreen: React.FC<{
         });
       }
     } catch (err: any) {
-      Alert.alert('Attachment Error', err.message || 'Could not select document.');
+      Alert.alert('Attachment Error', sanitizeUserErrorMessage(err) || 'Could not select document. Please try again.');
     }
   };
 
@@ -219,14 +220,14 @@ export const TechnicianAccountStatusScreen: React.FC<{
       });
 
       if (!res.success) {
-        Alert.alert('Submission Failed', res.error || 'Could not upload document.');
+        Alert.alert('Submission Failed', sanitizeUserErrorMessage(res.error) || 'Could not upload document. Please try again.');
         return;
       }
 
       setSuccessToast('Document submitted successfully! Admin will review your file.');
       await loadStatus(false);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Network error occurred while submitting document.');
+      Alert.alert('Submission Failed', sanitizeUserErrorMessage(err) || 'Unable to submit document. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }

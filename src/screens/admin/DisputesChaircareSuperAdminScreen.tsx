@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
 
 interface DisputesScreenProps {
@@ -135,7 +136,7 @@ export const DisputesChaircareSuperAdminScreen: React.FC<DisputesScreenProps> = 
         setDisputes([]);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Unable to retrieve disputes.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'Unable to retrieve disputes. Please refresh.');
     } finally {
       setIsLoading(false);
     }

@@ -8,9 +8,11 @@ export const validateBody = (schema: ZodSchema) => {
       next();
     } catch (err) {
       if (err instanceof ZodError) {
+        const firstMessage =
+          err.errors[0]?.message || 'Please check the required fields and try again.';
         res.status(400).json({
           success: false,
-          error: 'Validation failed',
+          error: firstMessage,
           details: err.errors.map((e) => ({
             field: e.path.join('.'),
             message: e.message,
@@ -30,9 +32,11 @@ export const validateParams = (schema: ZodSchema) => {
       next();
     } catch (err) {
       if (err instanceof ZodError) {
+        const firstMessage =
+          err.errors[0]?.message || 'Invalid parameters provided.';
         res.status(400).json({
           success: false,
-          error: 'Invalid URL parameters',
+          error: firstMessage,
           details: err.errors.map((e) => ({
             field: e.path.join('.'),
             message: e.message,
@@ -52,9 +56,11 @@ export const validateQuery = (schema: ZodSchema) => {
       next();
     } catch (err) {
       if (err instanceof ZodError) {
+        const firstMessage =
+          err.errors[0]?.message || 'Invalid query parameters.';
         res.status(400).json({
           success: false,
-          error: 'Invalid query parameters',
+          error: firstMessage,
           details: err.errors.map((e) => ({
             field: e.path.join('.'),
             message: e.message,

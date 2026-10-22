@@ -90,6 +90,62 @@ export interface ApiResponse<T = any> {
   };
 }
 
+/**
+ * Strips out any technical server, database, network, and HTTP codes/jargon.
+ * Only surfaces clean, user-actionable messages (e.g. invalid fields, file uploads, invalid credentials).
+ */
+export function sanitizeUserErrorMessage(rawError: any, statusCode?: number): string {
+  if (statusCode && statusCode >= 500) {
+    return 'Something went wrong while processing your request. Please try again.';
+  }
+
+  if (statusCode === 401) {
+    return 'Invalid credentials or session expired. Please log in again.';
+  }
+
+  if (statusCode === 403) {
+    return 'You do not have permission to perform this action.';
+  }
+
+  if (statusCode === 404) {
+    return 'The requested record could not be found.';
+  }
+
+  let str = '';
+  if (typeof rawError === 'string') {
+    str = rawError;
+  } else if (rawError && typeof rawError.message === 'string') {
+    str = rawError.message;
+  } else if (rawError && typeof rawError.error === 'string') {
+    str = rawError.error;
+  }
+
+  str = str.trim();
+  if (!str) {
+    return 'Please check your information and try again.';
+  }
+
+  const lower = str.toLowerCase();
+
+  // Detect technical, database, internal, or connection jargon
+  const isTechnical =
+    /\b(status \d+|request failed with status|\b[45]\d\d\b|sql|syntax|postgres|pg_|relation|column|parameter|deduced|foreign key|constraint|duplicate key|typeerror|referenceerror|rangeerror|syntaxerror|evalerror|database|server error|backend|internal error|unhandled|uncaught|abort|econnrefused|enotfound|enoent|network request failed|failed to fetch|socket|cors|json parse|jwt|token expired|bearer|malformed|null value|object object|\[object|spawn adb)\b/i.test(
+      lower
+    ) ||
+    lower.includes('at async') ||
+    lower.includes('at function') ||
+    lower.includes('failed with status');
+
+  if (isTechnical) {
+    if (statusCode === 400) {
+      return 'Please verify that all fields and documents are valid and try again.';
+    }
+    return 'Unable to complete this action right now. Please try again.';
+  }
+
+  return str;
+}
+
 export async function apiRequest<T = any>(
   endpoint: string,
   options: RequestInit = {}
@@ -136,7 +192,7 @@ export async function apiRequest<T = any>(
       return {
         success: false,
         status: response.status,
-        error: data?.error || data?.message || `Request failed with status ${response.status}`,
+        error: sanitizeUserErrorMessage(data?.error || data?.message, response.status),
       };
     }
 
@@ -148,12 +204,12 @@ export async function apiRequest<T = any>(
     if (err.name === 'AbortError') {
       return {
         success: false,
-        error: 'API request timed out. Please check your backend connection.',
+        error: 'The request took too long. Please check your connection and try again.',
       };
     }
     return {
       success: false,
-      error: 'Unable to connect to ChairCare server. Please check your internet connection and try again.',
+      error: 'Unable to connect. Please check your internet connection and try again.',
     };
   }
 }

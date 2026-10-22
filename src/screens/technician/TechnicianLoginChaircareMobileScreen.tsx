@@ -17,6 +17,7 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }> = ({
   navigation,
@@ -60,12 +61,12 @@ export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }>
             [{ text: 'OK' }]
           );
         } else {
-          Alert.alert('Authentication Failed', res.error || 'Invalid technician credentials.');
+          Alert.alert('Authentication Failed', sanitizeUserErrorMessage(res.error) || 'Invalid partner credentials. Please check your phone/email and password.');
         }
       }
     } catch (err: any) {
       setLoading(false);
-      Alert.alert('Error', err.message || 'Unable to authenticate.');
+      Alert.alert('Authentication Failed', sanitizeUserErrorMessage(err) || 'Unable to authenticate. Please check your credentials and try again.');
     }
   };
 

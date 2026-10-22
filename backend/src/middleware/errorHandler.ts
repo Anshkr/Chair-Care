@@ -16,11 +16,15 @@ export const errorHandler = (
 
   const statusCode = err.statusCode || (err.name === 'UnauthorizedError' ? 401 : 500);
 
+  const rawMsg = err.message || '';
+  const isTechnical =
+    statusCode >= 500 ||
+    /sql|syntax|postgres|relation|column|parameter|table|database|typeerror|referenceerror|econnrefused|fetch|failed with status/i.test(rawMsg);
+
   res.status(statusCode).json({
     success: false,
-    error:
-      statusCode === 500 && env.NODE_ENV === 'production'
-        ? 'An unexpected server error occurred. Please contact support.'
-        : err.message || 'Internal server error',
+    error: isTechnical
+      ? 'Unable to complete this request right now. Please try again shortly.'
+      : rawMsg || 'Request could not be processed.',
   });
 };

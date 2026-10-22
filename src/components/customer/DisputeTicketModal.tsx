@@ -16,6 +16,7 @@ import { AppIcon } from '../common/AppIcon';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { customerApi } from '../../services/api/customerApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 export interface DisputeTicketModalProps {
   visible: boolean;
@@ -117,10 +118,10 @@ export const DisputeTicketModal: React.FC<DisputeTicketModalProps> = ({
           onSuccess(res.data);
         }
       } else {
-        setErrorMessage(res.error || 'Failed to submit dispute ticket. Please try again.');
+        setErrorMessage(sanitizeUserErrorMessage(res.error) || 'Failed to submit dispute ticket. Please try again.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Network error occurred while filing dispute.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'Unable to submit dispute ticket. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

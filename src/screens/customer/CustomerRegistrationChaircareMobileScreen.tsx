@@ -18,6 +18,7 @@ import { AppIcon } from '../../components/common/AppIcon';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 /**
  * Screen: Customer Registration / Sign Up
@@ -94,11 +95,11 @@ export const CustomerRegistrationChaircareMobileScreen: React.FC<{
           navigation.replace(target);
         }
       } else {
-        setErrorMessage(result.error || 'Registration failed. Please try again.');
+        setErrorMessage(sanitizeUserErrorMessage(result.error) || 'Registration failed. Please check your details and try again.');
       }
     } catch (err: any) {
       setIsLoading(false);
-      setErrorMessage(err.message || 'An unexpected error occurred. Please try again.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'An unexpected error occurred. Please try again.');
     }
   };
 

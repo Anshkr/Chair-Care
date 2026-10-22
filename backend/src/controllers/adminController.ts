@@ -599,7 +599,7 @@ export const verifyTechnician = async (
     });
   } catch (err: any) {
     console.error('Failed to verify technician:', err);
-    res.status(500).json({ success: false, error: err.message || 'Failed to update technician verification status.' });
+    res.status(500).json({ success: false, error: 'Failed to update technician verification status. Please try again shortly.' });
   }
 };
 
@@ -1472,9 +1472,10 @@ export const createService = async (
       },
     });
   } catch (err: any) {
+    console.error('Failed to create service:', err);
     res.status(500).json({
       success: false,
-      error: err.message || 'Failed to create service.',
+      error: 'Failed to create service. Please verify the service details and try again.',
     });
   }
 };
@@ -1538,9 +1539,10 @@ export const updateService = async (
       },
     });
   } catch (err: any) {
+    console.error('Failed to update service:', err);
     res.status(500).json({
       success: false,
-      error: err.message || 'Failed to update service.',
+      error: 'Failed to update service. Please try again shortly.',
     });
   }
 };
@@ -1563,9 +1565,10 @@ export const deleteService = async (
       message: 'Service deleted / deactivated successfully.',
     });
   } catch (err: any) {
+    console.error('Failed to delete service:', err);
     res.status(500).json({
       success: false,
-      error: err.message || 'Failed to delete service.',
+      error: 'Failed to delete service. Please try again shortly.',
     });
   }
 };

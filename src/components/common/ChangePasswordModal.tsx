@@ -16,6 +16,7 @@ import { AppIcon } from './AppIcon';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { authApi } from '../../services/api/authApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 export interface ChangePasswordModalProps {
   visible: boolean;
@@ -100,10 +101,10 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
           Alert.alert('Password Updated', 'Your account password has been updated securely.');
         }, 1200);
       } else {
-        setErrorMessage(res.error || 'Failed to update password. Please check your current password.');
+        setErrorMessage(sanitizeUserErrorMessage(res.error) || 'Failed to update password. Please check your current password.');
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Network error occurred while updating password.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'Unable to update password. Please try again.');
     } finally {
       setIsLoading(false);
     }

@@ -16,7 +16,7 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { useBooking } from '../../context/BookingContext';
-import { getApiBaseUrl, setApiBaseUrl } from '../../services/api/apiClient';
+import { getApiBaseUrl, setApiBaseUrl, sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 /**
  * Screen ID: C03
@@ -78,11 +78,11 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
           navigation.replace(targetRoute);
         }
       } else {
-        setErrorMessage(result.error || 'Invalid credentials. Please check and try again.');
+        setErrorMessage(sanitizeUserErrorMessage(result.error) || 'Invalid credentials. Please check and try again.');
       }
     } catch (err: any) {
       setIsAuthenticating(false);
-      setErrorMessage(err.message || 'Login failed. Please try again.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'Login failed. Please check your credentials and try again.');
     }
   };
 
@@ -344,7 +344,7 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
             <View style={styles.trustRow}>
               <AppIcon name="Lock" size={14} color={Colors.onSurfaceVariant} />
               <Text style={styles.trustText}>
-                Secure 256-bit encryption • Neon PostgreSQL backend
+                Secure 256-bit encryption • Encrypted data protection
               </Text>
             </View>
             <Text style={styles.trustSubtext}>

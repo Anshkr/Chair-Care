@@ -22,6 +22,7 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { customerApi } from '../../services/api/customerApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { adminSyncEmitter } from '../../services/adminSync';
 import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
 
@@ -342,14 +343,14 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
         setIsEditingAddress(false);
         setEditingAddressId(null);
         Alert.alert(
-          'Address Synced',
-          'Your saved address has been updated in your profile and synchronized with the backend database.'
+          'Address Saved',
+          'Your address has been saved to your profile successfully.'
         );
       } else {
-        Alert.alert('Sync Failed', res.error || 'Could not save address to account.');
+        Alert.alert('Save Failed', sanitizeUserErrorMessage(res.error) || 'Could not save address to account.');
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'An error occurred while saving address.');
+      Alert.alert('Save Failed', sanitizeUserErrorMessage(err) || 'An error occurred while saving address.');
     } finally {
       setIsSavingAddress(false);
     }
@@ -1250,7 +1251,7 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
                   </Text>
                   <Text style={styles.modalHeaderSubtitle}>
                     {isEditingAddress
-                      ? 'Live synchronized with backend PostgreSQL'
+                      ? 'Saved to your profile securely'
                       : 'Delivery & service calibration locations'}
                   </Text>
                 </View>

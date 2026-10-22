@@ -38,6 +38,7 @@ const SAMPLE_CHAIR_PHOTOS = [
 ];
 
 import { customerApi } from '../../services/api/customerApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 /**
  * Screen ID: C17
@@ -109,10 +110,10 @@ export const RateYourExperienceChaircareMobileScreen: React.FC<{
           comment: reviewText.trim() || selectedChips.join(', '),
         });
         if (!res.success && res.error) {
-          Alert.alert('Review Submission Note', res.error);
+          Alert.alert('Review Submission', sanitizeUserErrorMessage(res.error) || 'Could not record review. Please try again.');
         }
       } catch (err: any) {
-        Alert.alert('Error', err.message || 'Could not record review.');
+        Alert.alert('Review Submission', sanitizeUserErrorMessage(err) || 'Could not record review. Please try again.');
       }
     }
 

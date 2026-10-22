@@ -22,6 +22,7 @@ import { Typography } from '../../constants/typography';
 import { JobRequestTicket } from './JobRequestsChaircareMobileScreen';
 import { customerApi } from '../../services/api/customerApi';
 import { technicianApi } from '../../services/api/technicianApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 const normalizeJobTicket = (item: any): any => {
   if (!item) return null;
@@ -144,12 +145,12 @@ export const JobRequestDetailsChaircareMobileScreen: React.FC<{
           if (isMounted && res && res.success && res.data) {
             setTicketData(normalizeJobTicket(res.data));
           } else if (isMounted && !initialTicket && res && !res.success) {
-            setErrorMessage(res.error || 'Job details could not be retrieved.');
+            setErrorMessage(sanitizeUserErrorMessage(res.error) || 'Job details could not be retrieved.');
           }
         })
         .catch((err) => {
           if (isMounted && !initialTicket) {
-            setErrorMessage(err.message || 'Error loading job details.');
+            setErrorMessage(sanitizeUserErrorMessage(err) || 'Error loading job details. Please try again.');
           }
         })
         .finally(() => {

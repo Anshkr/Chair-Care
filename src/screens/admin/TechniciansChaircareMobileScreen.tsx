@@ -18,6 +18,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
 
 interface TechniciansScreenProps {
@@ -247,7 +248,7 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
       loadTechnicians();
     } catch (err: any) {
       setIsSubmittingTech(false);
-      setFormError(err.message || 'Error communicating with backend.');
+      setFormError(sanitizeUserErrorMessage(err) || 'Unable to create technician. Please try again.');
     }
   };
 

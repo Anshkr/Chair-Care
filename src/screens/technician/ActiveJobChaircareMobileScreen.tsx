@@ -18,6 +18,7 @@ import { Typography } from '../../constants/typography';
 import { TechnicianHeaderAvatar } from '../../components/common/TechnicianHeaderAvatar';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface ActiveJobProps {
   navigation?: any;
@@ -205,7 +206,7 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
         request: updated,
       });
     } catch (err: any) {
-      setPinError(err.message || 'Verification failed. Try again.');
+      setPinError(sanitizeUserErrorMessage(err) || 'Verification failed. Please try again.');
     } finally {
       setIsVerifyingPin(false);
     }

@@ -252,7 +252,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
         Alert.alert('Update Failed', res.error || 'Could not save specializations.');
       }
     } catch {
-      Alert.alert('Update Failed', 'Network error. Please try again.');
+      Alert.alert('Update Failed', 'Unable to save specializations right now. Please try again.');
     } finally {
       setIsSavingSpecs(false);
     }
@@ -276,7 +276,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
         Alert.alert('Update Failed', res.error || 'Could not update working zone.');
       }
     } catch {
-      Alert.alert('Update Failed', 'Network error. Please try again.');
+      Alert.alert('Update Failed', 'Unable to update working zone right now. Please try again.');
     } finally {
       setIsSavingZone(false);
     }

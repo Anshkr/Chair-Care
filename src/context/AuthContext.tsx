@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserProfile, UserRole } from '../types/models';
 import { authApi, technicianApi } from '../services/api';
+import { sanitizeUserErrorMessage } from '../services/api/apiClient';
 import { adminSyncEmitter } from '../services/adminSync';
 
 export interface RegisterPayload {
@@ -144,7 +145,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (err: any) {
       return {
         success: false,
-        error: err.message || 'Unable to connect to authentication service.',
+        error: sanitizeUserErrorMessage(err) || 'Unable to connect. Please check your connection and try again.',
       };
     }
   };
@@ -177,13 +178,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         return {
           success: false,
-          error: res.error || 'Failed to create account. Please try again.',
+          error: sanitizeUserErrorMessage(res.error) || 'Failed to create account. Please check your details and try again.',
         };
       }
     } catch (err: any) {
       return {
         success: false,
-        error: err.message || 'An unexpected error occurred during registration.',
+        error: sanitizeUserErrorMessage(err) || 'Unable to register. Please check your details and try again.',
       };
     }
   };
@@ -226,9 +227,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         adminSyncEmitter.notifySync();
         return { success: true, user: updated };
       }
-      return { success: false, error: res.error || 'Failed to update profile.' };
+      return { success: false, error: sanitizeUserErrorMessage(res.error) || 'Failed to update profile.' };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Error updating profile.' };
+      return { success: false, error: sanitizeUserErrorMessage(err) || 'Unable to update profile. Please try again.' };
     }
   };
 
@@ -264,9 +265,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         adminSyncEmitter.notifySync();
         return { success: true, user: updated };
       }
-      return { success: false, error: res.error || 'Failed to update technician profile.' };
+      return { success: false, error: sanitizeUserErrorMessage(res.error) || 'Failed to update technician profile.' };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Error updating technician profile.' };
+      return { success: false, error: sanitizeUserErrorMessage(err) || 'Unable to update technician profile. Please try again.' };
     }
   };
 

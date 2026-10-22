@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
 
 interface SupportScreenProps {
@@ -154,7 +155,7 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
         setTickets([]);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Unable to connect to support telemetry.');
+      setErrorMessage(sanitizeUserErrorMessage(err) || 'Unable to load support tickets. Please refresh.');
     } finally {
       setIsLoading(false);
     }

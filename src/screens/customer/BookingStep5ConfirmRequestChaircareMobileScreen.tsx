@@ -19,6 +19,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useBooking } from '../../context/BookingContext';
 
 import { customerApi } from '../../services/api/customerApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 /**
  * Screen ID: C08
@@ -78,12 +79,12 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
           setPendingReturnRoute('BookingStep5');
           navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep5' });
         } else {
-          Alert.alert('Booking Error', res.error || 'Could not place service booking. Please try again.');
+          Alert.alert('Booking Error', sanitizeUserErrorMessage(res.error) || 'Could not place service booking. Please check your information and try again.');
         }
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert('Booking Error', err.message || 'An unexpected error occurred. Please try again.');
+      Alert.alert('Booking Error', sanitizeUserErrorMessage(err) || 'An unexpected error occurred while placing your booking. Please try again.');
     }
   };
 

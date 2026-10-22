@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface AssignmentConfirmationProps {
   navigation?: any;
@@ -114,7 +115,7 @@ export const AssignmentConfirmationChaircareMobileScreen: React.FC<AssignmentCon
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert('Connection Error', err.message || 'Unable to communicate with assignment service.');
+      Alert.alert('Assignment Failed', sanitizeUserErrorMessage(err) || 'Unable to assign technician. Please try again.');
     }
   };
 

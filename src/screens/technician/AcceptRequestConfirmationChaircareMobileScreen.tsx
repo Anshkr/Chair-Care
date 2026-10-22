@@ -15,6 +15,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface AcceptRequestConfirmationProps {
   navigation?: any;
@@ -91,15 +92,15 @@ export const AcceptRequestConfirmationChaircareMobileScreen: React.FC<
         setConfirmState('idle');
         Alert.alert(
           'Cannot Accept Job',
-          res.error || 'This job is already assigned to another technician or is no longer available.',
+          sanitizeUserErrorMessage(res.error) || 'This job is already assigned to another technician or is no longer available.',
           [{ text: 'OK', onPress: () => navigation.goBack() }]
         );
       }
     } catch (err: any) {
       setConfirmState('idle');
       Alert.alert(
-        'Connection Error',
-        err.message || 'Unable to accept job. Please check backend connectivity.',
+        'Unable to Accept Job',
+        sanitizeUserErrorMessage(err) || 'Unable to accept job right now. Please check your connection and try again.',
         [{ text: 'OK' }]
       );
     }

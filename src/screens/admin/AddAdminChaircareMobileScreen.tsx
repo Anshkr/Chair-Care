@@ -14,6 +14,7 @@ import { AppIcon } from '../../components/common/AppIcon';
 import { Colors, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface AddAdminProps {
   navigation?: any;
@@ -171,7 +172,7 @@ export const AddAdminChaircareMobileScreen: React.FC<AddAdminProps> = ({
       }, 700);
     } catch (err: any) {
       setIsProvisioning(false);
-      displayToast(err.message || 'Error communicating with administration backend');
+      displayToast(sanitizeUserErrorMessage(err) || 'Unable to create administrator. Please try again.');
     }
   };
 

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface VerifyTechnicianProps {
   navigation?: any;
@@ -126,7 +127,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         });
       }
     } catch (err: any) {
-      Alert.alert('Connection Error', err.message || 'Unable to communicate with verification backend.');
+      Alert.alert('Action Failed', sanitizeUserErrorMessage(err) || 'Unable to verify technician right now. Please try again.');
     }
   };
 
@@ -174,7 +175,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
     try {
       const res = await adminApi.verifyTechnician(currentTargetId, 'rejected', finalReason);
       if (res.error) {
-        Alert.alert('Rejection Error', res.error || 'Failed to update technician status.');
+        Alert.alert('Rejection Issue', sanitizeUserErrorMessage(res.error) || 'Failed to update technician status.');
         return;
       }
       if (navigation) {
@@ -193,7 +194,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         });
       }
     } catch (err: any) {
-      Alert.alert('Connection Error', err.message || 'Unable to communicate with backend.');
+      Alert.alert('Action Failed', sanitizeUserErrorMessage(err) || 'Unable to reject technician right now. Please try again.');
     }
   };
 
@@ -217,7 +218,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         finalNote
       );
       if (res.error) {
-        Alert.alert('Request Error', res.error || 'Failed to send re-upload request.');
+        Alert.alert('Request Issue', sanitizeUserErrorMessage(res.error) || 'Failed to send re-upload request.');
         return;
       }
       showToast(`Re-upload request sent to ${techName}.`);
@@ -227,7 +228,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
         navigation.navigate('Technicians');
       }
     } catch (err: any) {
-      Alert.alert('Connection Error', err.message || 'Unable to communicate with backend.');
+      Alert.alert('Action Failed', sanitizeUserErrorMessage(err) || 'Unable to send re-upload request right now. Please try again.');
     }
   };
 

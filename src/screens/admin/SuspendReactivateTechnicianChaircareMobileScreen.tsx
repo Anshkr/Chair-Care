@@ -18,6 +18,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
 import { adminApi } from '../../services/api/adminApi';
+import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 
 interface SuspendReactivateScreenProps {
   navigation?: any;
@@ -245,7 +246,7 @@ export const SuspendReactivateTechnicianChaircareMobileScreen: React.FC<SuspendR
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert('Connection Error', err.message || 'Unable to communicate with technician management backend.');
+      Alert.alert('Action Failed', sanitizeUserErrorMessage(err) || 'Unable to update technician status right now. Please try again.');
     }
   };
 
