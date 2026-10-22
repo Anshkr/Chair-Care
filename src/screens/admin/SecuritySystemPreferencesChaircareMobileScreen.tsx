@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
 
 interface SecurityPreferencesProps {
   navigation?: any;
@@ -91,6 +92,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
   const [rootPasswordInput, setRootPasswordInput] = useState<string>('');
 
   // Credentials Modals
+  const [isChangePasswordVisible, setIsChangePasswordVisible] = useState<boolean>(false);
   const [credentialModalType, setCredentialModalType] = useState<
     'password' | 'fido2' | 'recovery' | null
   >(null);
@@ -481,7 +483,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
             {/* Nav Row 1 */}
             <TouchableOpacity
               style={styles.credentialNavItem}
-              onPress={() => setCredentialModalType('password')}
+              onPress={() => setIsChangePasswordVisible(true)}
               activeOpacity={0.7}
             >
               <View style={styles.credentialNavLeft}>
@@ -1055,6 +1057,13 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Real Change Password Modal */}
+      <ChangePasswordModal
+        visible={isChangePasswordVisible}
+        onClose={() => setIsChangePasswordVisible(false)}
+        userRoleLabel="Super Admin Console"
+      />
     </View>
   );
 };

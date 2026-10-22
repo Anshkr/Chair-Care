@@ -81,6 +81,16 @@ export const authApi = {
     });
   },
 
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string
+  ): Promise<ApiResponse<{ message: string }>> => {
+    return apiRequest<{ message: string }>('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+
   logout: () => {
     setApiAuthToken(null);
   },

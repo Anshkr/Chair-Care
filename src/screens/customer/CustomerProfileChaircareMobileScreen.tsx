@@ -23,6 +23,7 @@ import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { customerApi } from '../../services/api/customerApi';
 import { adminSyncEmitter } from '../../services/adminSync';
+import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
 
 import { SavedAddressItem } from './BookingStep3ServiceLocationChaircareMobileScreen';
 
@@ -139,6 +140,7 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
   const [editAddress, setEditAddress] = useState(currentUser?.defaultAddress || '');
   const [tempAvatarUrl, setTempAvatarUrl] = useState<string>(currentUser?.avatarUrl || '');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
 
   // Synchronize edit fields when currentUser updates
   useEffect(() => {
@@ -826,6 +828,31 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
               <View style={styles.menuRowRightBadge}>
                 <View style={styles.pillBadgeBlue}>
                   <Text style={styles.pillBadgeBlueText}>Secure Gate</Text>
+                </View>
+                <Text style={styles.chevronIcon}>›</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Change Password */}
+            <TouchableOpacity
+              style={styles.menuRow}
+              onPress={() => setChangePasswordModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuRowLeft}>
+                <View style={styles.menuIconCircle}>
+                  <AppIcon name="Lock" size={18} color={Colors.onSurfaceVariant} />
+                </View>
+                <View style={styles.menuSubCol}>
+                  <Text style={styles.menuItemTitle}>Change Password</Text>
+                  <Text style={styles.menuItemSub}>Update your account login password</Text>
+                </View>
+              </View>
+              <View style={styles.menuRowRightBadge}>
+                <View style={styles.pillBadgeNeutral}>
+                  <Text style={styles.pillBadgeNeutralText}>Security</Text>
                 </View>
                 <Text style={styles.chevronIcon}>›</Text>
               </View>
@@ -1577,6 +1604,13 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
           </View>
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        visible={changePasswordModalVisible}
+        onClose={() => setChangePasswordModalVisible(false)}
+        userRoleLabel="Customer Account"
+      />
     </ScreenContainer>
   );
 };

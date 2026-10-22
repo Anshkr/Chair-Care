@@ -24,6 +24,7 @@ import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
 
 const PRESET_TECHNICIAN_AVATARS = [
   { id: '1', label: 'Field Specialist', uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80' },
@@ -119,6 +120,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
   const [prefModalVisible, setPrefModalVisible] = useState(false);
   const [autoAcceptPriority, setAutoAcceptPriority] = useState(false);
   const [soundOnAlert, setSoundOnAlert] = useState(true);
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
 
   React.useEffect(() => {
     let isMounted = true;
@@ -680,6 +682,31 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                 </View>
               </View>
               <Text style={styles.chevronIcon}>›</Text>
+            </TouchableOpacity>
+
+            {/* Change Password */}
+            <TouchableOpacity
+              style={styles.menuItemRow}
+              onPress={() => setChangePasswordModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <View style={styles.menuIconBox}>
+                  <AppIcon name="Lock" size={18} color={Colors.primary} />
+                </View>
+                <View style={styles.menuTextCol}>
+                  <Text style={styles.menuItemTitle}>Change Password</Text>
+                  <Text style={styles.menuItemSub}>
+                    Update field technician account login password
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.menuItemRightGroup}>
+                <View style={styles.offlinePill}>
+                  <Text style={styles.onlinePillText}>SECURITY</Text>
+                </View>
+                <Text style={styles.chevronIcon}>›</Text>
+              </View>
             </TouchableOpacity>
 
           </View>
@@ -1463,6 +1490,13 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
           </View>
         </View>
       </Modal>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        visible={changePasswordModalVisible}
+        onClose={() => setChangePasswordModalVisible(false)}
+        userRoleLabel="Technician Account"
+      />
     </View>
   );
 };

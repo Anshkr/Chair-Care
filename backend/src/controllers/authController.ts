@@ -365,3 +365,64 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     },
   });
 };
+
+export const changePassword = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      return;
+    }
+
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.userId;
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ success: false, error: 'Current password and new password are required.' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ success: false, error: 'New password must be at least 6 characters long.' });
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      res.status(400).json({ success: false, error: 'New password cannot be the same as your current password.' });
+      return;
+    }
+
+    const result = await query(
+      `SELECT id, password_hash FROM users WHERE id = $1;`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'User account not found.' });
+      return;
+    }
+
+    const user = result.rows[0];
+    const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isMatch) {
+      res.status(400).json({ success: false, error: 'Current password is incorrect. Please verify and try again.' });
+      return;
+    }
+
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2;`,
+      [newHash, userId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully.',
+    });
+  } catch (err: any) {
+    console.error('Failed to change password:', err);
+    res.status(500).json({ success: false, error: 'Failed to change password. Please try again later.' });
+  }
+};

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
+import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
 
 /**
  * Screen ID: A57
@@ -67,6 +68,7 @@ export const AdminProfilePriyaSharmaChaircareMobileScreen: React.FC<{
   const [isSuspended, setIsSuspended] = useState<boolean>(
     admin.status?.toLowerCase() === 'suspended'
   );
+  const [changePasswordModalVisible, setChangePasswordModalVisible] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string>('');
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
@@ -435,6 +437,42 @@ export const AdminProfilePriyaSharmaChaircareMobileScreen: React.FC<{
                 </View>
               </View>
             </View>
+
+            {/* Change Admin Password */}
+            <TouchableOpacity
+              style={[
+                styles.governanceItem,
+                {
+                  marginTop: 8,
+                  paddingTop: 12,
+                  borderTopWidth: 1,
+                  borderTopColor: 'rgba(0,0,0,0.06)',
+                },
+              ]}
+              onPress={() => setChangePasswordModalVisible(true)}
+              activeOpacity={0.7}
+            >
+              <View
+                style={[
+                  styles.itemIconWrapSmall,
+                  { backgroundColor: 'rgba(0, 82, 54, 0.1)' },
+                ]}
+              >
+                <MaterialIcons name="lock-reset" size={16} color={Colors.primary} />
+              </View>
+              <View style={[styles.governanceTextCol, { flex: 1 }]}>
+                <Text style={styles.itemFieldLabel}>ACCOUNT CREDENTIALS</Text>
+                <Text
+                  style={[
+                    styles.governanceValue,
+                    { fontWeight: '600', color: Colors.primary },
+                  ]}
+                >
+                  Change Administrator Password
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -570,6 +608,13 @@ export const AdminProfilePriyaSharmaChaircareMobileScreen: React.FC<{
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        visible={changePasswordModalVisible}
+        onClose={() => setChangePasswordModalVisible(false)}
+        userRoleLabel="Administrator Account"
+      />
     </View>
   );
 };
