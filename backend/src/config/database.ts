@@ -16,8 +16,8 @@ const pool = new Pool({
       }
     : undefined,
   max: 20, // Max connection pool clients
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 60000,
+  connectionTimeoutMillis: 15000,
 });
 
 pool.on('error', (err) => {
