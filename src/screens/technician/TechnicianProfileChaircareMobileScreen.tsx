@@ -25,6 +25,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
 import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 const PRESET_TECHNICIAN_AVATARS = [
   { id: '1', label: 'Field Specialist', uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80' },
@@ -1342,9 +1343,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                 style={styles.supportChannelBtn}
                 onPress={() => {
                   setHelpModalVisible(false);
-                  Linking.openURL('tel:+9118002004892').catch(() => {
-                    Alert.alert('Fleet Hotline', 'Call +91 1800 200 4892 (Toll Free 24/7)');
-                  });
+                  phoneCallService.callNumber('+91 1800 200 4892', 'Fleet Operations Hotline');
                 }}
                 activeOpacity={0.7}
               >

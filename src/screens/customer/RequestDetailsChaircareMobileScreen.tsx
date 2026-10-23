@@ -17,6 +17,7 @@ import { CustomerHeaderAvatar } from '../../components/common/CustomerHeaderAvat
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface TimelineStep {
   title: string;
@@ -304,10 +305,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
   }, [serverTicket, requestId, activeServiceTitle, activeChairType, activeAddress, activeVisitDate, activeTimeSlot, activeTotal, fallbackTech, draft]);
 
   const handleCall = (phoneNumber: string) => {
-    Alert.alert('Call Technician', `Calling ${ticketData.technician.name} at ${phoneNumber}...`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Call Now' },
-    ]);
+    phoneCallService.callNumber(phoneNumber, ticketData.technician.name);
   };
 
   const handleMessage = () => {
@@ -315,10 +313,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
   };
 
   const handleCallDispatcher = () => {
-    Alert.alert('Call Dispatcher', 'Connecting to ChairCare Priority Dispatch (+91 800 555 0199)...', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Connect' },
-    ]);
+    phoneCallService.callNumber('+918005550199', 'ChairCare Priority Dispatch');
   };
 
   const handleMoreOptions = () => {

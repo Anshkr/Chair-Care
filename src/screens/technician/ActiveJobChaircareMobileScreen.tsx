@@ -19,6 +19,7 @@ import { TechnicianHeaderAvatar } from '../../components/common/TechnicianHeader
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface ActiveJobProps {
   navigation?: any;
@@ -127,10 +128,8 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
   }, [waveAnim1, waveAnim2, waveAnim3, waveAnim4]);
 
   const handleCallCustomer = () => {
-    Alert.alert(
-      'Calling Customer',
-      `Calling ${ticket.customerName} (+91 98765 43210)...`
-    );
+    const phone = ticket.customerPhone || ticket.customer_phone || '+91 98765 43210';
+    phoneCallService.callNumber(phone, ticket.customerName);
   };
 
   const handleChatCustomer = () => {

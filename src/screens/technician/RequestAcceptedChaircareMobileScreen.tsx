@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface RequestAcceptedProps {
   navigation?: any;
@@ -93,10 +94,8 @@ export const RequestAcceptedChaircareMobileScreen: React.FC<
   }, [pulseAnim, opacityAnim]);
 
   const handleCallCustomer = () => {
-    Alert.alert(
-      'Calling Customer',
-      `Connecting to ${ticket.customerName || 'customer'} via ChairCare secure line...`
-    );
+    const phone = ticket.customerPhone || ticket.customer_phone || '+91 98765 43210';
+    phoneCallService.callNumber(phone, ticket.customerName);
   };
 
   const handleNavigateToCustomer = () => {

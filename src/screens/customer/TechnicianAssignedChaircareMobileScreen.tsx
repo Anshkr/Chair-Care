@@ -20,6 +20,7 @@ import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
 import { FadeIn } from '../../animations/FadeIn';
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 export const TechnicianAssignedChaircareMobileScreen: React.FC<{
   navigation: any;
@@ -129,7 +130,7 @@ export const TechnicianAssignedChaircareMobileScreen: React.FC<{
   };
 
   const handleCall = () => {
-    setCallModalVisible(true);
+    phoneCallService.callNumber(technician.phone, technician.name);
   };
 
   const handleMessage = () => {

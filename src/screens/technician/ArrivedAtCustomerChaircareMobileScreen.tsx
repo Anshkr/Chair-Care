@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface ArrivedAtCustomerProps {
   navigation?: any;
@@ -118,15 +119,7 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
 
   const handleCallCustomer = () => {
     const phone = ticket.customerPhone || ticket.customer_phone || '+91 98765 43210';
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined') {
-        window.open(`tel:${phone}`);
-      }
-    } else {
-      Linking.openURL(`tel:${phone}`).catch(() => {
-        Alert.alert('Phone Call', `Dial ${phone} to speak with customer.`);
-      });
-    }
+    phoneCallService.callNumber(phone, ticket.customerName);
   };
 
   const handleLiveChat = () => {

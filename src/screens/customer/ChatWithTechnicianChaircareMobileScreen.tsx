@@ -20,6 +20,7 @@ import { Typography } from '../../constants/typography';
 import { chatApi, ChatMessageItem } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface ChatMessage {
   id: string;
@@ -127,7 +128,7 @@ export const ChatWithTechnicianChaircareMobileScreen: React.FC<{
   };
 
   const handleCall = () => {
-    setCallModalVisible(true);
+    phoneCallService.callNumber(technicianPhone, recipientName);
   };
 
   const handleAttach = () => {

@@ -18,6 +18,7 @@ import { Typography } from '../../constants/typography';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { adminApi } from '../../services/api/adminApi';
 import { useAdminSync } from '../../services/adminSync';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface TechnicianProfileProps {
   navigation?: any;
@@ -146,9 +147,7 @@ export const TechnicianProfileRahulSharmaChaircareMobileScreen: React.FC<Technic
   }
 
   const handleCall = () => {
-    Linking.openURL(`tel:${phone.replace(/\s/g, '')}`).catch(() => {
-      Alert.alert('Phone Call', `Dialing ${phone}`);
-    });
+    phoneCallService.callNumber(phone, techName);
   };
 
   const handleCopy = (text: string, label: string) => {

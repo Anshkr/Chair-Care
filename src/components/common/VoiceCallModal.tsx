@@ -11,6 +11,7 @@ import {
   Linking,
 } from 'react-native';
 import { AppIcon } from './AppIcon';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 
@@ -73,18 +74,9 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
       return;
     }
 
-    // Attempt system native dialer in background if supported
+    // Directly open native phone dialer app
     if (phoneNumber) {
-      const clean = phoneNumber.replace(/[^0-9+]/g, '');
-      if (Platform.OS === 'web') {
-        try {
-          window.location.href = `tel:${clean}`;
-        } catch {
-          // ignore
-        }
-      } else {
-        Linking.openURL(`tel:${clean}`).catch(() => {});
-      }
+      phoneCallService.callNumber(phoneNumber, contactName);
     }
 
     const t1 = setTimeout(() => {
@@ -119,15 +111,8 @@ export const VoiceCallModal: React.FC<VoiceCallModalProps> = ({
   };
 
   const handleDialDirect = () => {
-    const clean = (phoneNumber || '').replace(/[^0-9+]/g, '');
-    if (Platform.OS === 'web') {
-      try {
-        window.location.href = `tel:${clean}`;
-      } catch {
-        window.open(`tel:${clean}`);
-      }
-    } else {
-      Linking.openURL(`tel:${clean}`).catch(() => {});
+    if (phoneNumber) {
+      phoneCallService.callNumber(phoneNumber, contactName);
     }
   };
 

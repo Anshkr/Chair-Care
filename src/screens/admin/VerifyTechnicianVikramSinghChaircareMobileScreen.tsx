@@ -19,6 +19,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface VerifyTechnicianProps {
   navigation?: any;
@@ -87,9 +88,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
   };
 
   const handleCall = () => {
-    Linking.openURL(`tel:${phone.replace(/\s/g, '')}`).catch(() => {
-      Alert.alert('Phone Call', `Dialing ${phone}`);
-    });
+    phoneCallService.callNumber(phone, techName);
   };
 
   const handleEmail = () => {

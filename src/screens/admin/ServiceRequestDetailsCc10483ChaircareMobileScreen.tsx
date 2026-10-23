@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface ServiceRequestDetailsProps {
   navigation?: any;
@@ -56,9 +57,7 @@ export const ServiceRequestDetailsCc10483ChaircareMobileScreen: React.FC<Service
   const [techSheetVisible, setTechSheetVisible] = useState<boolean>(false);
 
   const handleCall = () => {
-    Linking.openURL(`tel:${customerPhone}`).catch(() => {
-      Alert.alert('Phone Call', `Dialing ${customerPhone}`);
-    });
+    phoneCallService.callNumber(customerPhone, customerName);
   };
 
   const handleMessage = () => {

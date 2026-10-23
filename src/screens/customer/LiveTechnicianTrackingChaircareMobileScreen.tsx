@@ -20,6 +20,7 @@ import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
 import { customerApi } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 /**
  * Screen ID: C11
@@ -141,7 +142,7 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
   };
 
   const handleCall = () => {
-    // Simulated call trigger
+    phoneCallService.callNumber(technician.phone, technician.name);
   };
 
   const handleSimulateArrival = () => {

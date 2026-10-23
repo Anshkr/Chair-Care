@@ -20,6 +20,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
 import { useAdminSync } from '../../services/adminSync';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface LiveOperationsProps {
   navigation?: any;
@@ -602,7 +603,7 @@ export const LiveOperationsOverviewChaircareMobileScreen: React.FC<LiveOperation
                           style={styles.callTechBtn}
                           onPress={() => {
                             if (item.technicianPhone) {
-                              Linking.openURL(`tel:${item.technicianPhone}`);
+                              phoneCallService.callNumber(item.technicianPhone, item.technicianName);
                             } else {
                               Alert.alert('Technician Contact', `Specialist: ${item.technicianName}`);
                             }

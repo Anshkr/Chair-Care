@@ -17,6 +17,7 @@ import { Typography } from '../../constants/typography';
 import { TechnicianHeaderAvatar } from '../../components/common/TechnicianHeaderAvatar';
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface NavigateToCustomerProps {
   navigation?: any;
@@ -234,11 +235,7 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
 
   const handleCallCustomer = () => {
     const phone = ticket.customerPhone || '+91 91234 56789';
-    if (Platform.OS === 'web') {
-      window.open(`tel:${phone}`);
-    } else {
-      Linking.openURL(`tel:${phone}`);
-    }
+    phoneCallService.callNumber(phone, ticket.customerName);
   };
 
   const handleOpenChat = () => {

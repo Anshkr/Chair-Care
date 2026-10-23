@@ -30,6 +30,7 @@ import { useAdminSync } from '../../services/adminSync';
 import { AnimatedNumber } from '../../animations/AnimatedNumber';
 import { FadeIn } from '../../animations/FadeIn';
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: any }> = ({
   navigation,
@@ -589,7 +590,7 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
 
                 <TouchableOpacity
                   style={styles.heroSecondaryBtn}
-                  onPress={() => setCallModalVisible(true)}
+                  onPress={() => phoneCallService.callNumber(customerPhone || '', customerName || 'Customer')}
                   activeOpacity={0.8}
                 >
                   <AppIcon name="Phone" size={15} color={Colors.secondaryCobalt} />

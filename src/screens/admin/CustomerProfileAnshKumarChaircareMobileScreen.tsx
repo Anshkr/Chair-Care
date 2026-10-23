@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface CustomerProfileProps {
   navigation?: any;
@@ -60,10 +61,7 @@ export const CustomerProfileAnshKumarChaircareMobileScreen: React.FC<CustomerPro
   };
 
   const handleCall = () => {
-    const rawNumber = phone.replace(/[^\d+]/g, '');
-    Linking.openURL(`tel:${rawNumber}`).catch(() => {
-      Alert.alert('Phone Call', `Dialing ${phone}`);
-    });
+    phoneCallService.callNumber(phone, custName);
   };
 
   const handleEmail = () => {

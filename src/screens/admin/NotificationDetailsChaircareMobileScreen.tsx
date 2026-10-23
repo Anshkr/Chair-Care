@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface NotificationDetailsProps {
   navigation?: any;
@@ -156,11 +157,7 @@ export const NotificationDetailsChaircareMobileScreen: React.FC<
   };
 
   const handleCallClient = () => {
-    if (Platform.OS !== 'web') {
-      Linking.openURL(`tel:${notif.clientPhone}`);
-    } else {
-      showToast(`Calling ${notif.clientName} (${notif.clientPhone})...`, 'call');
-    }
+    phoneCallService.callNumber(notif.clientPhone, notif.clientName);
   };
 
   return (

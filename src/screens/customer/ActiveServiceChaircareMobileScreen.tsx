@@ -15,6 +15,7 @@ import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 /**
  * Screen ID: C13
@@ -53,14 +54,8 @@ export const ActiveServiceChaircareMobileScreen: React.FC<{
   }, []);
 
   const handleCall = () => {
-    Alert.alert(
-      `Call ${technician.name}`,
-      `Dial masked carrier connection to ${technician.name} (${technician.phone})?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Call Now', onPress: () => {} },
-      ]
-    );
+    setIsContactPopoverVisible(false);
+    phoneCallService.callNumber(technician.phone, technician.name);
   };
 
   const handleMessage = () => {

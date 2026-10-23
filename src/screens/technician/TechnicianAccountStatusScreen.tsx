@@ -22,6 +22,7 @@ import { technicianApi } from '../../services/api/technicianApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAuth } from '../../context/AuthContext';
 import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 const DOCUMENT_TYPES = [
   'Aadhaar Card',
@@ -234,9 +235,7 @@ export const TechnicianAccountStatusScreen: React.FC<{
   };
 
   const handleCallSupport = () => {
-    Linking.openURL('tel:+918005550199').catch(() => {
-      Alert.alert('Helpline', 'Call ChairCare Customer Support directly at +91 800 555 0199');
-    });
+    phoneCallService.callNumber('+91 800 555 0199', 'ChairCare Customer Support');
   };
 
   const handleEmailSupport = () => {

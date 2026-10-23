@@ -20,6 +20,7 @@ import { customerApi } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
 
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 /**
  * Screen ID: C12
@@ -128,7 +129,7 @@ export const TechnicianArrivedChaircareMobileScreen: React.FC<{
   };
 
   const handleCall = () => {
-    setCallModalVisible(true);
+    phoneCallService.callNumber(technician.phone, technician.name);
   };
 
   const handleMessage = () => {

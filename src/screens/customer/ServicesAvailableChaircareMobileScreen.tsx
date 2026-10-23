@@ -27,6 +27,7 @@ import { useAuth } from '../../context/AuthContext';
 import { customerApi, serviceApi, notificationApi } from '../../services/api';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 import { PressableScale } from '../../animations/PressableScale';
 import { FadeIn } from '../../animations/FadeIn';
 
@@ -907,11 +908,7 @@ export const ServicesAvailableChaircareMobileScreen: React.FC<{
                       style={styles.arrivedAuxBtn}
                       onPress={() => {
                         const phone = activeRequest.technician?.phone || activeRequest.technician_phone || '+91 98765 43210';
-                        if (Platform.OS === 'web') {
-                          window.open(`tel:${phone}`);
-                        } else {
-                          Linking.openURL(`tel:${phone}`).catch(() => {});
-                        }
+                        phoneCallService.callNumber(phone, activeRequest.technician?.name || activeRequest.technician_name);
                       }}
                       activeOpacity={0.8}
                     >

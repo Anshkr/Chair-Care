@@ -23,6 +23,7 @@ import { JobRequestTicket } from './JobRequestsChaircareMobileScreen';
 import { customerApi } from '../../services/api/customerApi';
 import { technicianApi } from '../../services/api/technicianApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 const normalizeJobTicket = (item: any): any => {
   if (!item) return null;
@@ -251,11 +252,7 @@ export const JobRequestDetailsChaircareMobileScreen: React.FC<{
 
   const handleCallCustomer = () => {
     if (ticket.customerPhone) {
-      if (Platform.OS === 'web') {
-        window.open(`tel:${ticket.customerPhone}`);
-      } else {
-        Linking.openURL(`tel:${ticket.customerPhone}`);
-      }
+      phoneCallService.callNumber(ticket.customerPhone, ticket.customerName);
     } else {
       Alert.alert(
         'Call Customer',
