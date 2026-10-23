@@ -488,98 +488,97 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </Text>
         </View>
 
-        {/* Section 1: Live Dispatch Map Card & GPS Button */}
-        <View style={styles.mapCardContainer}>
-          <ImageBackground
-            source={{
-              uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=800&auto=format&fit=crop&q=80',
-            }}
-            style={styles.mapBackground}
-            imageStyle={styles.mapImage}
-          >
-            <View style={styles.mapScrim} />
-
-            {/* Coverage Indicator Pill */}
-            <View style={styles.coveragePill}>
-              <View style={styles.pulseContainer}>
-                <View style={styles.pulseRing} />
-                <View style={styles.pulseDot} />
-              </View>
-              <Text style={styles.coverageText}>Delhi NCR Dispatch • 15–30 min arrival</Text>
+        {/* Section 1: Executive Dispatch Hub (Map & Live GPS Quick Action) */}
+        <View style={styles.dispatchHubCard}>
+          <View style={styles.hubHeaderRow}>
+            <View style={styles.hubStatusBadge}>
+              <View style={styles.pulseDot} />
+              <Text style={styles.hubStatusText}>DELHI NCR LIVE DISPATCH</Text>
             </View>
+            <Text style={styles.hubEtaText}>15–30 min arrival</Text>
+          </View>
 
-            {/* Pulsing Pin Graphic */}
-            <View style={[styles.centerPinContainer, { pointerEvents: 'none' }]}>
-              <View style={styles.pinRipple} />
-              <View style={styles.pinBadge}>
-                <AppIcon name="MapPin" size={20} color="#FFFFFF" />
+          <View style={styles.hubActionsGrid}>
+            {/* Tile 1: Interactive Map Picker */}
+            <TouchableOpacity
+              style={styles.hubActionTile}
+              onPress={() => setIsMapPickerVisible(true)}
+              activeOpacity={0.82}
+            >
+              <View style={[styles.hubTileIconBg, { backgroundColor: 'rgba(2, 132, 199, 0.18)' }]}>
+                <AppIcon name="MapPin" size={18} color="#38bdf8" />
               </View>
-            </View>
-
-            {/* Map Actions: Select on Map & Current Location */}
-            <View style={styles.mapCtaContainer}>
-              <TouchableOpacity
-                style={styles.selectFromMapCardBtn}
-                onPress={() => setIsMapPickerVisible(true)}
-                activeOpacity={0.85}
-              >
-                <View style={styles.selectFromMapIconBg}>
-                  <AppIcon name="MapPin" size={18} color="#FFFFFF" />
+              <View style={styles.hubTileContent}>
+                <View style={styles.hubTileTitleRow}>
+                  <Text style={styles.hubTileTitle}>Select on Map</Text>
+                  <AppIcon name="ChevronRight" size={13} color="#94a3b8" />
                 </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.selectFromMapTitle}>Select Location from Map</Text>
-                    <View style={styles.liveReticlePill}>
-                      <Text style={styles.liveReticleText}>SEARCH & PIN</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.selectFromMapSubtitle}>
-                    Search places, pinpoint your exact doorstep, and share GPS with technician
-                  </Text>
-                </View>
-                <AppIcon name="ChevronRight" size={18} color="#38bdf8" />
-              </TouchableOpacity>
+                <Text style={styles.hubTileSub}>Pinpoint exact doorstep</Text>
+              </View>
+            </TouchableOpacity>
 
-              <TouchableOpacity
+            {/* Tile 2: Live Device GPS */}
+            <TouchableOpacity
+              style={[
+                styles.hubActionTile,
+                gpsStatus === 'locked' && styles.hubActionTileLocked,
+              ]}
+              onPress={handleGpsLocate}
+              activeOpacity={0.82}
+              disabled={gpsStatus === 'locating'}
+            >
+              <View
                 style={[
-                  styles.gpsBtn,
-                  gpsStatus === 'locked' && styles.gpsBtnLocked,
+                  styles.hubTileIconBg,
+                  {
+                    backgroundColor:
+                      gpsStatus === 'locked'
+                        ? 'rgba(16, 185, 129, 0.22)'
+                        : 'rgba(56, 189, 248, 0.12)',
+                  },
                 ]}
-                onPress={handleGpsLocate}
-                activeOpacity={0.85}
               >
                 {gpsStatus === 'locating' ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <ActivityIndicator size="small" color="#38bdf8" />
                 ) : (
                   <AppIcon
                     name={gpsStatus === 'locked' ? 'Check' : 'Crosshair'}
-                    size={16}
-                    color={gpsStatus === 'locked' ? Colors.tertiaryEmerald : Colors.secondaryCobalt}
+                    size={18}
+                    color={gpsStatus === 'locked' ? '#34d399' : '#38bdf8'}
                   />
                 )}
-                <Text
-                  style={[
-                    styles.gpsBtnText,
-                    gpsStatus === 'locked' && styles.gpsLockedText,
-                  ]}
-                >
-                  {gpsStatus === 'locating'
-                    ? 'Detecting current GPS location...'
-                    : gpsStatus === 'locked'
-                    ? '✓ Current Location Detected'
-                    : 'Use Current Location (GPS Auto-Detect)'}
+              </View>
+              <View style={styles.hubTileContent}>
+                <View style={styles.hubTileTitleRow}>
+                  <Text style={styles.hubTileTitle}>
+                    {gpsStatus === 'locked' ? 'GPS Locked' : 'Current GPS'}
+                  </Text>
+                  <AppIcon name="ChevronRight" size={13} color="#94a3b8" />
+                </View>
+                <Text style={styles.hubTileSub}>
+                  {gpsStatus === 'locating' ? 'Locating...' : 'Auto-detect doorstep'}
                 </Text>
-              </TouchableOpacity>
-            </View>
-          </ImageBackground>
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* GPS / Map Pin Detection Feedback Banner */}
         {gpsMessage && (
           <View style={styles.gpsBannerRow}>
             <View style={styles.gpsBannerContent}>
-              <AppIcon name="Compass" size={16} color={Colors.tertiaryEmerald} />
-              <Text style={styles.gpsBannerText}>{gpsMessage}</Text>
+              <View style={styles.gpsIconCircle}>
+                <AppIcon name="Navigation" size={15} color="#059669" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.gpsBannerHeader}>PINPOINT COORDINATES ATTACHED</Text>
+                <Text style={styles.gpsBannerText} numberOfLines={1}>{gpsMessage}</Text>
+                {latitude != null && longitude != null && (
+                  <Text style={styles.gpsCoordsMicro}>
+                    Lat: {latitude.toFixed(5)}° N, Lng: {longitude.toFixed(5)}° E • Dispatched to technician
+                  </Text>
+                )}
+              </View>
             </View>
             <TouchableOpacity
               style={styles.clearPinBtn}
@@ -591,42 +590,25 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </View>
         )}
 
-        {/* Verified Coordinates Pill for Doorstep Technician Dispatch */}
-        {latitude != null && longitude != null && (
-          <View style={styles.verifiedCoordsRow}>
-            <View style={styles.verifiedCoordsDot} />
-            <Text style={styles.verifiedCoordsText}>
-              Exact Lat/Long: {latitude.toFixed(5)}° N, {longitude.toFixed(5)}° E • Dispatched to technician for precision doorstep arrival
-            </Text>
-          </View>
-        )}
-
         {/* Section 2: SAVED ADDRESSES (Book directly from saved address) */}
         <View style={styles.savedSection}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleGroup}>
               <AppIcon name="Bookmark" size={16} color={Colors.secondaryCobalt} />
               <Text style={styles.sectionTitleCaps}>SAVED ADDRESSES</Text>
+              <View style={styles.savedCountPill}>
+                <Text style={styles.savedCountText}>{savedAddresses.length}</Text>
+              </View>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <TouchableOpacity
-                style={styles.pickOnMapHeaderBtn}
-                onPress={() => setIsMapPickerVisible(true)}
-                activeOpacity={0.7}
-              >
-                <AppIcon name="Map" size={13} color="#0284c7" />
-                <Text style={styles.pickOnMapHeaderText}>Map Picker</Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.addNewAddressInlineBtn}
-                onPress={handleAddNewAddressMode}
-                activeOpacity={0.7}
-              >
-                <AppIcon name="Plus" size={14} color={Colors.primary} />
-                <Text style={styles.addNewAddressInlineText}>Enter New</Text>
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity
+              style={styles.addNewAddressInlineBtn}
+              onPress={handleAddNewAddressMode}
+              activeOpacity={0.7}
+            >
+              <AppIcon name="Plus" size={13} color="#0284c7" />
+              <Text style={styles.addNewAddressInlineText}>Enter New</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.addressList}>
@@ -669,7 +651,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                         </View>
                         {isSelected && (
                           <View style={styles.selectedTag}>
-                            <Text style={styles.selectedTagText}>Selected</Text>
+                            <Text style={styles.selectedTagText}>✓ Selected</Text>
                           </View>
                         )}
                       </View>
@@ -699,7 +681,9 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                       isSelected ? styles.radioSelected : styles.radioUnselected,
                     ]}
                   >
-                    {isSelected && <View style={styles.radioInnerDot} />}
+                    {isSelected ? (
+                      <AppIcon name="Check" size={12} color="#FFFFFF" />
+                    ) : null}
                   </View>
                 </TouchableOpacity>
               );
@@ -1064,227 +1048,152 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     lineHeight: 20,
   },
-  mapCardContainer: {
-    width: '100%',
-    height: 240,
+  dispatchHubCard: {
+    backgroundColor: '#0F172A',
     borderRadius: BorderRadius.xl,
-    overflow: 'hidden',
-    backgroundColor: Colors.surfaceContainerLow,
-    ...Shadows.level2,
-  },
-  selectFromMapCardBtn: {
-    backgroundColor: '#0284c7',
-    borderRadius: BorderRadius.lg,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-    ...Shadows.level2,
-  },
-  selectFromMapIconBg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectFromMapTitle: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  liveReticlePill: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  liveReticleText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  selectFromMapSubtitle: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 11,
-    marginTop: 1,
-  },
-  pickOnMapHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.md,
-    backgroundColor: 'rgba(2, 132, 199, 0.12)',
-  },
-  pickOnMapHeaderText: {
-    color: '#0284c7',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  verifiedCoordsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.md,
-    gap: 8,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#38bdf8',
+    borderColor: '#1E293B',
+    gap: 12,
+    ...Shadows.level2,
   },
-  verifiedCoordsDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#38bdf8',
-  },
-  verifiedCoordsText: {
-    color: '#93c5fd',
-    fontSize: 11,
-    fontWeight: '600',
-    flex: 1,
-  },
-  mapBackground: {
-    width: '100%',
-    height: '100%',
+  hubHeaderRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 12,
+    alignItems: 'center',
+    paddingBottom: 2,
   },
-  mapImage: {
-    borderRadius: BorderRadius.xl,
-  },
-  mapScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  },
-  coveragePill: {
-    alignSelf: 'flex-start',
+  hubStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(247, 249, 251, 0.95)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: BorderRadius.full,
     gap: 6,
-    ...Shadows.level1,
-  },
-  pulseContainer: {
-    width: 10,
-    height: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pulseRing: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.tertiaryFixedDim,
-    opacity: 0.7,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
   },
   pulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.tertiaryEmerald,
+    backgroundColor: '#10B981',
   },
-  coverageText: {
+  hubStatusText: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    color: '#10B981',
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  hubEtaText: {
     ...Typography.labelMono,
     fontSize: 10,
-    color: Colors.onSurface,
+    color: '#94A3B8',
     fontWeight: '600',
   },
-  centerPinContainer: {
-    position: 'absolute',
-    top: '32%',
-    left: '50%',
-    marginLeft: -18,
+  hubActionsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  hubActionTile: {
+    flex: 1,
+    backgroundColor: '#1E293B',
+    borderRadius: BorderRadius.lg,
+    padding: 10,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
   },
-  pinRipple: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(37, 99, 235, 0.3)',
+  hubActionTileLocked: {
+    borderColor: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
   },
-  pinBadge: {
+  hubTileIconBg: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.secondaryCobalt,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.level2,
   },
-  mapCtaContainer: {
-    width: '100%',
+  hubTileContent: {
+    flex: 1,
   },
-  gpsBtn: {
-    height: 42,
-    borderRadius: BorderRadius.lg,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+  hubTileTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    ...Shadows.level2,
+    justifyContent: 'space-between',
   },
-  gpsBtnLocked: {
-    borderWidth: 1.5,
-    borderColor: Colors.tertiaryEmerald,
-    backgroundColor: '#F0FDF4',
-  },
-  gpsBtnText: {
-    ...Typography.labelMd,
-    fontSize: 12,
-    color: Colors.onSurface,
+  hubTileTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
   },
-  gpsLockedText: {
-    color: Colors.tertiaryEmerald,
+  hubTileSub: {
+    color: '#94A3B8',
+    fontSize: 10,
+    marginTop: 2,
   },
   gpsBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: BorderRadius.md,
-    gap: 8,
+    paddingVertical: 10,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    gap: 10,
+    ...Shadows.level1,
   },
   gpsBannerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
     flex: 1,
+  },
+  gpsIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gpsBannerHeader: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    color: '#059669',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   gpsBannerText: {
     ...Typography.bodySm,
     fontSize: 12,
-    color: '#065F46',
-    fontWeight: '600',
-    flex: 1,
+    color: '#064E3B',
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  gpsCoordsMicro: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    color: '#047857',
+    marginTop: 2,
   },
   clearPinBtn: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
   },
   clearPinText: {
-    color: '#dc2626',
+    color: '#DC2626',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1309,19 +1218,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     fontWeight: '700',
   },
+  savedCountPill: {
+    backgroundColor: Colors.surfaceContainerHigh,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: BorderRadius.full,
+  },
+  savedCountText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: Colors.onSurfaceVariant,
+    fontWeight: '700',
+  },
   addNewAddressInlineBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: BorderRadius.sm,
-    backgroundColor: Colors.surfaceContainerHigh,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: 'rgba(2, 132, 199, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(2, 132, 199, 0.25)',
   },
   addNewAddressInlineText: {
     ...Typography.labelSm,
-    color: Colors.primary,
+    color: '#0284c7',
     fontWeight: '700',
+    fontSize: 11,
   },
   addressList: {
     gap: 10,
@@ -1335,15 +1259,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   addressCardSelected: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: '#F0F9FF',
     borderWidth: 1.5,
-    borderColor: Colors.secondaryCobalt,
+    borderColor: '#0284C7',
     ...Shadows.level2,
   },
   addressCardUnselected: {
-    backgroundColor: Colors.surfaceContainerLow,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: Colors.outlineHairline,
+    borderColor: '#E2E8F0',
     ...Shadows.level1,
   },
   addressLeft: {
@@ -1359,10 +1283,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addressIconBoxSelected: {
-    backgroundColor: 'rgba(19, 70, 153, 0.12)',
+    backgroundColor: 'rgba(2, 132, 199, 0.15)',
   },
   addressIconBoxUnselected: {
-    backgroundColor: Colors.surfaceContainerHighest,
+    backgroundColor: '#F1F5F9',
   },
   addressDetails: {
     flex: 1,
@@ -1433,18 +1357,21 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
   },
   radioCircle: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    borderWidth: 1.5,
   },
   radioSelected: {
-    backgroundColor: Colors.secondaryCobalt,
+    borderColor: '#0284C7',
+    backgroundColor: '#0284C7',
   },
   radioUnselected: {
-    backgroundColor: Colors.surfaceContainerHighest,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
   },
   radioInnerDot: {
     width: 8,
@@ -1453,12 +1380,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   siteAccessCard: {
-    backgroundColor: Colors.surfaceContainerLowest,
+    backgroundColor: '#FFFFFF',
     borderRadius: BorderRadius.xl,
     padding: 16,
     gap: 14,
     borderWidth: 1,
-    borderColor: Colors.outlineHairline,
+    borderColor: '#E2E8F0',
     ...Shadows.level1,
   },
   siteAccessHeader: {
