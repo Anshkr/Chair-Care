@@ -411,7 +411,13 @@ export const SplashScreenChaircareMobileScreen: React.FC<{
         useNativeDriver: Platform.OS !== 'web',
       }),
     ]).start(() => {
-      navigation.navigate('Intro1');
+      if (onFinishIntro) {
+        onFinishIntro();
+      } else if (navigation?.canGoBack()) {
+        navigation.goBack();
+      } else if (navigation) {
+        navigation.navigate('CustomerMain');
+      }
     });
   };
 

@@ -38,6 +38,15 @@ const startServer = async () => {
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+
+  // Prevent transient network glitches or temporary DNS drops from crashing the Node process
+  process.on('unhandledRejection', (reason: any) => {
+    console.error('⚠️ [Unhandled Rejection Trapped]:', reason?.message || reason);
+  });
+
+  process.on('uncaughtException', (err: any) => {
+    console.error('⚠️ [Uncaught Exception Trapped]:', err?.message || err);
+  });
 };
 
 startServer().catch((err) => {

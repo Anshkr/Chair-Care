@@ -7,8 +7,6 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { UserRole } from '../../types/models';
 
-import { resetIntroSeen } from '../../utils/introStorage';
-
 export interface DevRoleSwitcherProps {
   onReplayIntro?: () => void;
 }
@@ -17,7 +15,7 @@ export interface DevRoleSwitcherProps {
  * Developer-only floating role switcher.
  * Only rendered in development mode (`__DEV__`).
  */
-export const DevRoleSwitcher: React.FC<DevRoleSwitcherProps> = ({ onReplayIntro }) => {
+export const DevRoleSwitcher: React.FC<DevRoleSwitcherProps> = () => {
   if (!__DEV__) {
     return null;
   }
@@ -114,18 +112,6 @@ export const DevRoleSwitcher: React.FC<DevRoleSwitcherProps> = ({ onReplayIntro 
         </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.introToggleRow}
-        onPress={() => {
-          resetIntroSeen();
-          if (onReplayIntro) onReplayIntro();
-          setCollapsed(true);
-        }}
-        activeOpacity={0.75}
-      >
-        <AppIcon name="Compass" size={14} color={Colors.secondaryCobalt} />
-        <Text style={styles.introToggleText}>Replay Intro Walkthrough</Text>
-      </TouchableOpacity>
     </View>
   );
 };
