@@ -197,23 +197,42 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const handleSelectSavedAddress = (item: SavedAddressItem) => {
     setSelectedAddressId(item.id);
     populateFieldsFromAddress(item);
+    setGpsStatus('idle');
+    setGpsMessage(null);
+  };
+
+  const handleClearMapPin = () => {
+    setGpsStatus('idle');
+    setGpsMessage(null);
+    if (selectedAddressId) {
+      const match = savedAddresses.find((a) => a.id === selectedAddressId);
+      if (match) {
+        setLatitude(match.latitude);
+        setLongitude(match.longitude);
+        return;
+      }
+    }
+    setLatitude(undefined);
+    setLongitude(undefined);
   };
 
   const handleLocationSelectedFromMap = (data: SelectedLocationData) => {
-    setFlatNo(data.flatNo);
-    setBuildingName(data.buildingName);
-    setStreetArea(data.streetArea);
-    setCity(data.city);
-    setStateName(data.state);
-    setPincode(data.pincode);
-    setLandmark(data.landmark || '');
-    setInstructions(data.instructions || '');
-    setSelectedTag(data.tag);
+    // 1. Set pinpoint coordinates for technician dispatch
     setLatitude(data.latitude);
     setLongitude(data.longitude);
     setSelectedAddressId(null);
+
+    // 2. Clear manual address fields so user can cleanly type their own village / house details!
+    // DO NOT auto-fill fields with guesses
+    setFlatNo('');
+    setBuildingName('');
+    setStreetArea('');
+    setLandmark('');
+    setInstructions('');
+
+    // 3. Status feedback
     setGpsStatus('locked');
-    setGpsMessage(`Location Pinned on Map: ${data.flatNo}, ${data.streetArea} (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)})`);
+    setGpsMessage(`📍 Location Pinned on Map: ${data.localityName || `${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)}`}`);
   };
 
   const handleAddNewAddressMode = () => {
@@ -221,12 +240,16 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     setFlatNo('');
     setBuildingName('');
     setStreetArea('');
-    setCity('Gurgaon');
-    setStateName('Haryana');
-    setPincode('122002');
+    setCity('');
+    setStateName('');
+    setPincode('');
     setLandmark('');
     setInstructions('');
     setSelectedTag('Home');
+    setLatitude(undefined);
+    setLongitude(undefined);
+    setGpsStatus('idle');
+    setGpsMessage(null);
   };
 
   // Real GPS Geolocation Detection
@@ -235,13 +258,6 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     setGpsMessage('Detecting high-precision GPS position...');
 
     const applyFallback = () => {
-      setFlatNo((prev) => prev || 'Flat 402, 4th Floor');
-      setBuildingName('Palm Springs Residences');
-      setStreetArea('Sector 54, Golf Course Road');
-      setCity('Gurgaon');
-      setStateName('Haryana');
-      setPincode('122002');
-      setLandmark('Opposite Horizon Centre');
       setLatitude(28.4485);
       setLongitude(77.0945);
       setGpsStatus('locked');
@@ -255,6 +271,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           const { latitude: posLat, longitude: posLng } = position.coords;
           setLatitude(posLat);
           setLongitude(posLng);
+          setSelectedAddressId(null);
           try {
             // Reverse geocode via OpenStreetMap Nominatim
             const response = await fetch(
@@ -269,21 +286,10 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
             const data = await response.json();
             if (data && data.address) {
               const a = data.address;
-              const detectedRoad =
-                a.road || a.suburb || a.neighbourhood || a.residential || 'Golf Course Extension Road';
-              const detectedBuilding = a.building || a.complex || a.residential || '';
-              const detectedCity = a.city || a.town || a.state_district || 'Gurgaon';
-              const detectedState = a.state || 'Haryana';
-              const detectedPincode = a.postcode || '122002';
-
-              setStreetArea(detectedRoad);
-              if (detectedBuilding) setBuildingName(detectedBuilding);
-              setCity(detectedCity);
-              setStateName(detectedState);
-              setPincode(detectedPincode);
+              const detectedLocality =
+                a.suburb || a.neighbourhood || a.road || a.city || 'Current GPS Location';
               setGpsStatus('locked');
-              setGpsMessage(`GPS Locked: ${detectedRoad}, ${detectedCity} (${detectedPincode})`);
-              setSelectedAddressId(null);
+              setGpsMessage(`GPS Locked: ${detectedLocality} (${posLat.toFixed(4)}, ${posLng.toFixed(4)})`);
             } else {
               applyFallback();
             }
@@ -291,8 +297,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
             applyFallback();
           }
         },
-        (error) => {
-          // Permission denied or timeout
+        () => {
           applyFallback();
         },
         { enableHighAccuracy: true, timeout: 8000 }
@@ -569,11 +574,20 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </ImageBackground>
         </View>
 
-        {/* GPS Detection Feedback Banner */}
+        {/* GPS / Map Pin Detection Feedback Banner */}
         {gpsMessage && (
           <View style={styles.gpsBannerRow}>
-            <AppIcon name="Compass" size={16} color={Colors.tertiaryEmerald} />
-            <Text style={styles.gpsBannerText}>{gpsMessage}</Text>
+            <View style={styles.gpsBannerContent}>
+              <AppIcon name="Compass" size={16} color={Colors.tertiaryEmerald} />
+              <Text style={styles.gpsBannerText}>{gpsMessage}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.clearPinBtn}
+              onPress={handleClearMapPin}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.clearPinText}>Clear Pin</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -932,12 +946,6 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
         initialLocation={{
           latitude,
           longitude,
-          flatNo,
-          buildingName,
-          streetArea,
-          city,
-          state: stateName,
-          pincode,
         }}
       />
     </ScreenContainer>
@@ -1245,6 +1253,7 @@ const styles = StyleSheet.create({
   gpsBannerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#ECFDF5',
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1253,12 +1262,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(16, 185, 129, 0.3)',
   },
+  gpsBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
   gpsBannerText: {
     ...Typography.bodySm,
     fontSize: 12,
     color: '#065F46',
     fontWeight: '600',
     flex: 1,
+  },
+  clearPinBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+  },
+  clearPinText: {
+    color: '#dc2626',
+    fontSize: 11,
+    fontWeight: '700',
   },
   savedSection: {
     gap: 10,

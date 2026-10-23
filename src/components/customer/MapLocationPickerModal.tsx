@@ -20,16 +20,11 @@ import { geocodingService, GeocodedPlace } from '../../services/location/geocodi
 export interface SelectedLocationData {
   latitude: number;
   longitude: number;
-  fullAddress: string;
-  flatNo: string;
-  buildingName: string;
-  streetArea: string;
-  city: string;
-  state: string;
-  pincode: string;
-  landmark?: string;
-  instructions?: string;
-  tag: 'Home' | 'Office' | 'Other';
+  localityName?: string;
+  formattedAddress?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
 }
 
 interface MapLocationPickerModalProps {
@@ -39,12 +34,6 @@ interface MapLocationPickerModalProps {
   initialLocation?: {
     latitude?: number;
     longitude?: number;
-    flatNo?: string;
-    buildingName?: string;
-    streetArea?: string;
-    city?: string;
-    state?: string;
-    pincode?: string;
   };
 }
 
@@ -69,17 +58,6 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
   const [searchResults, setSearchResults] = useState<GeocodedPlace[]>([]);
   const [showResultsDropdown, setShowResultsDropdown] = useState(false);
 
-  // Address fields
-  const [flatNo, setFlatNo] = useState(initialLocation?.flatNo || '');
-  const [buildingName, setBuildingName] = useState(initialLocation?.buildingName || '');
-  const [streetArea, setStreetArea] = useState(initialLocation?.streetArea || '');
-  const [city, setCity] = useState(initialLocation?.city || 'Gurgaon');
-  const [stateName, setStateName] = useState(initialLocation?.state || 'Haryana');
-  const [pincode, setPincode] = useState(initialLocation?.pincode || '122002');
-  const [landmark, setLandmark] = useState('');
-  const [instructions, setInstructions] = useState('');
-  const [selectedTag, setSelectedTag] = useState<'Home' | 'Office' | 'Other'>('Home');
-
   // Loading reverse geocode
   const [isReverseGeocoding, setIsReverseGeocoding] = useState(false);
   const [detectedAddressSummary, setDetectedAddressSummary] = useState('');
@@ -93,12 +71,6 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
       const lat = initialLocation?.latitude || DEFAULT_LAT;
       const lng = initialLocation?.longitude || DEFAULT_LNG;
       setCoords({ latitude: lat, longitude: lng });
-      if (initialLocation?.flatNo) setFlatNo(initialLocation.flatNo);
-      if (initialLocation?.buildingName) setBuildingName(initialLocation.buildingName);
-      if (initialLocation?.streetArea) setStreetArea(initialLocation.streetArea);
-      if (initialLocation?.city) setCity(initialLocation.city);
-      if (initialLocation?.pincode) setPincode(initialLocation.pincode);
-
       reverseGeocodeCoords(lat, lng);
     }
   }, [visible]);
@@ -127,26 +99,15 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     setCoords({ latitude: place.latitude, longitude: place.longitude });
     setSearchQuery(place.title);
     setShowResultsDropdown(false);
-
-    if (place.buildingName) setBuildingName(place.buildingName);
-    if (place.streetArea) setStreetArea(place.streetArea);
-    if (place.city) setCity(place.city);
-    if (place.state) setStateName(place.state);
-    if (place.pincode) setPincode(place.pincode);
     setDetectedAddressSummary(place.subtitle || place.fullAddress);
   };
 
-  // Reverse geocode whenever pin coordinates change
+  // Reverse geocode whenever pin coordinates change (only for display summary, never fills text fields)
   const reverseGeocodeCoords = async (lat: number, lng: number) => {
     setIsReverseGeocoding(true);
     try {
       const res = await geocodingService.reverseGeocode(lat, lng);
       setDetectedAddressSummary(res.formattedAddress);
-      if (res.buildingName && !buildingName) setBuildingName(res.buildingName);
-      if (res.streetArea) setStreetArea(res.streetArea);
-      if (res.city) setCity(res.city);
-      if (res.state) setStateName(res.state);
-      if (res.pincode) setPincode(res.pincode);
     } catch {
       setDetectedAddressSummary(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
     } finally {
@@ -165,7 +126,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
           reverseGeocodeCoords(latitude, longitude);
           setIsLocatingGps(false);
         },
-        (err) => {
+        () => {
           setIsLocatingGps(false);
           Alert.alert(
             'GPS Signal',
@@ -189,41 +150,12 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
   };
 
   const handleConfirm = () => {
-    if (!flatNo.trim()) {
-      Alert.alert(
-        'House / Flat Number Required',
-        'Please enter your Flat, House, Floor, or Office number so the technician can reach your exact door.'
-      );
-      return;
-    }
-
-    const parts = [
-      flatNo.trim(),
-      buildingName.trim(),
-      streetArea.trim(),
-      `${city.trim()}${stateName.trim() ? ', ' + stateName.trim() : ''}${pincode.trim() ? ' - ' + pincode.trim() : ''}`,
-    ].filter(Boolean);
-
-    let fullAddress = parts.join(', ');
-    if (landmark.trim()) {
-      fullAddress += ` (Landmark: ${landmark.trim()})`;
-    }
-
     onSelectLocation({
       latitude: coords.latitude,
       longitude: coords.longitude,
-      fullAddress,
-      flatNo: flatNo.trim(),
-      buildingName: buildingName.trim(),
-      streetArea: streetArea.trim(),
-      city: city.trim(),
-      state: stateName.trim(),
-      pincode: pincode.trim(),
-      landmark: landmark.trim(),
-      instructions: instructions.trim(),
-      tag: selectedTag,
+      localityName: detectedAddressSummary || `${coords.latitude.toFixed(4)}, ${coords.longitude.toFixed(4)}`,
+      formattedAddress: detectedAddressSummary,
     });
-
     onClose();
   };
 
@@ -331,7 +263,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
             <AppIcon name="Search" size={18} color="#94A3B8" />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search society, landmark, area, or street..."
+              placeholder="Search village, society, landmark, area, or street..."
               placeholderTextColor="#94A3B8"
               value={searchQuery}
               onChangeText={handleSearchChange}
@@ -385,7 +317,6 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
                 width: '100%',
                 height: '100%',
                 border: 'none',
-                borderRadius: 16,
               }}
               title="Interactive Service Map"
             />
@@ -475,109 +406,37 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
           </View>
         </View>
 
-        {/* Bottom Sheet Details Form */}
-        <ScrollView style={styles.detailsDrawer} keyboardShouldPersistTaps="handled">
-          {/* Detected Locality Card */}
+        {/* Bottom Pin Summary & Confirmation Card */}
+        <View style={styles.bottomCard}>
           <View style={styles.detectedCard}>
             <View style={styles.detectedBadge}>
               <AppIcon name="Navigation" size={14} color="#0284C7" />
               <Text style={styles.detectedBadgeText}>GPS PINPOINT FOR TECHNICIAN</Text>
             </View>
             <Text style={styles.detectedAddressText}>
-              {isReverseGeocoding ? 'Fetching street details...' : detectedAddressSummary || `${city}, ${stateName}`}
+              {isReverseGeocoding ? 'Detecting area...' : detectedAddressSummary || 'Selected Location Pin'}
             </Text>
             <Text style={styles.detectedCoordsText}>
               Exact Lat/Long: {coords.latitude.toFixed(6)}, {coords.longitude.toFixed(6)}
             </Text>
           </View>
 
-          {/* Mandatory Flat / House No Field */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>
-              HOUSE / FLAT / OFFICE / FLOOR NO. <Text style={styles.requiredStar}>*</Text>
+          <View style={styles.infoHintRow}>
+            <AppIcon name="Info" size={14} color="#94A3B8" />
+            <Text style={styles.infoHintText}>
+              The technician will navigate directly to this map pin. You can enter your specific house/flat number on the address form without any auto-filled guesses.
             </Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g. Flat 402, 4th Floor, Tower B"
-              placeholderTextColor="#94A3B8"
-              value={flatNo}
-              onChangeText={setFlatNo}
-            />
           </View>
 
-          {/* Building / Society Name */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>APARTMENT / BUILDING / SOCIETY NAME</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g. Palm Springs Residences / DLF Square"
-              placeholderTextColor="#94A3B8"
-              value={buildingName}
-              onChangeText={setBuildingName}
-            />
-          </View>
-
-          {/* Landmark */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>LANDMARK (OPTIONAL)</Text>
-            <TextInput
-              style={styles.formInput}
-              placeholder="e.g. Near Rapid Metro Pillar 140 / Opposite Starbucks"
-              placeholderTextColor="#94A3B8"
-              value={landmark}
-              onChangeText={setLandmark}
-            />
-          </View>
-
-          {/* Address Tag Selector */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>SAVE AS</Text>
-            <View style={styles.tagRow}>
-              {(['Home', 'Office', 'Other'] as const).map((tag) => (
-                <TouchableOpacity
-                  key={tag}
-                  style={[styles.tagPill, selectedTag === tag && styles.tagPillActive]}
-                  onPress={() => setSelectedTag(tag)}
-                  activeOpacity={0.8}
-                >
-                  <AppIcon
-                    name={tag === 'Home' ? 'Home' : tag === 'Office' ? 'Briefcase' : 'MapPin'}
-                    size={14}
-                    color={selectedTag === tag ? '#ffffff' : '#94A3B8'}
-                  />
-                  <Text
-                    style={[styles.tagPillText, selectedTag === tag && styles.tagPillTextActive]}
-                  >
-                    {tag}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Delivery Instructions */}
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>ARRIVAL INSTRUCTIONS FOR TECHNICIAN</Text>
-            <TextInput
-              style={[styles.formInput, { height: 60 }]}
-              placeholder="e.g. Ring bell twice, entry from Gate 2 with visitor pass"
-              placeholderTextColor="#94A3B8"
-              value={instructions}
-              onChangeText={setInstructions}
-              multiline
-            />
-          </View>
-
-          {/* Confirm Button */}
-          <View style={{ marginTop: Spacing.md, marginBottom: Spacing.xl }}>
+          <View style={{ marginTop: Spacing.sm, marginBottom: Platform.OS === 'ios' ? 24 : Spacing.sm }}>
             <PrecisionButton
-              title="Confirm Exact Location"
+              title="Confirm This Pin Location"
               variant="primary"
               size="lg"
               onPress={handleConfirm}
             />
           </View>
-        </ScrollView>
+        </View>
       </View>
     </Modal>
   );
@@ -683,11 +542,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   mapContainer: {
-    height: Dimensions.get('window').height * 0.38,
+    flex: 1,
     position: 'relative',
     backgroundColor: '#0f172a',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
   },
   nativeFallbackMap: {
     flex: 1,
@@ -752,11 +609,13 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  detailsDrawer: {
-    flex: 1,
-    backgroundColor: '#090d16',
+  bottomCard: {
+    backgroundColor: '#0d1527',
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
+    paddingBottom: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
   },
   detectedCard: {
     backgroundColor: '#0f172a',
@@ -764,7 +623,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: '#1e293b',
-    marginBottom: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   detectedBadge: {
     flexDirection: 'row',
@@ -789,55 +648,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 4,
   },
-  formGroup: {
-    marginBottom: Spacing.md,
+  infoHintRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 4,
+    marginBottom: Spacing.sm,
   },
-  formLabel: {
+  infoHintText: {
+    flex: 1,
     color: '#94A3B8',
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-  requiredStar: {
-    color: '#ef4444',
-  },
-  formInput: {
-    backgroundColor: '#111827',
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    color: '#ffffff',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
-  },
-  tagRow: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  tagPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    backgroundColor: '#111827',
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    gap: 6,
-  },
-  tagPillActive: {
-    backgroundColor: '#0284c7',
-    borderColor: '#38bdf8',
-  },
-  tagPillText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tagPillTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+    lineHeight: 16,
   },
 });
+
