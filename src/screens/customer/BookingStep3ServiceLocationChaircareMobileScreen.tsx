@@ -163,6 +163,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   );
   const [isMapPickerVisible, setIsMapPickerVisible] = useState<boolean>(false);
   const [isConvertingAddress, setIsConvertingAddress] = useState<boolean>(false);
+  const [locationSource, setLocationSource] = useState<'saved' | 'map' | 'manual' | 'gps'>('saved');
 
   // Sync saved addresses on mount or profile load
   useEffect(() => {
@@ -196,6 +197,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
 
   const handleSelectSavedAddress = (item: SavedAddressItem) => {
     setSelectedAddressId(item.id);
+    setLocationSource('saved');
     populateFieldsFromAddress(item);
     setGpsStatus('idle');
     setGpsMessage(null);
@@ -205,6 +207,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     setGpsStatus('idle');
     setGpsMessage(null);
     if (selectedAddressId) {
+      setLocationSource('saved');
       const match = savedAddresses.find((a) => a.id === selectedAddressId);
       if (match) {
         setLatitude(match.latitude);
@@ -212,18 +215,20 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
         return;
       }
     }
+    setLocationSource('manual');
     setLatitude(undefined);
     setLongitude(undefined);
   };
 
   const handleLocationSelectedFromMap = (data: SelectedLocationData) => {
     // 1. Set pinpoint coordinates for technician dispatch
+    setLocationSource('map');
     setLatitude(data.latitude);
     setLongitude(data.longitude);
     setSelectedAddressId(null);
 
-    // 2. Clear manual address fields so user can cleanly type their own village / house details!
-    // DO NOT auto-fill fields with guesses
+    // 2. Clear manual address fields so user can cleanly type their own house / landmark details!
+    // Apartment / building name is omitted for map pin locations
     setFlatNo('');
     setBuildingName('');
     setStreetArea('');
@@ -237,6 +242,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
 
   const handleAddNewAddressMode = () => {
     setSelectedAddressId(null);
+    setLocationSource('manual');
     setFlatNo('');
     setBuildingName('');
     setStreetArea('');
@@ -310,7 +316,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const computeFullAddress = () => {
     const parts = [
       flatNo.trim(),
-      buildingName.trim(),
+      locationSource !== 'map' ? buildingName.trim() : '',
       streetArea.trim(),
       `${city.trim()}${stateName.trim() ? ', ' + stateName.trim() : ''}${pincode.trim() ? ' - ' + pincode.trim() : ''}`,
     ].filter(Boolean);
@@ -323,16 +329,17 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   };
 
   const handleContinue = async () => {
-    // 1. Validation: Flat No is required first, as requested by user
+    // 1. Validation: House / Flat No is required first
     if (!flatNo.trim()) {
       Alert.alert(
-        'Flat / House No. Required',
-        'Please enter your Flat, House, Floor, or Unit number before continuing.'
+        'House / Door No. Required',
+        'Please enter your House, Flat, Floor, or Door number before continuing.'
       );
       return;
     }
 
-    if (!streetArea.trim() && !buildingName.trim()) {
+    // When location is selected from map, apartment/building name is NOT required
+    if (locationSource !== 'map' && !streetArea.trim() && !buildingName.trim()) {
       Alert.alert(
         'Location Details Required',
         'Please enter your Building, Society, or Street/Area details.'
@@ -340,7 +347,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
       return;
     }
 
-    if (!city.trim()) {
+    if (!city.trim() && locationSource !== 'map') {
       Alert.alert('City Required', 'Please enter your city.');
       return;
     }
@@ -697,19 +704,26 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
             <View style={styles.siteAccessTitleRow}>
               <AppIcon name="MapPin" size={18} color={Colors.primary} />
               <Text style={styles.siteAccessTitle}>
-                {selectedAddressId ? 'Selected Address Details (Editable)' : 'Enter Service Location'}
+                {locationSource === 'map'
+                  ? 'House & Doorstep Details'
+                  : selectedAddressId
+                  ? 'Selected Address Details (Editable)'
+                  : 'Enter Service Location'}
               </Text>
             </View>
             <View style={styles.requiredPill}>
-              <Text style={styles.requiredPillText}>Verified Entry</Text>
+              <Text style={styles.requiredPillText}>
+                {locationSource === 'map' ? 'Map Pin Linked' : 'Verified Entry'}
+              </Text>
             </View>
           </View>
 
-          {/* INPUT 1: FLAT / HOUSE NO. (FIRST FIELD AS REQUESTED) */}
+          {/* INPUT 1: HOUSE / FLAT / FLOOR NO. */}
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
               <Text style={styles.inputLabel}>
-                Flat / House / Floor / Unit No. <Text style={styles.reqAsterisk}>*</Text>
+                {locationSource === 'map' ? 'House / Door / Floor No.' : 'Flat / House / Floor / Unit No.'}{' '}
+                <Text style={styles.reqAsterisk}>*</Text>
               </Text>
               <Text style={styles.labelHint}>Step 1</Text>
             </View>
@@ -722,36 +736,43 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                   setFlatNo(val);
                   if (selectedAddressId) setSelectedAddressId(null);
                 }}
-                placeholder="e.g. Flat 402, 4th Floor, Tower B"
+                placeholder={
+                  locationSource === 'map'
+                    ? 'e.g. House No. 24 / Plot 12 / Near Village Chaupal'
+                    : 'e.g. Flat 402, 4th Floor, Tower B'
+                }
                 placeholderTextColor={Colors.outline}
               />
             </View>
           </View>
 
-          {/* INPUT 2: APARTMENT / BUILDING / SOCIETY NAME */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>
-              Apartment / Building / Society Name <Text style={styles.reqAsterisk}>*</Text>
-            </Text>
-            <View style={styles.inputBox}>
-              <AppIcon name="Building2" size={18} color={Colors.onSurfaceVariant} />
-              <TextInput
-                style={styles.textInput}
-                value={buildingName}
-                onChangeText={(val) => {
-                  setBuildingName(val);
-                  if (selectedAddressId) setSelectedAddressId(null);
-                }}
-                placeholder="e.g. Palm Springs Residences / Cyber Heights"
-                placeholderTextColor={Colors.outline}
-              />
+          {/* INPUT 2: APARTMENT / BUILDING / SOCIETY NAME - HIDDEN WHEN MAP LOCATION IS SELECTED */}
+          {locationSource !== 'map' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>
+                Apartment / Building / Society Name <Text style={styles.reqAsterisk}>*</Text>
+              </Text>
+              <View style={styles.inputBox}>
+                <AppIcon name="Building2" size={18} color={Colors.onSurfaceVariant} />
+                <TextInput
+                  style={styles.textInput}
+                  value={buildingName}
+                  onChangeText={(val) => {
+                    setBuildingName(val);
+                    if (selectedAddressId) setSelectedAddressId(null);
+                  }}
+                  placeholder="e.g. Palm Springs Residences / Cyber Heights"
+                  placeholderTextColor={Colors.outline}
+                />
+              </View>
             </View>
-          </View>
+          )}
 
           {/* INPUT 3: AREA / STREET / SECTOR / LOCALITY */}
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>
-              Area / Street / Sector / Locality <Text style={styles.reqAsterisk}>*</Text>
+              {locationSource === 'map' ? 'Area / Street / Village (Optional)' : 'Area / Street / Sector / Locality'}{' '}
+              {locationSource !== 'map' && <Text style={styles.reqAsterisk}>*</Text>}
             </Text>
             <View style={styles.inputBox}>
               <AppIcon name="Compass" size={18} color={Colors.onSurfaceVariant} />
@@ -762,7 +783,11 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                   setStreetArea(val);
                   if (selectedAddressId) setSelectedAddressId(null);
                 }}
-                placeholder="e.g. Sector 54, Golf Course Extension Road"
+                placeholder={
+                  locationSource === 'map'
+                    ? 'e.g. Main Basti / Rampura Village'
+                    : 'e.g. Sector 54, Golf Course Extension Road'
+                }
                 placeholderTextColor={Colors.outline}
               />
             </View>
