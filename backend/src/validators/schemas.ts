@@ -34,6 +34,8 @@ export const createRequestSchema = z.object({
   visitDate: z.string().min(1, 'Visit date is required'),
   totalAmount: z.number().nonnegative().optional().default(0),
   paymentMethod: z.string().optional().default('card'),
+  latitude: z.number().optional().nullable(),
+  longitude: z.number().optional().nullable(),
 });
 
 export const updateJobStatusSchema = z.object({

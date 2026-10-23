@@ -25,6 +25,8 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
     visitDate,
     totalAmount,
     paymentMethod,
+    latitude,
+    longitude,
   } = req.body;
 
   let finalServiceId = serviceId;
@@ -49,9 +51,9 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
     `INSERT INTO service_requests (
       tracking_code, customer_id, service_id, chair_model, issue_description,
       status, address, unit_floor, time_slot, visit_date, total_amount,
-      is_paid, payment_method, security_pin
-    ) VALUES ($1, $2, $3, $4, $5, 'finding_technician', $6, $7, $8, $9, $10, $11, $12, $13)
-    RETURNING id, tracking_code, status, total_amount, security_pin, created_at;`,
+      is_paid, payment_method, security_pin, latitude, longitude
+    ) VALUES ($1, $2, $3, $4, $5, 'finding_technician', $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+    RETURNING id, tracking_code, status, total_amount, security_pin, latitude, longitude, created_at;`,
     [
       trackingCode,
       customerId,
@@ -66,6 +68,8 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
       paymentMethod === 'cash' ? false : true,
       paymentMethod || 'card',
       randPin,
+      latitude != null ? latitude : null,
+      longitude != null ? longitude : null,
     ]
   );
 
@@ -150,6 +154,8 @@ export const getMyRequests = async (req: AuthenticatedRequest, res: Response): P
       sr.is_paid,
       sr.payment_method,
       sr.security_pin,
+      sr.latitude,
+      sr.longitude,
       sr.created_at,
       s.title as service_title,
       s.code as service_code,
@@ -205,6 +211,8 @@ export const getMyRequests = async (req: AuthenticatedRequest, res: Response): P
         payment_method: row.payment_method,
         securityPin: pin,
         security_pin: pin,
+        latitude: row.latitude != null ? Number(row.latitude) : undefined,
+        longitude: row.longitude != null ? Number(row.longitude) : undefined,
         createdAt: row.created_at,
         created_at: row.created_at,
         serviceTitle: row.service_title,
@@ -368,6 +376,8 @@ export const getRequestById = async (req: AuthenticatedRequest, res: Response): 
       isPaid: reqData.is_paid,
       paymentMethod: reqData.payment_method,
       securityPin: pin,
+      latitude: reqData.latitude != null ? Number(reqData.latitude) : undefined,
+      longitude: reqData.longitude != null ? Number(reqData.longitude) : undefined,
       cancellationReason: reqData.cancellation_reason,
       createdAt: reqData.created_at,
       service: reqData.service_title

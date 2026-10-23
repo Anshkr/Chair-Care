@@ -12,6 +12,8 @@ export interface CreateBookingPayload {
   visitDate: string;
   totalAmount?: number;
   paymentMethod?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export const customerApi = {

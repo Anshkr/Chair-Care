@@ -36,6 +36,8 @@ export interface BookingDraft {
   visitDate?: string;
   timeSlot?: string;
   estimatedTotal?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ServiceRequest {
@@ -53,6 +55,9 @@ export interface ServiceRequest {
   status: 'draft' | 'finding_technician' | 'assigned' | 'in_route' | 'arrived' | 'in_progress' | 'completed' | 'cancelled';
   createdAt: string;
   address: string;
+  unitFloor?: string;
+  latitude?: number;
+  longitude?: number;
   timeSlot: string;
   totalAmount: number;
   isPaid: boolean;

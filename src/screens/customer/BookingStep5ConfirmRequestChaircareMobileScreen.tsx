@@ -66,6 +66,8 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
         visitDate: visitDate,
         totalAmount: draft?.estimatedTotal || 599,
         paymentMethod: (draft as any)?.paymentMethod || 'online',
+        latitude: draft?.latitude,
+        longitude: draft?.longitude,
       });
 
       setIsSubmitting(false);

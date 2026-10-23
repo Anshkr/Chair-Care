@@ -20,6 +20,8 @@ import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { useBooking } from '../../context/BookingContext';
 import { authApi } from '../../services/api';
+import { MapLocationPickerModal, SelectedLocationData } from '../../components/customer/MapLocationPickerModal';
+import { geocodingService } from '../../services/location/geocodingService';
 
 export interface SavedAddressItem {
   id: string;
@@ -34,6 +36,8 @@ export interface SavedAddressItem {
   landmark?: string;
   instructions?: string;
   fullAddress: string;
+  latitude?: number;
+  longitude?: number;
   isDefault?: boolean;
 }
 
@@ -51,6 +55,8 @@ const DEFAULT_SAVED_ADDRESSES: SavedAddressItem[] = [
     landmark: 'Near Rapid Metro Sector 55-56',
     instructions: 'MyGate entry code: 4492',
     fullAddress: 'Tower 4, Apt 1102, Cyber Heights, Sector 62, Gurgaon, Haryana - 122002',
+    latitude: 28.4195,
+    longitude: 77.0850,
     isDefault: true,
   },
   {
@@ -66,6 +72,8 @@ const DEFAULT_SAVED_ADDRESSES: SavedAddressItem[] = [
     landmark: 'Opposite Cyber Hub Building 10',
     instructions: 'Collect visitor badge at ground reception desk',
     fullAddress: 'Suite 402, 4th Floor, WeWork Forum, DLF Cyber City, Sector 24, Gurgaon - 122002',
+    latitude: 28.4950,
+    longitude: 77.0880,
     isDefault: false,
   },
 ];
@@ -146,6 +154,16 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'locked' | 'error'>('idle');
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
 
+  // Coordinates state for exact technician dispatch
+  const [latitude, setLatitude] = useState<number | undefined>(
+    draft?.latitude || DEFAULT_SAVED_ADDRESSES[0].latitude
+  );
+  const [longitude, setLongitude] = useState<number | undefined>(
+    draft?.longitude || DEFAULT_SAVED_ADDRESSES[0].longitude
+  );
+  const [isMapPickerVisible, setIsMapPickerVisible] = useState<boolean>(false);
+  const [isConvertingAddress, setIsConvertingAddress] = useState<boolean>(false);
+
   // Sync saved addresses on mount or profile load
   useEffect(() => {
     const list = loadSavedAddressesFromStorage(currentUser?.id);
@@ -170,11 +188,32 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     setLandmark(item.landmark || '');
     setInstructions(item.instructions || '');
     setSelectedTag(item.tag || 'Home');
+    if (item.latitude && item.longitude) {
+      setLatitude(item.latitude);
+      setLongitude(item.longitude);
+    }
   };
 
   const handleSelectSavedAddress = (item: SavedAddressItem) => {
     setSelectedAddressId(item.id);
     populateFieldsFromAddress(item);
+  };
+
+  const handleLocationSelectedFromMap = (data: SelectedLocationData) => {
+    setFlatNo(data.flatNo);
+    setBuildingName(data.buildingName);
+    setStreetArea(data.streetArea);
+    setCity(data.city);
+    setStateName(data.state);
+    setPincode(data.pincode);
+    setLandmark(data.landmark || '');
+    setInstructions(data.instructions || '');
+    setSelectedTag(data.tag);
+    setLatitude(data.latitude);
+    setLongitude(data.longitude);
+    setSelectedAddressId(null);
+    setGpsStatus('locked');
+    setGpsMessage(`Location Pinned on Map: ${data.flatNo}, ${data.streetArea} (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)})`);
   };
 
   const handleAddNewAddressMode = () => {
@@ -203,6 +242,8 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
       setStateName('Haryana');
       setPincode('122002');
       setLandmark('Opposite Horizon Centre');
+      setLatitude(28.4485);
+      setLongitude(77.0945);
       setGpsStatus('locked');
       setGpsMessage('GPS Position Detected: Sector 54, Golf Course Rd, Gurgaon');
       setSelectedAddressId(null);
@@ -211,11 +252,13 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
-          const { latitude, longitude } = position.coords;
+          const { latitude: posLat, longitude: posLng } = position.coords;
+          setLatitude(posLat);
+          setLongitude(posLng);
           try {
             // Reverse geocode via OpenStreetMap Nominatim
             const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${posLat}&lon=${posLng}&addressdetails=1`,
               {
                 headers: {
                   'Accept-Language': 'en',
@@ -299,6 +342,32 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
 
     const fullAddress = computeFullAddress();
 
+    let finalLat = latitude;
+    let finalLng = longitude;
+    let finalFullAddress = fullAddress;
+
+    // Convert manual location accurately to exact lat/long coordinates for technician dispatch
+    setIsConvertingAddress(true);
+    try {
+      const geocoded = await geocodingService.forwardGeocodeManualAddress({
+        flatNo,
+        buildingName,
+        streetArea,
+        city,
+        state: stateName,
+        pincode,
+        fullAddress,
+      });
+      if (geocoded) {
+        finalLat = geocoded.latitude;
+        finalLng = geocoded.longitude;
+      }
+    } catch {
+      // fallback to existing or default coordinates
+    } finally {
+      setIsConvertingAddress(false);
+    }
+
     // 2. Save for future if toggle is enabled
     if (saveForFuture) {
       const newAddressId = `addr_${Date.now()}`;
@@ -314,7 +383,9 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
         pincode: pincode.trim(),
         landmark: landmark.trim(),
         instructions: instructions.trim(),
-        fullAddress,
+        fullAddress: finalFullAddress,
+        latitude: finalLat,
+        longitude: finalLng,
         isDefault: selectedTag === 'Home',
       };
 
@@ -333,17 +404,19 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
       // Also persist to user profile in backend if authenticated
       if (isAuthenticated) {
         try {
-          await authApi.updateProfile({ defaultAddress: fullAddress });
+          await authApi.updateProfile({ defaultAddress: finalFullAddress });
         } catch {
           // silently continue
         }
       }
     }
 
-    // 3. Update booking draft
+    // 3. Update booking draft with exact coordinates
     updateDraft({
-      serviceAddress: fullAddress,
+      serviceAddress: finalFullAddress,
       unitOrFloor: flatNo.trim(),
+      latitude: finalLat,
+      longitude: finalLng,
     });
 
     // 4. Continue to schedule
@@ -438,8 +511,30 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
               </View>
             </View>
 
-            {/* GPS Locator Button */}
+            {/* Map Actions: Select on Map & Current Location */}
             <View style={styles.mapCtaContainer}>
+              <TouchableOpacity
+                style={styles.selectFromMapCardBtn}
+                onPress={() => setIsMapPickerVisible(true)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.selectFromMapIconBg}>
+                  <AppIcon name="MapPin" size={18} color="#FFFFFF" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.selectFromMapTitle}>Select Location from Map</Text>
+                    <View style={styles.liveReticlePill}>
+                      <Text style={styles.liveReticleText}>SEARCH & PIN</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.selectFromMapSubtitle}>
+                    Search places, pinpoint your exact doorstep, and share GPS with technician
+                  </Text>
+                </View>
+                <AppIcon name="ChevronRight" size={18} color="#38bdf8" />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={[
                   styles.gpsBtn,
@@ -452,7 +547,7 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                   <ActivityIndicator size="small" color={Colors.primary} />
                 ) : (
                   <AppIcon
-                    name={gpsStatus === 'locked' ? 'Check' : 'Navigation'}
+                    name={gpsStatus === 'locked' ? 'Check' : 'Crosshair'}
                     size={16}
                     color={gpsStatus === 'locked' ? Colors.tertiaryEmerald : Colors.secondaryCobalt}
                   />
@@ -482,6 +577,16 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </View>
         )}
 
+        {/* Verified Coordinates Pill for Doorstep Technician Dispatch */}
+        {latitude != null && longitude != null && (
+          <View style={styles.verifiedCoordsRow}>
+            <View style={styles.verifiedCoordsDot} />
+            <Text style={styles.verifiedCoordsText}>
+              Exact Lat/Long: {latitude.toFixed(5)}° N, {longitude.toFixed(5)}° E • Dispatched to technician for precision doorstep arrival
+            </Text>
+          </View>
+        )}
+
         {/* Section 2: SAVED ADDRESSES (Book directly from saved address) */}
         <View style={styles.savedSection}>
           <View style={styles.sectionHeaderRow}>
@@ -489,14 +594,25 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
               <AppIcon name="Bookmark" size={16} color={Colors.secondaryCobalt} />
               <Text style={styles.sectionTitleCaps}>SAVED ADDRESSES</Text>
             </View>
-            <TouchableOpacity
-              style={styles.addNewAddressInlineBtn}
-              onPress={handleAddNewAddressMode}
-              activeOpacity={0.7}
-            >
-              <AppIcon name="Plus" size={14} color={Colors.primary} />
-              <Text style={styles.addNewAddressInlineText}>Enter New</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={styles.pickOnMapHeaderBtn}
+                onPress={() => setIsMapPickerVisible(true)}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="Map" size={13} color="#0284c7" />
+                <Text style={styles.pickOnMapHeaderText}>Map Picker</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.addNewAddressInlineBtn}
+                onPress={handleAddNewAddressMode}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="Plus" size={14} color={Colors.primary} />
+                <Text style={styles.addNewAddressInlineText}>Enter New</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.addressList}>
@@ -801,13 +917,29 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
         </View>
 
         <PrecisionButton
-          title="Continue to Schedule →"
+          title={isConvertingAddress ? 'Verifying Doorstep Coordinates...' : 'Continue to Schedule →'}
           size="lg"
           variant="primary"
           onPress={handleContinue}
           style={styles.continueBtn}
         />
       </View>
+
+      <MapLocationPickerModal
+        visible={isMapPickerVisible}
+        onClose={() => setIsMapPickerVisible(false)}
+        onSelectLocation={handleLocationSelectedFromMap}
+        initialLocation={{
+          latitude,
+          longitude,
+          flatNo,
+          buildingName,
+          streetArea,
+          city,
+          state: stateName,
+          pincode,
+        }}
+      />
     </ScreenContainer>
   );
 };
@@ -926,11 +1058,88 @@ const styles = StyleSheet.create({
   },
   mapCardContainer: {
     width: '100%',
-    height: 180,
+    height: 240,
     borderRadius: BorderRadius.xl,
     overflow: 'hidden',
     backgroundColor: Colors.surfaceContainerLow,
     ...Shadows.level2,
+  },
+  selectFromMapCardBtn: {
+    backgroundColor: '#0284c7',
+    borderRadius: BorderRadius.lg,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+    ...Shadows.level2,
+  },
+  selectFromMapIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  selectFromMapTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  liveReticlePill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  liveReticleText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  selectFromMapSubtitle: {
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  pickOnMapHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.md,
+    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+  },
+  pickOnMapHeaderText: {
+    color: '#0284c7',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  verifiedCoordsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#38bdf8',
+  },
+  verifiedCoordsDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#38bdf8',
+  },
+  verifiedCoordsText: {
+    color: '#93c5fd',
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
   },
   mapBackground: {
     width: '100%',

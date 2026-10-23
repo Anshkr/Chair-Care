@@ -155,10 +155,17 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
   }, [pulseAnim, radarAnim, pinBounceAnim]);
 
   const openExternalMap = async (address: string) => {
-    const encoded = encodeURIComponent(address.trim());
-    const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encoded}`;
-    const appleMapsUrl = `maps://?daddr=${encoded}`;
-    const androidGeoUrl = `geo:0,0?q=${encoded}`;
+    const hasCoords = typeof ticket?.latitude === 'number' && typeof ticket?.longitude === 'number';
+    const dest = hasCoords
+      ? `${ticket.latitude},${ticket.longitude}`
+      : encodeURIComponent(address.trim());
+    const googleMapsDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
+    const appleMapsUrl = hasCoords
+      ? `maps://?daddr=${ticket.latitude},${ticket.longitude}`
+      : `maps://?daddr=${encodeURIComponent(address.trim())}`;
+    const androidGeoUrl = hasCoords
+      ? `geo:${ticket.latitude},${ticket.longitude}?q=${ticket.latitude},${ticket.longitude}(${encodeURIComponent(ticket.customerName || 'Customer Doorstep')})`
+      : `geo:0,0?q=${encodeURIComponent(address.trim())}`;
 
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined') {

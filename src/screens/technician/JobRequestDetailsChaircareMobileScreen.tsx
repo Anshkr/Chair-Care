@@ -704,6 +704,11 @@ export const JobRequestDetailsChaircareMobileScreen: React.FC<{
                     Corridor Dispatch • On-Site Customer Location
                   </Text>
                 )}
+                {ticket.latitude != null && ticket.longitude != null && (
+                  <Text style={[styles.addressLine2, { color: '#0284c7', fontWeight: '600', marginTop: 3 }]}>
+                    📍 Doorstep GPS: {Number(ticket.latitude).toFixed(5)}° N, {Number(ticket.longitude).toFixed(5)}° E
+                  </Text>
+                )}
               </View>
             </View>
 

@@ -19,6 +19,8 @@ const initialDraft: BookingDraft = {
   visitDate: '',
   timeSlot: '',
   estimatedTotal: 0,
+  latitude: undefined,
+  longitude: undefined,
 };
 
 const BookingContext = createContext<BookingContextType | undefined>(undefined);
