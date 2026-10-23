@@ -17,6 +17,7 @@ import { Typography } from '../../constants/typography';
 import { useTechnician } from '../../context/TechnicianContext';
 import { adminApi } from '../../services/api/adminApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface AssignmentConfirmationProps {
   navigation?: any;
@@ -146,9 +147,7 @@ export const AssignmentConfirmationChaircareMobileScreen: React.FC<AssignmentCon
             <AppIcon name="MoreVertical" size={20} />
           </TouchableOpacity>
 
-          <View style={styles.profileAvatarTop}>
-            <AppIcon name="User" size={18} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 

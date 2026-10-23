@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
 import { useAdminSync } from '../../services/adminSync';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface ServiceRequestsProps {
   navigation?: any;
@@ -269,9 +270,7 @@ export const ServiceRequestsChaircareMobileScreen: React.FC<ServiceRequestsProps
             <AppIcon name="Sliders" size={18} />
           </TouchableOpacity>
 
-          <View style={styles.profileAvatarTop}>
-            <AppIcon name="User" size={18} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 

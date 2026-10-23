@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface AssignTechnicianProps {
   navigation?: any;
@@ -189,9 +190,7 @@ export const AssignTechnicianChaircareMobileScreen: React.FC<AssignTechnicianPro
             <AppIcon name="MoreVertical" size={20} />
           </TouchableOpacity>
 
-          <View style={styles.profileAvatarTop}>
-            <AppIcon name="User" size={18} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 

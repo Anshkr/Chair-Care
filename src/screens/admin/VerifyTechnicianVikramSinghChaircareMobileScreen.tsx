@@ -20,6 +20,7 @@ import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface VerifyTechnicianProps {
   navigation?: any;
@@ -263,9 +264,7 @@ export const VerifyTechnicianVikramSinghChaircareMobileScreen: React.FC<VerifyTe
             <AppIcon name="MoreVertical" size={20} />
           </TouchableOpacity>
 
-          <View style={styles.profileAvatarTop}>
-            <AppIcon name="User" size={18} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 

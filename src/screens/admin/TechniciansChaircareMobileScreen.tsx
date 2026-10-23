@@ -20,6 +20,7 @@ import { BrandLogo } from '../../components/common/BrandLogo';
 import { adminApi } from '../../services/api/adminApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { useAdminSync } from '../../services/adminSync';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface TechniciansScreenProps {
   navigation?: any;
@@ -329,13 +330,7 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
             <AppIcon name="Bell" size={18} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.profileAvatarTop}
-            onPress={() => navigation?.navigate('AdminSettingsTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} />
-          </TouchableOpacity>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 

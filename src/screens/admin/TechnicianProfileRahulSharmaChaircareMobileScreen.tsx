@@ -19,6 +19,7 @@ import { BrandLogo } from '../../components/common/BrandLogo';
 import { adminApi } from '../../services/api/adminApi';
 import { useAdminSync } from '../../services/adminSync';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface TechnicianProfileProps {
   navigation?: any;
@@ -208,9 +209,7 @@ export const TechnicianProfileRahulSharmaChaircareMobileScreen: React.FC<Technic
             <AppIcon name="RotateCw" size={18} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
 
-          <View style={styles.profileAvatarTop}>
-            <AppIcon name="User" size={18} color={Colors.onPrimary} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
