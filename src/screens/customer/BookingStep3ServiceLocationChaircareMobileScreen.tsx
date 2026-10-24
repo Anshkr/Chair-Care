@@ -358,26 +358,28 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     let finalLng = longitude;
     let finalFullAddress = fullAddress;
 
-    // Convert manual location accurately to exact lat/long coordinates for technician dispatch
-    setIsConvertingAddress(true);
-    try {
-      const geocoded = await geocodingService.forwardGeocodeManualAddress({
-        flatNo,
-        buildingName,
-        streetArea,
-        city,
-        state: stateName,
-        pincode,
-        fullAddress,
-      });
-      if (geocoded) {
-        finalLat = geocoded.latitude;
-        finalLng = geocoded.longitude;
+    // Only forward-geocode manual text address if customer did NOT pick from map or GPS
+    if (finalLat == null || finalLng == null) {
+      setIsConvertingAddress(true);
+      try {
+        const geocoded = await geocodingService.forwardGeocodeManualAddress({
+          flatNo,
+          buildingName,
+          streetArea,
+          city,
+          state: stateName,
+          pincode,
+          fullAddress,
+        });
+        if (geocoded) {
+          finalLat = geocoded.latitude;
+          finalLng = geocoded.longitude;
+        }
+      } catch {
+        // fallback to existing or default coordinates
+      } finally {
+        setIsConvertingAddress(false);
       }
-    } catch {
-      // fallback to existing or default coordinates
-    } finally {
-      setIsConvertingAddress(false);
     }
 
     // 2. Save for future if toggle is enabled

@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   Linking,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -40,78 +41,77 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
   const passedRequest = route?.params?.request || acceptedRequest;
   const passedId = route?.params?.requestId || route?.params?.jobId;
 
+  // Authoritative ticket state refreshed from server to get exact DB coordinates
+  const [ticketData, setTicketData] = useState<any>(passedRequest || null);
+
+  useEffect(() => {
+    if (passedId) {
+      const cleanId = String(passedId).trim().replace(/^#/, '');
+      technicianApi.getJobDetails(cleanId).then((res) => {
+        if (res.success && res.data) {
+          setTicketData((prev: any) => ({ ...(prev || {}), ...res.data }));
+        }
+      }).catch(() => {});
+    }
+  }, [passedId]);
+
   // Selected request data
-  const ticket = passedRequest || {
+  const ticket = ticketData || passedRequest || {
     id: passedId || '',
     ticketNumber: passedId || 'DISPATCH',
     serviceTitle: 'Office Chair Repair',
     categoryTag: 'Precision Field Service',
     customerName: 'Customer',
-    customerPhone: '+91 91234 56789',
+    customerPhone: '',
     customerRating: 5.0,
     isVerifiedCustomer: true,
-    addressLine1: 'Customer Service Address',
-    addressLine2: 'Assigned Site Location',
-    gatePass: 'Check building security reception',
-    chairModel: 'Ergonomic Task Chair',
-    chairIssue: 'Repair inspection and component servicing',
-    technicianNote: 'Standard diagnostic protocol',
-    distance: 'Direct route',
-    etaMinutes: '15',
-    routeSummary: 'Optimal navigation route',
+    address: 'Customer Doorstep Location',
+    unitFloor: '',
+    chairModel: 'Office Chair',
+    chairIssue: 'Repair inspection requested',
     status: 'assigned',
   };
 
+  // Exact Customer Target Coordinates chosen by customer on map
+  const rawCustLat =
+    ticket?.latitude != null && !isNaN(Number(ticket.latitude))
+      ? Number(ticket.latitude)
+      : ticket?.lat != null && !isNaN(Number(ticket.lat))
+      ? Number(ticket.lat)
+      : undefined;
+
+  const rawCustLng =
+    ticket?.longitude != null && !isNaN(Number(ticket.longitude))
+      ? Number(ticket.longitude)
+      : ticket?.lng != null && !isNaN(Number(ticket.lng))
+      ? Number(ticket.lng)
+      : undefined;
+
+  const hasValidCustCoords = rawCustLat != null && rawCustLng != null;
+  const custLat = hasValidCustCoords ? rawCustLat! : 28.4595;
+  const custLng = hasValidCustCoords ? rawCustLng! : 77.0266;
+
   const destinationAddress =
-    ticket.fullAddress ||
     ticket.address ||
-    (ticket.addressLine1
-      ? `${ticket.addressLine1}${ticket.addressLine2 ? ', ' + ticket.addressLine2 : ''}`
-      : '') ||
+    ticket.fullAddress ||
     ticket.locationArea ||
-    'Tower 4, Apt 1102, Cyber Heights, Sector 62, Gurgaon';
+    (hasValidCustCoords ? `GPS Doorstep: ${custLat.toFixed(5)}° N, ${custLng.toFixed(5)}° E` : 'Customer Selected Location');
 
   const destinationShort =
-    ticket.unitFloor ||
-    (ticket.customerName && ticket.customerName !== 'Customer'
+    ticket.unitFloor
+      ? `${ticket.unitFloor}`
+      : ticket.customerName && ticket.customerName !== 'Customer'
       ? `${ticket.customerName}'s Location`
-      : '') ||
-    'Cyber Heights, Sector 62';
+      : 'Customer Doorstep';
 
-  const displayAddressLine1 =
-    ticket.fullAddress ||
-    ticket.address ||
-    ticket.addressLine1 ||
-    'Tower 4, Apt 1102, Cyber Heights, Sector 62, Gurgaon';
+  const displayAddressLine1 = destinationAddress;
 
   const displayAddressLine2 =
     ticket.unitFloor
-      ? `Unit / Floor: ${ticket.unitFloor} • Landmark: Cyber City Corridor`
-      : ticket.addressLine2 || 'Sector 62, Gurugram, Haryana 122002';
-
-  // Customer Target Coordinates
-  const custLat =
-    typeof ticket?.latitude === 'number' && !isNaN(ticket.latitude)
-      ? ticket.latitude
-      : 28.4595;
-  const custLng =
-    typeof ticket?.longitude === 'number' && !isNaN(ticket.longitude)
-      ? ticket.longitude
-      : 77.0266;
-
-  // Technician Coordinates Initial Setup
-  const initialTechLat =
-    typeof ticket?.technicianLatitude === 'number' && !isNaN(ticket.technicianLatitude)
-      ? ticket.technicianLatitude
-      : typeof ticket?.technician_latitude === 'number' && !isNaN(ticket.technician_latitude)
-      ? ticket.technician_latitude
-      : custLat - 0.016;
-  const initialTechLng =
-    typeof ticket?.technicianLongitude === 'number' && !isNaN(ticket.technicianLongitude)
-      ? ticket.technicianLongitude
-      : typeof ticket?.technician_longitude === 'number' && !isNaN(ticket.technician_longitude)
-      ? ticket.technician_longitude
-      : custLng - 0.012;
+      ? `Unit / Floor: ${ticket.unitFloor} • Doorstep GPS: ${custLat.toFixed(5)}° N, ${custLng.toFixed(5)}° E`
+      : hasValidCustCoords
+      ? `📍 Exact Selected GPS: ${custLat.toFixed(5)}° N, ${custLng.toFixed(5)}° E`
+      : 'Customer Doorstep Location';
 
   const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371;
@@ -127,68 +127,144 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
     return R * c;
   };
 
-  const calculateEta = (distKm: number) => {
+  // Real ETA calculation based on real distance and urban road factor
+  const calculateRealEta = (distKm: number) => {
     if (distKm <= 0.05) return 0;
-    return Math.max(1, Math.round(distKm * 2.8 + 1));
+    // Road travel distance is ~1.35x straight line due to urban street grid
+    const roadDistanceKm = distKm * 1.35;
+    // City average driving / riding speed: ~22 km/h
+    const minutes = (roadDistanceKm / 22) * 60;
+    return Math.max(1, Math.round(minutes));
   };
 
-  // State
-  const [techCoords, setTechCoords] = useState({
+  // Initial technician coordinates setup from last known location or customer location
+  const initialTechLat =
+    typeof ticket?.technicianLatitude === 'number' && !isNaN(ticket.technicianLatitude)
+      ? ticket.technicianLatitude
+      : typeof ticket?.technician_latitude === 'number' && !isNaN(ticket.technician_latitude)
+      ? ticket.technician_latitude
+      : custLat;
+  const initialTechLng =
+    typeof ticket?.technicianLongitude === 'number' && !isNaN(ticket.technicianLongitude)
+      ? ticket.technicianLongitude
+      : typeof ticket?.technician_longitude === 'number' && !isNaN(ticket.technician_longitude)
+      ? ticket.technician_longitude
+      : custLng;
+
+  // Real-time State
+  const [techCoords, setTechCoords] = useState<{ latitude: number; longitude: number }>({
     latitude: initialTechLat,
     longitude: initialTechLng,
   });
-  const [currentDistKm, setCurrentDistKm] = useState(() =>
+  const [currentDistKm, setCurrentDistKm] = useState<number>(() =>
     calculateDistanceKm(initialTechLat, initialTechLng, custLat, custLng)
   );
-  const [currentEtaMin, setCurrentEtaMin] = useState(() =>
-    calculateEta(calculateDistanceKm(initialTechLat, initialTechLng, custLat, custLng))
+  const [currentEtaMin, setCurrentEtaMin] = useState<number>(() =>
+    calculateRealEta(calculateDistanceKm(initialTechLat, initialTechLng, custLat, custLng))
   );
   const [isNavigating, setIsNavigating] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hasUnreadMessage, setHasUnreadMessage] = useState(true);
 
-  // Live movement simulation towards customer when technician is en route or navigating
+  // Sync handler that recalculates real-time distance and real ETA, and updates database
+  const handleLocationUpdate = useCallback(
+    (lat: number, lng: number) => {
+      setTechCoords({ latitude: lat, longitude: lng });
+      const dist = calculateDistanceKm(lat, lng, custLat, custLng);
+      const eta = calculateRealEta(dist);
+
+      setCurrentDistKm(dist);
+      setCurrentEtaMin(eta);
+
+      // Sync real technician GPS position and real ETA to database so customer tracking screen updates live
+      const resolvedId = ticket?.id || passedId;
+      if (resolvedId) {
+        const cleanId = String(resolvedId).trim().replace(/^#/, '');
+        technicianApi.updateLiveLocation(cleanId, lat, lng, eta).catch(() => {});
+      }
+    },
+    [custLat, custLng, ticket?.id, passedId]
+  );
+
+  // Real-time Hardware GPS Tracker using expo-location (and web navigator.geolocation fallback)
   useEffect(() => {
+    let isMounted = true;
+    let locationWatcher: Location.LocationSubscription | null = null;
+    let webWatchId: number | null = null;
+
     if (ticket.status === 'arrived' || ticket.status === 'completed') {
       setCurrentDistKm(0);
       setCurrentEtaMin(0);
       return;
     }
 
-    const interval = setInterval(() => {
-      setTechCoords((prev) => {
-        const dLat = custLat - prev.latitude;
-        const dLng = custLng - prev.longitude;
-        const remainingDist = calculateDistanceKm(prev.latitude, prev.longitude, custLat, custLng);
+    const startGpsTracking = async () => {
+      // 1. Hardware GPS via expo-location (High precision)
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const current = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Highest,
+          });
+          if (isMounted && current?.coords) {
+            handleLocationUpdate(current.coords.latitude, current.coords.longitude);
+          }
 
-        if (remainingDist <= 0.05) {
-          setCurrentDistKm(0);
-          setCurrentEtaMin(0);
-          return prev;
+          locationWatcher = await Location.watchPositionAsync(
+            {
+              accuracy: Location.Accuracy.High,
+              timeInterval: 4000,
+              distanceInterval: 10,
+            },
+            (pos) => {
+              if (isMounted && pos?.coords) {
+                handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
+              }
+            }
+          );
+          return;
         }
+      } catch (nativeErr) {
+        // Fall back to web browser geolocation
+      }
 
-        // Step 6% closer along the vector towards destination each interval
-        const stepRatio = 0.06;
-        const nextLat = prev.latitude + dLat * stepRatio;
-        const nextLng = prev.longitude + dLng * stepRatio;
-        const nextDist = calculateDistanceKm(nextLat, nextLng, custLat, custLng);
-        const nextEta = calculateEta(nextDist);
+      // 2. Web browser navigator.geolocation
+      if (typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (isMounted && pos?.coords) {
+              handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
 
-        setCurrentDistKm(nextDist);
-        setCurrentEtaMin(nextEta);
+        webWatchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (isMounted && pos?.coords) {
+              handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+        );
+      }
+    };
 
-        // Sync live location and ETA to database so customer tracking screen updates simultaneously
-        if (ticket.id) {
-          technicianApi.updateLiveLocation(ticket.id, nextLat, nextLng, nextEta).catch(() => {});
-        }
+    startGpsTracking();
 
-        return { latitude: nextLat, longitude: nextLng };
-      });
-    }, 3500);
-
-    return () => clearInterval(interval);
-  }, [ticket.id, ticket.status, custLat, custLng]);
+    return () => {
+      isMounted = false;
+      if (locationWatcher) {
+        locationWatcher.remove();
+      }
+      if (webWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(webWatchId);
+      }
+    };
+  }, [ticket.status, handleLocationUpdate]);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -430,7 +506,7 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
                   <Text style={styles.hudInstructionText} numberOfLines={1}>
                     {currentDistKm <= 0.05
                       ? 'Arrived at Customer Doorstep'
-                      : 'Turn right onto Golf Course Rd'}
+                      : 'Head towards customer doorstep GPS'}
                   </Text>
                 </View>
               </View>
@@ -585,7 +661,7 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
               <Text style={styles.etaSubDetail}>
                 {currentDistKm <= 0.05
                   ? 'At customer location • Ready for service'
-                  : `${currentDistKm.toFixed(1)} km away • Fast route via Golf Course Rd`}
+                  : `${currentDistKm.toFixed(1)} km away • Live road calculation`}
               </Text>
             </View>
 
@@ -624,15 +700,16 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
               <AppIcon name="ExternalLink" size={16} color={Colors.primary} />
             </TouchableOpacity>
 
-            {/* Customer Note Highlight */}
-            <View style={styles.technicianNoteBox}>
-              <AppIcon name="FileText" size={18} />
-              <Text style={styles.technicianNoteText}>
-                <Text style={styles.noteBold}>Technician Note: </Text>
-                {ticket.technicianNote ||
-                  'Ring bell twice. Herman Miller Aeron is located in the home study immediately right of the foyer.'}
-              </Text>
-            </View>
+            {/* Customer Note / Issue Description */}
+            {(ticket.issueDescription || ticket.issue_description || ticket.symptom) && (
+              <View style={styles.technicianNoteBox}>
+                <AppIcon name="FileText" size={18} />
+                <Text style={styles.technicianNoteText}>
+                  <Text style={styles.noteBold}>Reported Issue: </Text>
+                  {ticket.issueDescription || ticket.issue_description || ticket.symptom}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Chair Asset Preview Card */}

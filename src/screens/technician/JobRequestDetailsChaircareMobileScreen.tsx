@@ -107,6 +107,26 @@ const normalizeJobTicket = (item: any): any => {
     travelTime: item.travelTime || '~15 mins',
     status: item.status || 'assigned',
     isPaid: Boolean(item.isPaid ?? item.is_paid),
+    latitude: item.latitude != null ? Number(item.latitude) : undefined,
+    longitude: item.longitude != null ? Number(item.longitude) : undefined,
+    technicianLatitude:
+      item.technicianLatitude != null
+        ? Number(item.technicianLatitude)
+        : item.technician_latitude != null
+        ? Number(item.technician_latitude)
+        : undefined,
+    technicianLongitude:
+      item.technicianLongitude != null
+        ? Number(item.technicianLongitude)
+        : item.technician_longitude != null
+        ? Number(item.technician_longitude)
+        : undefined,
+    technicianEtaMinutes:
+      item.technicianEtaMinutes != null
+        ? Number(item.technicianEtaMinutes)
+        : item.technician_eta_minutes != null
+        ? Number(item.technician_eta_minutes)
+        : undefined,
   };
 };
 
