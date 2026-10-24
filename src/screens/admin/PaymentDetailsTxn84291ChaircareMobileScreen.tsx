@@ -158,7 +158,7 @@ export const PaymentDetailsTxn84291ChaircareMobileScreen: React.FC<
               if (navigation && navigation.canGoBack()) {
                 navigation.goBack();
               } else if (navigation) {
-                navigation.navigate('Payments');
+                navigation.navigate('PaymentsTab');
               }
             }}
             activeOpacity={0.7}

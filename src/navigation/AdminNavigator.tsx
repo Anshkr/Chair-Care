@@ -74,6 +74,21 @@ const AdminTabs = () => {
         }}
       />
       <Tab.Screen
+        name="PaymentsTab"
+        component={AdminScreens.PaymentsChaircareMobileScreen}
+        options={{
+          tabBarLabel: 'Payments',
+          tabBarIcon: ({ color, focused }) => (
+            <AppIcon
+              name="CreditCard"
+              size={20}
+              color={color}
+              strokeWidth={focused ? 2.2 : 1.8}
+            />
+          ),
+        }}
+      />
+      <Tab.Screen
         name="AdminSettingsTab"
         component={AdminScreens.AdminSettingsChaircareMobileScreen}
         options={{
@@ -103,6 +118,7 @@ export const AdminNavigator: React.FC = () => {
     >
       <Stack.Screen name="AdminMain" component={AdminTabs} />
       <Stack.Screen name="AdminDashboard" component={AdminTabs} />
+      <Stack.Screen name="PaymentsTab" component={AdminTabs} />
       <Stack.Screen name="LiveOperationsOverview" component={AdminScreens.LiveOperationsOverviewChaircareMobileScreen} />
       <Stack.Screen name="ServiceRequests" component={AdminScreens.ServiceRequestsChaircareMobileScreen} />
       <Stack.Screen name="ServiceRequestDetails" component={AdminScreens.ServiceRequestDetailsCc10483ChaircareMobileScreen} />

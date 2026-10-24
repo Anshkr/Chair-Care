@@ -204,7 +204,7 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
 
               <PrecisionCard
                 style={styles.kpiCard}
-                onPress={() => navigation.navigate('Payments')}
+                onPress={() => navigation.navigate('PaymentsTab')}
               >
                 <View style={styles.kpiHeader}>
                   <Text style={styles.kpiTitle} numberOfLines={1}>TOTAL REVENUE</Text>
@@ -401,7 +401,7 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
 
               <TouchableOpacity
                 style={styles.moduleCard}
-                onPress={() => navigation.navigate('Payments')}
+                onPress={() => navigation.navigate('PaymentsTab')}
                 activeOpacity={0.8}
               >
                 <AppIcon name="CreditCard" size={20} color={Colors.primary} />

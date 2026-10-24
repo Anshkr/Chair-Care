@@ -121,7 +121,7 @@ export const RefundCompletedChaircareMobileScreen: React.FC<
 
   const handleDoneBackToPayments = () => {
     if (navigation) {
-      navigation.navigate('Payments');
+      navigation.navigate('PaymentsTab');
     }
   };
 

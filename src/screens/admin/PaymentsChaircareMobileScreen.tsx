@@ -14,11 +14,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { useTheme } from '../../context/ThemeContext';
 import { adminApi } from '../../services/api/adminApi';
 import { useAdminSync } from '../../services/adminSync';
 
 interface PaymentsScreenProps {
   navigation?: any;
+  route?: any;
 }
 
 export type PaymentFilterTab = 'all' | 'successful' | 'pending' | 'failed' | 'refunded';
@@ -47,8 +49,11 @@ export interface PaymentTransactionItem {
 
 export const PaymentsChaircareMobileScreen: React.FC<PaymentsScreenProps> = ({
   navigation,
+  route,
 }) => {
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+  const isTab = route?.name === 'PaymentsTab';
 
   const [payments, setPayments] = useState<PaymentTransactionItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -631,6 +636,66 @@ export const PaymentsChaircareMobileScreen: React.FC<PaymentsScreenProps> = ({
           </Text>
         </View>
       </ScrollView>
+
+      {/* 7. Bottom Navigation Bar (Rendered when opened via stack screen) */}
+      {!isTab && (
+        <View
+          style={[
+            styles.bottomNavContainer,
+            {
+              backgroundColor: theme.surfaceContainerLowest,
+              borderTopColor: theme.outlineHairline,
+              paddingBottom: Math.max(insets.bottom, 8),
+              height: 60 + Math.max(insets.bottom, 8),
+            },
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.navTabItem}
+            onPress={() => navigation?.navigate('AdminMain', { screen: 'AdminDashboardTab' })}
+            activeOpacity={0.7}
+          >
+            <AppIcon name="LayoutDashboard" size={20} color={theme.outline} strokeWidth={1.8} />
+            <Text style={[styles.navTabLabel, { color: theme.outline }]}>Dashboard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navTabItem}
+            onPress={() => navigation?.navigate('AdminMain', { screen: 'ServiceRequestsTab' })}
+            activeOpacity={0.7}
+          >
+            <AppIcon name="ClipboardList" size={20} color={theme.outline} strokeWidth={1.8} />
+            <Text style={[styles.navTabLabel, { color: theme.outline }]}>Requests</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navTabItem}
+            onPress={() => navigation?.navigate('AdminMain', { screen: 'TechniciansTab' })}
+            activeOpacity={0.7}
+          >
+            <AppIcon name="Users" size={20} color={theme.outline} strokeWidth={1.8} />
+            <Text style={[styles.navTabLabel, { color: theme.outline }]}>Technicians</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navTabItemActive}
+            onPress={() => {}}
+            activeOpacity={0.7}
+          >
+            <AppIcon name="CreditCard" size={20} color={theme.secondaryCobalt} strokeWidth={2.2} />
+            <Text style={[styles.navTabLabelActive, { color: theme.secondaryCobalt }]}>Payments</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navTabItem}
+            onPress={() => navigation?.navigate('AdminMain', { screen: 'AdminSettingsTab' })}
+            activeOpacity={0.7}
+          >
+            <AppIcon name="Settings" size={20} color={theme.outline} strokeWidth={1.8} />
+            <Text style={[styles.navTabLabel, { color: theme.outline }]}>Settings</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
@@ -1286,52 +1351,34 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 64,
-    backgroundColor: 'rgba(247, 249, 251, 0.96)',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#eceef0',
+    borderTopWidth: StyleSheet.hairlineWidth,
     ...Shadows.level2,
     zIndex: 100,
   },
   navTabItem: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 48,
-  },
-  navTabIcon: {
-    fontFamily: 'MaterialSymbolsOutlined',
-    fontSize: 22,
-    color: '#45464d',
-    includeFontPadding: false,
+    flex: 1,
+    paddingTop: 8,
   },
   navTabLabel: {
-    fontFamily: Typography.labelMd.fontFamily,
-    fontSize: 11,
-    color: '#45464d',
-    marginTop: 2,
+    fontSize: 10,
+    fontWeight: '500',
+    marginTop: 3,
   },
   navTabItemActive: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 64,
-    height: 48,
-  },
-  navTabIconActive: {
-    fontFamily: 'MaterialSymbolsOutlined',
-    fontSize: 22,
-    color: '#0051d5',
-    includeFontPadding: false,
+    flex: 1,
+    paddingTop: 8,
   },
   navTabLabelActive: {
-    fontFamily: Typography.labelMd.fontFamily,
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    color: '#0051d5',
-    marginTop: 2,
+    marginTop: 3,
   },
 
   /* Color utilities */

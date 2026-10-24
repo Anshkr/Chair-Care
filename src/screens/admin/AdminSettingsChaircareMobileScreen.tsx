@@ -167,7 +167,7 @@ const CONFIG_GROUPS: ConfigGroup[] = [
         badgeType: 'success',
         icon: 'account-balance',
         iconBgType: 'secondary',
-        targetScreen: 'Payments',
+        targetScreen: 'PaymentsTab',
       },
       {
         id: 'tax_tariff',
