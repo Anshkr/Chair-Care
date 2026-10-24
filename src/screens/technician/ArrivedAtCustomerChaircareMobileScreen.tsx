@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
+import { PhotoCaptureModal, CapturedPhoto } from '../../components/common/PhotoCaptureModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -147,113 +148,18 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
     setPhotoPickerVisible(true);
   };
 
-  const handleTakePhoto = async () => {
-    try {
-      setIsCapturingPhoto(true);
-      const perm = await ImagePicker.requestCameraPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Camera Permission Required', 'Please enable camera permissions to photograph the chair.');
-        setIsCapturingPhoto(false);
-        return;
-      }
+  const handlePhotoCaptured = (captured: CapturedPhoto) => {
+    const updated = [captured, ...arrivalPhotos];
+    setArrivalPhotos(updated);
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const mime = asset.mimeType || 'image/jpeg';
-        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
-        if (!dataUri.startsWith('data:') && asset.uri) {
-          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
-        }
-
-        const newPhoto = {
-          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          uri: dataUri,
-          tag: 'Pre-Repair Inspection',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-
-        const updated = [newPhoto, ...arrivalPhotos];
-        setArrivalPhotos(updated);
-        setPhotoPickerVisible(false);
-
-        if (typeof window !== 'undefined' && targetJobId) {
-          try {
-            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
-          } catch {}
-        }
-
-        if (targetJobId) {
-          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
-        }
-      }
-    } catch (err: any) {
-      if (Platform.OS === 'web') {
-        handlePickFromGallery();
-        return;
-      }
-      Alert.alert('Camera Error', 'Could not capture photo. Please select from gallery.');
-    } finally {
-      setIsCapturingPhoto(false);
+    if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+      } catch {}
     }
-  };
 
-  const handlePickFromGallery = async () => {
-    try {
-      setIsCapturingPhoto(true);
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!perm.granted) {
-        Alert.alert('Gallery Permission Required', 'Please allow gallery access to upload chair inspection photos.');
-        setIsCapturingPhoto(false);
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
-        allowsEditing: false,
-        quality: 0.8,
-        base64: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const asset = result.assets[0];
-        const mime = asset.mimeType || 'image/jpeg';
-        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
-        if (!dataUri.startsWith('data:') && asset.uri) {
-          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
-        }
-
-        const newPhoto = {
-          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          uri: dataUri,
-          tag: 'Pre-Repair Inspection',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-
-        const updated = [newPhoto, ...arrivalPhotos];
-        setArrivalPhotos(updated);
-        setPhotoPickerVisible(false);
-
-        if (typeof window !== 'undefined' && targetJobId) {
-          try {
-            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
-          } catch {}
-        }
-
-        if (targetJobId) {
-          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
-        }
-      }
-    } catch (err: any) {
-      Alert.alert('Gallery Error', 'Could not select photo.');
-    } finally {
-      setIsCapturingPhoto(false);
+    if (targetJobId) {
+      technicianApi.uploadJobPhoto(targetJobId, captured).catch(() => {});
     }
   };
 
@@ -737,63 +643,22 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
         </View>
       </ScrollView>
 
-      {/* Pre-Service Photo Picker Modal */}
-      <Modal
+      {/* Pre-Service Photo Capture Modal with Live Web Camera & Gallery */}
+      <PhotoCaptureModal
         visible={photoPickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => !isCapturingPhoto && setPhotoPickerVisible(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.photoPickerCard}>
-            <View style={styles.photoPickerHeader}>
-              <View style={styles.photoPickerIconPod}>
-                <AppIcon name="Camera" size={24} color={Colors.primary} />
-              </View>
-              <Text style={styles.photoPickerTitle}>Add Pre-Service Photo</Text>
-              <Text style={styles.photoPickerSubtitle}>
-                Photograph chair condition before starting disassembly.
-              </Text>
-            </View>
-
-            {isCapturingPhoto ? (
-              <View style={styles.photoLoadingBox}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={styles.photoLoadingText}>Processing photo...</Text>
-              </View>
-            ) : (
-              <View style={styles.photoActionButtonsCol}>
-                <TouchableOpacity
-                  style={styles.photoOptionBtnPrimary}
-                  onPress={handleTakePhoto}
-                  activeOpacity={0.85}
-                >
-                  <AppIcon name="Camera" size={20} color="#FFFFFF" />
-                  <Text style={styles.photoOptionBtnPrimaryText}>Take Photo with Camera</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.photoOptionBtnSecondary}
-                  onPress={handlePickFromGallery}
-                  activeOpacity={0.85}
-                >
-                  <AppIcon name="Folder" size={20} color={Colors.primary} />
-                  <Text style={styles.photoOptionBtnSecondaryText}>Choose from Gallery</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            <TouchableOpacity
-              style={styles.photoPickerCancelBtn}
-              onPress={() => setPhotoPickerVisible(false)}
-              disabled={isCapturingPhoto}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.photoPickerCancelText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setPhotoPickerVisible(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        title="Add Pre-Service Photo"
+        subtitle="Photograph chair condition on doorstep before starting service."
+        tags={[
+          'Doorstep Arrival',
+          'Pre-Repair Inspection',
+          'Chair Overview',
+          'Damage Detail',
+          'Mechanism View',
+        ]}
+        defaultTag="Pre-Repair Inspection"
+      />
     </View>
   );
 };

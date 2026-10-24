@@ -9,7 +9,9 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Image,
 } from 'react-native';
+import { PhotoCaptureModal, CapturedPhoto } from '../../components/common/PhotoCaptureModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -58,13 +60,20 @@ export const AdditionalWorkApprovalChaircareMobileScreen: React.FC<
     'The existing hydraulic cylinder has an internal nitrogen seal puncture causing slow sink under normal body weight. Replacing with BIFMA Class-4 OEM cylinder is essential to restore height lock.'
   );
 
+  interface ProofPhoto {
+    id: string;
+    tag: string;
+    label: string;
+    icon?: string;
+    uri?: string;
+  }
+
   // Photos State
-  const [photos, setPhotos] = useState<
-    Array<{ id: string; tag: string; label: string; icon: string }>
-  >([
+  const [photos, setPhotos] = useState<ProofPhoto[]>([
     { id: '1', tag: 'SEAL_FAIL', label: 'Degraded Piston Gasket', icon: 'Search' },
     { id: '2', tag: 'SPEC_OEM', label: 'BIFMA Class-4 Stamp', icon: 'Settings' },
   ]);
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
 
   // Submission / Approval State: 'idle' | 'transmitting' | 'sent'
   const [submitState, setSubmitState] = useState<'idle' | 'transmitting' | 'sent'>('idle');
@@ -86,37 +95,23 @@ export const AdditionalWorkApprovalChaircareMobileScreen: React.FC<
   };
 
   const handleAddProof = () => {
-    Alert.alert(
-      'Attach Diagnostic Evidence',
-      'Choose image source for technician scope authorization:',
-      [
-        {
-          text: 'Take Photo',
-          onPress: () => {
-            const newPhoto = {
-              id: `photo-${Date.now()}`,
-              tag: 'DIAG_PROOF',
-              label: 'Wear Evidence',
-              icon: 'Camera',
-            };
-            setPhotos((prev) => [...prev, newPhoto]);
-          },
-        },
-        {
-          text: 'Choose from Gallery',
-          onPress: () => {
-            const newPhoto = {
-              id: `photo-${Date.now()}`,
-              tag: 'DIAG_PROOF',
-              label: 'Component Spec',
-              icon: 'Image',
-            };
-            setPhotos((prev) => [...prev, newPhoto]);
-          },
-        },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    setPhotoPickerVisible(true);
+  };
+
+  const handlePhotoCaptured = (captured: CapturedPhoto) => {
+    const tagClean = (captured.tag || 'PROOF').toUpperCase().replace(/\s+/g, '_').slice(0, 10);
+    const newPhoto: ProofPhoto = {
+      id: captured.id,
+      tag: tagClean,
+      label: captured.label || 'Diagnostic Proof',
+      icon: 'Camera',
+      uri: captured.uri,
+    };
+    setPhotos((prev) => [...prev, newPhoto]);
+  };
+
+  const handleRemovePhoto = (id: string) => {
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleSendApproval = () => {
@@ -366,15 +361,28 @@ export const AdditionalWorkApprovalChaircareMobileScreen: React.FC<
             >
               {photos.map((p) => (
                 <View key={p.id} style={styles.photoThumbTile}>
-                  <View style={styles.photoThumbPlaceholder}>
-                    <AppIcon name={p.icon} size={20} color={Colors.primary} strokeWidth={1.8} />
-                    <Text style={styles.photoThumbLabel} numberOfLines={1}>
-                      {p.label}
-                    </Text>
-                  </View>
+                  {p.uri ? (
+                    <Image source={{ uri: p.uri }} style={styles.photoThumbImage} />
+                  ) : (
+                    <View style={styles.photoThumbPlaceholder}>
+                      <AppIcon name={p.icon || 'Camera'} size={20} color={Colors.primary} strokeWidth={1.8} />
+                      <Text style={styles.photoThumbLabel} numberOfLines={1}>
+                        {p.label}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.photoTagBadge}>
                     <Text style={styles.photoTagText}>{p.tag}</Text>
                   </View>
+                  {p.uri && (
+                    <TouchableOpacity
+                      style={styles.photoRemoveBtn}
+                      onPress={() => handleRemovePhoto(p.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.photoRemoveText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
 
@@ -506,6 +514,22 @@ export const AdditionalWorkApprovalChaircareMobileScreen: React.FC<
           </Text>
         </View>
       )}
+      {/* Photo Capture Modal with Live Web Camera & Gallery */}
+      <PhotoCaptureModal
+        visible={photoPickerVisible}
+        onClose={() => setPhotoPickerVisible(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        title="Attach Diagnostic Evidence"
+        subtitle="Capture live photo with camera or choose from gallery."
+        tags={[
+          'Wear Evidence',
+          'Defective Part',
+          'Component Spec',
+          'Pneumatic Seal',
+          'Tilt Mechanism',
+        ]}
+        defaultTag="Wear Evidence"
+      />
     </View>
   );
 };
@@ -879,6 +903,28 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  photoThumbImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: BorderRadius.lg,
+  },
+  photoRemoveBtn: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+  },
+  photoRemoveText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
   },
   addProofBtn: {
     width: 90,
