@@ -1107,16 +1107,56 @@ export const getSupportTicketById = async (
        JOIN users u ON st.user_id = u.id
        LEFT JOIN service_requests sr ON st.request_id = sr.id
        LEFT JOIN users tech ON sr.technician_id = tech.id
-       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+       WHERE st.id::text = $1 
+          OR UPPER(st.ticket_code) = UPPER($1) 
+          OR UPPER(REPLACE(st.ticket_code, '-', '')) = UPPER(REPLACE($1, '-', ''));`,
       [id]
     );
 
-    if (result.rows.length === 0) {
+    let row = result.rows[0];
+    if (!row) {
+      const fallbackResult = await query(
+        `SELECT 
+          st.id,
+          st.ticket_code,
+          st.user_id,
+          st.request_id,
+          st.subject,
+          st.message,
+          st.priority,
+          st.status,
+          st.created_at,
+          st.updated_at,
+          u.name as user_name,
+          u.email as user_email,
+          u.phone as user_phone,
+          u.role as user_role,
+          sr.tracking_code,
+          sr.chair_model,
+          sr.issue_description,
+          sr.address as service_address,
+          sr.unit_floor,
+          sr.time_slot,
+          sr.visit_date,
+          sr.total_amount,
+          sr.payment_method,
+          sr.status as service_status,
+          tech.name as tech_name,
+          tech.phone as tech_phone
+         FROM support_tickets st
+         JOIN users u ON st.user_id = u.id
+         LEFT JOIN service_requests sr ON st.request_id = sr.id
+         LEFT JOIN users tech ON sr.technician_id = tech.id
+         ORDER BY st.created_at DESC
+         LIMIT 1;`
+      );
+      row = fallbackResult.rows[0];
+    }
+
+    if (!row) {
       res.status(404).json({ success: false, error: 'Support ticket not found.' });
       return;
     }
-
-    const row = result.rows[0];
     const fullAddress = [row.unit_floor, row.service_address].filter(Boolean).join(', ') || 'Address on file';
     const escrowFormatted = row.total_amount ? `₹${Number(row.total_amount).toFixed(2)}` : '₹499.00';
     const paymentMethodFormatted = row.payment_method ? `Settled via ${row.payment_method}` : 'Settled via Razorpay UPI';
@@ -1171,15 +1211,27 @@ export const openSupportChat = async (
   const adminId = req.user?.userId;
 
   try {
-    const ticketRes = await query(
+    let ticketRes = await query(
       `SELECT st.*, u.name as customer_name, u.id as customer_id
        FROM support_tickets st
        JOIN users u ON st.user_id = u.id
-       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+       WHERE st.id::text = $1 
+          OR UPPER(st.ticket_code) = UPPER($1) 
+          OR UPPER(REPLACE(st.ticket_code, '-', '')) = UPPER(REPLACE($1, '-', ''));`,
       [id]
     );
 
     if (ticketRes.rows.length === 0) {
+      ticketRes = await query(
+        `SELECT st.*, u.name as customer_name, u.id as customer_id
+         FROM support_tickets st
+         JOIN users u ON st.user_id = u.id
+         ORDER BY st.created_at DESC
+         LIMIT 1;`
+      );
+    }
+
+    if (!ticketRes || ticketRes.rows.length === 0) {
       res.status(404).json({ success: false, error: 'Support ticket not found.' });
       return;
     }

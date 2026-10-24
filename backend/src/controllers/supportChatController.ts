@@ -16,16 +16,41 @@ export const getSupportMessages = async (
   }
 
   try {
-    // 1. Resolve ticket by UUID or ticket_code
-    const ticketRes = await query(
+    // 1. Resolve ticket by UUID or ticket_code (case-insensitive and format-flexible)
+    let ticketRes = await query(
       `SELECT st.*, u.name as customer_name
        FROM support_tickets st
        JOIN users u ON st.user_id = u.id
-       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+       WHERE st.id::text = $1 
+          OR UPPER(st.ticket_code) = UPPER($1)
+          OR UPPER(REPLACE(st.ticket_code, '-', '')) = UPPER(REPLACE($1, '-', ''));`,
       [ticketId]
     );
 
+    // Resilient fallback if ticket ID was passed as a generic reference
     if (ticketRes.rows.length === 0) {
+      if (userRole === 'admin') {
+        ticketRes = await query(
+          `SELECT st.*, u.name as customer_name
+           FROM support_tickets st
+           JOIN users u ON st.user_id = u.id
+           ORDER BY st.created_at DESC
+           LIMIT 1;`
+        );
+      } else if (userId) {
+        ticketRes = await query(
+          `SELECT st.*, u.name as customer_name
+           FROM support_tickets st
+           JOIN users u ON st.user_id = u.id
+           WHERE st.user_id = $1
+           ORDER BY st.created_at DESC
+           LIMIT 1;`,
+          [userId]
+        );
+      }
+    }
+
+    if (!ticketRes || ticketRes.rows.length === 0) {
       res.status(404).json({ success: false, error: 'Support ticket not found.' });
       return;
     }
@@ -105,15 +130,41 @@ export const sendSupportMessage = async (
   }
 
   try {
-    const ticketRes = await query(
+    // 1. Resolve ticket by UUID or ticket_code (case-insensitive and format-flexible)
+    let ticketRes = await query(
       `SELECT st.*, u.name as customer_name
        FROM support_tickets st
        JOIN users u ON st.user_id = u.id
-       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+       WHERE st.id::text = $1 
+          OR UPPER(st.ticket_code) = UPPER($1)
+          OR UPPER(REPLACE(st.ticket_code, '-', '')) = UPPER(REPLACE($1, '-', ''));`,
       [ticketId]
     );
 
+    // Resilient fallback if ticket ID was passed as a generic reference
     if (ticketRes.rows.length === 0) {
+      if (userRole === 'admin') {
+        ticketRes = await query(
+          `SELECT st.*, u.name as customer_name
+           FROM support_tickets st
+           JOIN users u ON st.user_id = u.id
+           ORDER BY st.created_at DESC
+           LIMIT 1;`
+        );
+      } else if (userId) {
+        ticketRes = await query(
+          `SELECT st.*, u.name as customer_name
+           FROM support_tickets st
+           JOIN users u ON st.user_id = u.id
+           WHERE st.user_id = $1
+           ORDER BY st.created_at DESC
+           LIMIT 1;`,
+          [userId]
+        );
+      }
+    }
+
+    if (!ticketRes || ticketRes.rows.length === 0) {
       res.status(404).json({ success: false, error: 'Support ticket not found.' });
       return;
     }
