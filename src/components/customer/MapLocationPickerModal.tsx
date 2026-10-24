@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import * as Location from 'expo-location';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { AppIcon } from '../common/AppIcon';
 import { PrecisionButton } from '../common/PrecisionButton';
@@ -64,6 +65,22 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
   const [isLocatingGps, setIsLocatingGps] = useState(false);
 
   const searchTimerRef = useRef<any>(null);
+  const iframeRef = useRef<any>(null);
+  const webViewRef = useRef<any>(null);
+
+  // Send panTo message to Leaflet map iframe or webview
+  const sendPanToMap = (lat: number, lng: number) => {
+    const payload = JSON.stringify({ type: 'panTo', lat, lng });
+    if (Platform.OS === 'web' && iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage(payload, '*');
+      } catch {}
+    } else if (webViewRef.current) {
+      try {
+        webViewRef.current.postMessage(payload);
+      } catch {}
+    }
+  };
 
   // Sync initial coordinates when modal opens
   useEffect(() => {
@@ -72,8 +89,26 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
       const lng = initialLocation?.longitude || DEFAULT_LNG;
       setCoords({ latitude: lat, longitude: lng });
       reverseGeocodeCoords(lat, lng);
+      setTimeout(() => sendPanToMap(lat, lng), 300);
     }
   }, [visible]);
+
+  // Web message listener for Leaflet drag events
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleWebMessage = (event: MessageEvent) => {
+        try {
+          const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+          if (data && data.type === 'dragged' && typeof data.lat === 'number' && typeof data.lng === 'number') {
+            setCoords({ latitude: data.lat, longitude: data.lng });
+            reverseGeocodeCoords(data.lat, data.lng);
+          }
+        } catch {}
+      };
+      window.addEventListener('message', handleWebMessage);
+      return () => window.removeEventListener('message', handleWebMessage);
+    }
+  }, []);
 
   // Handle place search with debounce
   const handleSearchChange = (text: string) => {
@@ -92,7 +127,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
       setSearchResults(results);
       setShowResultsDropdown(results.length > 0);
       setIsSearching(false);
-    }, 350);
+    }, 300);
   };
 
   const handleSelectSearchResult = (place: GeocodedPlace) => {
@@ -100,9 +135,10 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     setSearchQuery(place.title);
     setShowResultsDropdown(false);
     setDetectedAddressSummary(place.subtitle || place.fullAddress);
+    sendPanToMap(place.latitude, place.longitude);
   };
 
-  // Reverse geocode whenever pin coordinates change (only for display summary, never fills text fields)
+  // Reverse geocode whenever pin coordinates change
   const reverseGeocodeCoords = async (lat: number, lng: number) => {
     setIsReverseGeocoding(true);
     try {
@@ -115,15 +151,38 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     }
   };
 
-  // GPS Current Location Button
-  const handleUseCurrentLocation = () => {
+  // GPS Current Location Button with high accuracy and zero cached age
+  const handleUseCurrentLocation = async () => {
     setIsLocatingGps(true);
+
+    // 1. Try hardware GPS via Expo Location (mobile native)
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Highest,
+        });
+        if (location?.coords) {
+          const { latitude, longitude } = location.coords;
+          setCoords({ latitude, longitude });
+          reverseGeocodeCoords(latitude, longitude);
+          sendPanToMap(latitude, longitude);
+          setIsLocatingGps(false);
+          return;
+        }
+      }
+    } catch (nativeErr) {
+      console.log('Native location attempt failed, checking browser geolocation:', nativeErr);
+    }
+
+    // 2. Web browser geolocation fallback with maximumAge: 0 to guarantee fresh position
     if (typeof navigator !== 'undefined' && navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
           setCoords({ latitude, longitude });
           reverseGeocodeCoords(latitude, longitude);
+          sendPanToMap(latitude, longitude);
           setIsLocatingGps(false);
         },
         () => {
@@ -133,7 +192,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
             'Could not retrieve live GPS coordinates. Please ensure location services are enabled or search for your location.'
           );
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
     } else {
       setIsLocatingGps(false);
@@ -147,6 +206,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     const newLng = coords.longitude + deltaLng;
     setCoords({ latitude: newLat, longitude: newLng });
     reverseGeocodeCoords(newLat, newLng);
+    sendPanToMap(newLat, newLng);
   };
 
   const handleConfirm = () => {
@@ -225,19 +285,23 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
             var payload = JSON.stringify({ type: 'dragged', lat: c.lat, lng: c.lng });
             if (window.ReactNativeWebView) {
               window.ReactNativeWebView.postMessage(payload);
-            } else if (window.parent) {
+            }
+            if (window.parent && window.parent !== window) {
               window.parent.postMessage(payload, '*');
             }
           });
 
-          window.addEventListener('message', function(e) {
+          function handlePanMessage(e) {
             try {
               var data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
               if (data && data.type === 'panTo') {
-                map.setView([data.lat, data.lng], 16);
+                map.setView([data.lat, data.lng], 16, { animate: true });
               }
             } catch (err) {}
-          });
+          }
+
+          window.addEventListener('message', handlePanMessage);
+          document.addEventListener('message', handlePanMessage);
         </script>
       </body>
     </html>
@@ -312,6 +376,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
         <View style={styles.mapContainer}>
           {Platform.OS === 'web' ? (
             <iframe
+              ref={iframeRef}
               srcDoc={leafletMapHtml}
               style={{
                 width: '100%',
@@ -326,6 +391,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
                 const { WebView } = require('react-native-webview');
                 return (
                   <WebView
+                    ref={webViewRef}
                     source={{ html: leafletMapHtml }}
                     style={{ flex: 1 }}
                     originWhitelist={['*']}
