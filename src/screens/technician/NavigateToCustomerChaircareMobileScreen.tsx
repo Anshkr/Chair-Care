@@ -187,7 +187,7 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
     [custLat, custLng, ticket?.id, passedId]
   );
 
-  // Real-time Hardware GPS Tracker using expo-location (and web navigator.geolocation fallback)
+  // Real-time Hardware GPS Tracker using expo-location on mobile and navigator.geolocation on web
   useEffect(() => {
     let isMounted = true;
     let locationWatcher: Location.LocationSubscription | null = null;
@@ -200,36 +200,38 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
     }
 
     const startGpsTracking = async () => {
-      // 1. Hardware GPS via expo-location (High precision)
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
-          const current = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Highest,
-          });
-          if (isMounted && current?.coords) {
-            handleLocationUpdate(current.coords.latitude, current.coords.longitude);
-          }
-
-          locationWatcher = await Location.watchPositionAsync(
-            {
-              accuracy: Location.Accuracy.High,
-              timeInterval: 4000,
-              distanceInterval: 10,
-            },
-            (pos) => {
-              if (isMounted && pos?.coords) {
-                handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
-              }
+      // 1. Mobile Native (iOS / Android): Hardware GPS via expo-location
+      if (Platform.OS !== 'web') {
+        try {
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            const current = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Highest,
+            });
+            if (isMounted && current?.coords) {
+              handleLocationUpdate(current.coords.latitude, current.coords.longitude);
             }
-          );
-          return;
+
+            locationWatcher = await Location.watchPositionAsync(
+              {
+                accuracy: Location.Accuracy.High,
+                timeInterval: 4000,
+                distanceInterval: 10,
+              },
+              (pos) => {
+                if (isMounted && pos?.coords) {
+                  handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
+                }
+              }
+            );
+            return;
+          }
+        } catch (nativeErr) {
+          // Native location error fallback
         }
-      } catch (nativeErr) {
-        // Fall back to web browser geolocation
       }
 
-      // 2. Web browser navigator.geolocation
+      // 2. Web browser: standard W3C navigator.geolocation (zero expo-event-emitter dependency)
       if (typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
@@ -241,15 +243,17 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
           { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
         );
 
-        webWatchId = navigator.geolocation.watchPosition(
-          (pos) => {
-            if (isMounted && pos?.coords) {
-              handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
-            }
-          },
-          () => {},
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
-        );
+        try {
+          webWatchId = navigator.geolocation.watchPosition(
+            (pos) => {
+              if (isMounted && pos?.coords) {
+                handleLocationUpdate(pos.coords.latitude, pos.coords.longitude);
+              }
+            },
+            () => {},
+            { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+          );
+        } catch {}
       }
     };
 
@@ -258,10 +262,16 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
     return () => {
       isMounted = false;
       if (locationWatcher) {
-        locationWatcher.remove();
+        try {
+          if (typeof locationWatcher.remove === 'function') {
+            locationWatcher.remove();
+          }
+        } catch {}
       }
       if (webWatchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
-        navigator.geolocation.clearWatch(webWatchId);
+        try {
+          navigator.geolocation.clearWatch(webWatchId);
+        } catch {}
       }
     };
   }, [ticket.status, handleLocationUpdate]);
