@@ -11,6 +11,8 @@ import {
   updateTechnicianProfile,
   getJobHistory,
   updateLiveLocation,
+  addJobPhoto,
+  updateJobPhotoLogs,
 } from '../controllers/technicianController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -29,6 +31,8 @@ router.use(requireRole(['technician', 'admin']));
 router.get('/jobs', getAssignedJobs);
 router.get('/history', getJobHistory);
 router.get('/jobs/:id', getJobById);
+router.post('/jobs/:id/photos', addJobPhoto);
+router.put('/jobs/:id/photos', updateJobPhotoLogs);
 router.post('/availability', validateBody(updateAvailabilitySchema), updateAvailability);
 router.post('/jobs/:id/accept', acceptJob);
 router.patch('/jobs/:id/status', validateBody(updateJobStatusSchema), updateJobStatus);

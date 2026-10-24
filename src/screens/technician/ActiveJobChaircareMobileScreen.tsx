@@ -11,7 +11,11 @@ import {
   Platform,
   Modal,
   TextInput,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -20,6 +24,14 @@ import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+
+export interface DiagnosticPhoto {
+  id: string;
+  uri: string;
+  tag: string;
+  timestamp: string;
+  notes?: string;
+}
 
 interface ActiveJobProps {
   navigation?: any;
@@ -78,6 +90,31 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
   const [serviceStartTime, setServiceStartTime] = useState<string | null>(resolvedStartedAt || null);
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => calculateCurrentSeconds(resolvedStartedAt));
 
+  // Photo logs state with persistence
+  const [photoLogs, setPhotoLogs] = useState<DiagnosticPhoto[]>(() => {
+    if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        const cached = window.localStorage.getItem(`chaircare_job_photos_${targetJobId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    if (Array.isArray(ticket?.photoLogs) && ticket.photoLogs.length > 0) {
+      return ticket.photoLogs;
+    }
+    if (Array.isArray(ticket?.photo_logs) && ticket.photo_logs.length > 0) {
+      return ticket.photo_logs;
+    }
+    return [];
+  });
+
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
+  const [selectedTag, setSelectedTag] = useState('Pre-Repair Inspection');
+  const [zoomedPhoto, setZoomedPhoto] = useState<DiagnosticPhoto | null>(null);
+
   // Initialize and persist service start timestamp
   useEffect(() => {
     if (!serviceStartTime) {
@@ -108,6 +145,14 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
             if (typeof window !== 'undefined') {
               try {
                 window.localStorage.setItem(`chaircare_job_start_${targetJobId}`, serverStart);
+              } catch {}
+            }
+          }
+          if (Array.isArray(res.data.photoLogs) && res.data.photoLogs.length > 0) {
+            setPhotoLogs(res.data.photoLogs);
+            if (typeof window !== 'undefined') {
+              try {
+                window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(res.data.photoLogs));
               } catch {}
             }
           }
@@ -268,16 +313,137 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
     }
   };
 
-  const handleAddPhotoLog = () => {
-    Alert.alert(
-      'Diagnostic Photo Log',
-      'Select photo source to document repair milestones:',
-      [
-        { text: 'Take New Photo', onPress: () => Alert.alert('Photo Log Added', 'Pre-repair inspection photo saved to ticket log.') },
-        { text: 'Choose from Library', onPress: () => Alert.alert('Photo Log Added', 'Diagnostic attachment saved.') },
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+  const handleAddPhotoLog = (defaultTag?: string) => {
+    if (defaultTag) setSelectedTag(defaultTag);
+    setPhotoPickerVisible(true);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      setIsCapturingPhoto(true);
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Camera Permission Required', 'Please enable camera permissions to photograph chair diagnostics.');
+        setIsCapturingPhoto(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || 'image/jpeg';
+        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUri.startsWith('data:') && asset.uri) {
+          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+
+        const newPhoto: DiagnosticPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          uri: dataUri,
+          tag: selectedTag,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        const updated = [newPhoto, ...photoLogs];
+        setPhotoLogs(updated);
+        setPhotoPickerVisible(false);
+
+        if (typeof window !== 'undefined' && targetJobId) {
+          try {
+            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+          } catch {}
+        }
+
+        if (targetJobId) {
+          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.warn('Camera error:', err);
+      if (Platform.OS === 'web') {
+        handlePickFromGallery();
+        return;
+      }
+      Alert.alert('Camera Error', sanitizeUserErrorMessage(err) || 'Could not capture photo.');
+    } finally {
+      setIsCapturingPhoto(false);
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      setIsCapturingPhoto(true);
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Photo Library Access', 'Please allow photo gallery access to upload chair inspection photos.');
+        setIsCapturingPhoto(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || 'image/jpeg';
+        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUri.startsWith('data:') && asset.uri) {
+          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+
+        const newPhoto: DiagnosticPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          uri: dataUri,
+          tag: selectedTag,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        const updated = [newPhoto, ...photoLogs];
+        setPhotoLogs(updated);
+        setPhotoPickerVisible(false);
+
+        if (typeof window !== 'undefined' && targetJobId) {
+          try {
+            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+          } catch {}
+        }
+
+        if (targetJobId) {
+          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      console.warn('Gallery error:', err);
+      Alert.alert('Photo Error', sanitizeUserErrorMessage(err) || 'Could not select photo.');
+    } finally {
+      setIsCapturingPhoto(false);
+    }
+  };
+
+  const handleDeletePhoto = (photoId: string) => {
+    const updated = photoLogs.filter((p) => p.id !== photoId);
+    setPhotoLogs(updated);
+    if (zoomedPhoto?.id === photoId) setZoomedPhoto(null);
+
+    if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+      } catch {}
+    }
+
+    if (targetJobId) {
+      technicianApi.updateJobPhotoLogs(targetJobId, updated).catch(() => {});
+    }
   };
 
   return (
@@ -627,35 +793,93 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
         </View>
 
         {/* Diagnostic Visual Attachment / Spec Verification Tile */}
+        {/* Diagnostic Visual Attachment / Spec Verification Tile */}
         <View style={styles.diagnosticsCard}>
           <View style={styles.diagnosticsHeaderRow}>
-            <Text style={styles.diagnosticsTitle}>Mechanical Diagnostics</Text>
-            <View style={styles.verifiedSpecGroup}>
-              <AppIcon name="Check" size={18} />
-              <Text style={styles.verifiedSpecText}>Class 4 Cylinder</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.diagnosticsTitle}>Mechanical Diagnostics & Photos</Text>
+              {photoLogs.length > 0 && (
+                <View style={styles.photoCountBadge}>
+                  <Text style={styles.photoCountBadgeText}>{photoLogs.length}</Text>
+                </View>
+              )}
             </View>
+            <TouchableOpacity
+              style={styles.addPhotoHeaderBtn}
+              onPress={() => handleAddPhotoLog()}
+              activeOpacity={0.8}
+            >
+              <AppIcon name="Camera" size={14} color={Colors.primary} />
+              <Text style={styles.addPhotoHeaderBtnText}>+ Add Photo</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.diagPhotoGrid}>
-            <View style={styles.diagPhotoTile}>
-              <View style={styles.diagPhotoPlaceholder}>
-                <AppIcon name="Wrench" size={18} />
-                <Text style={styles.diagPhotoSub}>Pneumatic Housing</Text>
-              </View>
-              <View style={styles.diagPhotoTag}>
-                <Text style={styles.diagTagText}>Pre-Repair</Text>
-              </View>
-            </View>
+            {/* Captured Photos */}
+            {photoLogs.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.diagPhotoTile}
+                onPress={() => setZoomedPhoto(item)}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: item.uri }} style={styles.diagPhotoImg} />
+                <View style={styles.diagPhotoOverlay}>
+                  <Text style={styles.diagPhotoTime}>{item.timestamp}</Text>
+                  <View style={styles.diagPhotoTag}>
+                    <Text style={styles.diagTagText} numberOfLines={1}>{item.tag}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
 
-            <View style={styles.diagPhotoTile}>
-              <View style={styles.diagPhotoPlaceholder}>
-                <AppIcon name="Settings" size={18} />
-                <Text style={styles.diagPhotoSub}>Fulcrum Calibration</Text>
-              </View>
-              <View style={styles.diagPhotoTag}>
-                <Text style={styles.diagTagText}>Live Replacement</Text>
-              </View>
-            </View>
+            {/* Quick Add / Starter Tiles if few or no photos */}
+            {photoLogs.length === 0 ? (
+              <>
+                <TouchableOpacity
+                  style={styles.diagPhotoTile}
+                  onPress={() => handleAddPhotoLog('Pre-Repair Inspection')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.diagPhotoPlaceholder}>
+                    <AppIcon name="Camera" size={22} color={Colors.primary} />
+                    <Text style={styles.diagPhotoSub}>Pneumatic Housing</Text>
+                    <Text style={styles.diagPhotoHint}>Tap to Photograph</Text>
+                  </View>
+                  <View style={styles.diagPhotoTag}>
+                    <Text style={styles.diagTagText}>Pre-Repair</Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.diagPhotoTile}
+                  onPress={() => handleAddPhotoLog('Live Replacement')}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.diagPhotoPlaceholder}>
+                    <AppIcon name="Camera" size={22} color={Colors.primary} />
+                    <Text style={styles.diagPhotoSub}>Fulcrum Calibration</Text>
+                    <Text style={styles.diagPhotoHint}>Tap to Photograph</Text>
+                  </View>
+                  <View style={styles.diagPhotoTag}>
+                    <Text style={styles.diagTagText}>Live Replacement</Text>
+                  </View>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={[styles.diagPhotoTile, styles.diagPhotoAddTile]}
+                onPress={() => handleAddPhotoLog()}
+                activeOpacity={0.8}
+              >
+                <View style={styles.diagPhotoPlaceholder}>
+                  <View style={styles.diagPhotoAddCircle}>
+                    <AppIcon name="Plus" size={20} color={Colors.primary} />
+                  </View>
+                  <Text style={styles.diagPhotoSub}>Add Photo Log</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -723,11 +947,13 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
 
           <TouchableOpacity
             style={styles.secondarySubBtn}
-            onPress={handleAddPhotoLog}
+            onPress={() => handleAddPhotoLog()}
             activeOpacity={0.8}
           >
             <AppIcon name="Camera" size={18} />
-            <Text style={styles.subBtnText}>Add Photo Log</Text>
+            <Text style={styles.subBtnText}>
+              Add Photo Log{photoLogs.length > 0 ? ` (${photoLogs.length})` : ''}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -810,6 +1036,151 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
                 <Text style={styles.pinConfirmText}>
                   {isVerifyingPin ? 'Verifying...' : 'Verify & Complete'}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Photo Picker Options Modal */}
+      <Modal
+        visible={photoPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isCapturingPhoto && setPhotoPickerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.photoPickerCard}>
+            <View style={styles.photoPickerHeader}>
+              <View style={styles.photoPickerIconPod}>
+                <AppIcon name="Camera" size={24} color={Colors.primary} />
+              </View>
+              <Text style={styles.photoPickerTitle}>Add Diagnostic Photo</Text>
+              <Text style={styles.photoPickerSubtitle}>
+                Select category and capture or upload chair service documentation.
+              </Text>
+            </View>
+
+            {/* Tag Selection Pills */}
+            <Text style={styles.tagSectionLabel}>MILESTONE CATEGORY</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagPillScroll} contentContainerStyle={styles.tagPillContainer}>
+              {[
+                'Pre-Repair Inspection',
+                'Cylinder & Gas Lift',
+                'Tilt Mechanism',
+                'Live Replacement',
+                'Base & Casters',
+                'Completed Assembly',
+              ].map((tag) => (
+                <TouchableOpacity
+                  key={tag}
+                  style={[
+                    styles.tagPill,
+                    selectedTag === tag && styles.tagPillActive,
+                  ]}
+                  onPress={() => setSelectedTag(tag)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.tagPillText,
+                      selectedTag === tag && styles.tagPillTextActive,
+                    ]}
+                  >
+                    {tag}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {isCapturingPhoto ? (
+              <View style={styles.photoLoadingBox}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.photoLoadingText}>Processing photo...</Text>
+              </View>
+            ) : (
+              <View style={styles.photoActionButtonsCol}>
+                <TouchableOpacity
+                  style={styles.photoOptionBtnPrimary}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="Camera" size={20} color="#FFFFFF" />
+                  <Text style={styles.photoOptionBtnPrimaryText}>Take Photo with Camera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.photoOptionBtnSecondary}
+                  onPress={handlePickFromGallery}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="Folder" size={20} color={Colors.primary} />
+                  <Text style={styles.photoOptionBtnSecondaryText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.photoPickerCancelBtn}
+              onPress={() => setPhotoPickerVisible(false)}
+              disabled={isCapturingPhoto}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.photoPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Photo Zoom / Full Preview Modal */}
+      <Modal
+        visible={!!zoomedPhoto}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setZoomedPhoto(null)}
+      >
+        <View style={styles.zoomModalBackdrop}>
+          <View style={styles.zoomModalCard}>
+            <View style={styles.zoomModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.zoomModalTitle}>{zoomedPhoto?.tag || 'Diagnostic Photo'}</Text>
+                <Text style={styles.zoomModalTime}>{zoomedPhoto?.timestamp || 'Captured During Service'}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.zoomCloseBtn}
+                onPress={() => setZoomedPhoto(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.zoomCloseIcon}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {zoomedPhoto?.uri && (
+              <View style={styles.zoomImageWrapper}>
+                <Image
+                  source={{ uri: zoomedPhoto.uri }}
+                  style={styles.zoomImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+
+            <View style={styles.zoomModalFooter}>
+              <TouchableOpacity
+                style={styles.zoomDeleteBtn}
+                onPress={() => zoomedPhoto && handleDeletePhoto(zoomedPhoto.id)}
+                activeOpacity={0.8}
+              >
+                <AppIcon name="Trash2" size={16} color="#DC2626" />
+                <Text style={styles.zoomDeleteText}>Delete Photo</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.zoomDoneBtn}
+                onPress={() => setZoomedPhoto(null)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.zoomDoneText}>Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1833,6 +2204,300 @@ const styles = StyleSheet.create({
   pinConfirmText: {
     ...Typography.bodyMedium,
     fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  photoCountBadge: {
+    backgroundColor: '#059669',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.full,
+  },
+  photoCountBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  addPhotoHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.surfaceContainerHighest,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  addPhotoHeaderBtnText: {
+    ...Typography.labelMono,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  diagPhotoImg: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  diagPhotoOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'space-between',
+    padding: 6,
+    backgroundColor: 'rgba(0,0,0,0.22)',
+  },
+  diagPhotoTime: {
+    ...Typography.labelMono,
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  diagPhotoHint: {
+    ...Typography.labelMono,
+    fontSize: 8,
+    color: Colors.primary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  diagPhotoAddTile: {
+    borderStyle: 'dashed',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.surfaceContainerLowest,
+  },
+  diagPhotoAddCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  photoPickerCard: {
+    width: '90%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    ...Shadows.level3,
+  },
+  photoPickerHeader: {
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  photoPickerIconPod: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  photoPickerTitle: {
+    ...Typography.titleLg,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  photoPickerSubtitle: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  tagSectionLabel: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  tagPillScroll: {
+    marginBottom: Spacing.md,
+  },
+  tagPillContainer: {
+    gap: 6,
+    paddingVertical: 2,
+  },
+  tagPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+  },
+  tagPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  tagPillText: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.onSurface,
+  },
+  tagPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  photoLoadingBox: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photoLoadingText: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+  },
+  photoActionButtonsCol: {
+    gap: 10,
+    marginBottom: Spacing.md,
+  },
+  photoOptionBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+  },
+  photoOptionBtnPrimaryText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  photoOptionBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+  },
+  photoOptionBtnSecondaryText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  photoPickerCancelBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  photoPickerCancelText: {
+    ...Typography.bodyMedium,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  zoomModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  zoomModalCard: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '90%',
+    backgroundColor: '#0F172A',
+    borderRadius: BorderRadius.xxl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  zoomModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  zoomModalTitle: {
+    ...Typography.titleLg,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  zoomModalTime: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: '#94A3B8',
+    marginTop: 2,
+  },
+  zoomCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomCloseIcon: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  zoomImageWrapper: {
+    width: '100%',
+    height: 340,
+    backgroundColor: '#020617',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zoomImage: {
+    width: '100%',
+    height: '100%',
+  },
+  zoomModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  zoomDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  zoomDeleteText: {
+    ...Typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  zoomDoneBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: BorderRadius.md,
+  },
+  zoomDoneText: {
+    ...Typography.bodyMedium,
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   bookedPriceStrip: {

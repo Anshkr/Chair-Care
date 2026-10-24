@@ -10,7 +10,12 @@ import {
   Alert,
   Platform,
   Linking,
+  Modal,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -59,6 +64,8 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
     status: 'arrived',
   };
 
+  const targetJobId = String(ticket.id || passedId || '').trim().replace(/^#/, '');
+
   // Pre-entry checklist state
   const [checklist, setChecklist] = useState({
     tarpReady: true,
@@ -67,6 +74,24 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
   });
 
   const [isStartingService, setIsStartingService] = useState(false);
+
+  const [arrivalPhotos, setArrivalPhotos] = useState<any[]>(() => {
+    if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        const cached = window.localStorage.getItem(`chaircare_job_photos_${targetJobId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    if (Array.isArray(ticket?.photoLogs) && ticket.photoLogs.length > 0) {
+      return ticket.photoLogs;
+    }
+    return [];
+  });
+  const [photoPickerVisible, setPhotoPickerVisible] = useState(false);
+  const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
 
   // Animations for geofence radar pulse
   const radarAnim = useRef(new Animated.Value(1)).current;
@@ -116,6 +141,120 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
       ...prev,
       [key]: !prev[key],
     }));
+  };
+
+  const handleOpenArrivalPhotoPicker = () => {
+    setPhotoPickerVisible(true);
+  };
+
+  const handleTakePhoto = async () => {
+    try {
+      setIsCapturingPhoto(true);
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Camera Permission Required', 'Please enable camera permissions to photograph the chair.');
+        setIsCapturingPhoto(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || 'image/jpeg';
+        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUri.startsWith('data:') && asset.uri) {
+          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+
+        const newPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          uri: dataUri,
+          tag: 'Pre-Repair Inspection',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        const updated = [newPhoto, ...arrivalPhotos];
+        setArrivalPhotos(updated);
+        setPhotoPickerVisible(false);
+
+        if (typeof window !== 'undefined' && targetJobId) {
+          try {
+            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+          } catch {}
+        }
+
+        if (targetJobId) {
+          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      if (Platform.OS === 'web') {
+        handlePickFromGallery();
+        return;
+      }
+      Alert.alert('Camera Error', 'Could not capture photo. Please select from gallery.');
+    } finally {
+      setIsCapturingPhoto(false);
+    }
+  };
+
+  const handlePickFromGallery = async () => {
+    try {
+      setIsCapturingPhoto(true);
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Gallery Permission Required', 'Please allow gallery access to upload chair inspection photos.');
+        setIsCapturingPhoto(false);
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || 'image/jpeg';
+        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUri.startsWith('data:') && asset.uri) {
+          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+
+        const newPhoto = {
+          id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          uri: dataUri,
+          tag: 'Pre-Repair Inspection',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        };
+
+        const updated = [newPhoto, ...arrivalPhotos];
+        setArrivalPhotos(updated);
+        setPhotoPickerVisible(false);
+
+        if (typeof window !== 'undefined' && targetJobId) {
+          try {
+            window.localStorage.setItem(`chaircare_job_photos_${targetJobId}`, JSON.stringify(updated));
+          } catch {}
+        }
+
+        if (targetJobId) {
+          technicianApi.uploadJobPhoto(targetJobId, newPhoto).catch(() => {});
+        }
+      }
+    } catch (err: any) {
+      Alert.alert('Gallery Error', 'Could not select photo.');
+    } finally {
+      setIsCapturingPhoto(false);
+    }
   };
 
   const handleCallCustomer = () => {
@@ -186,6 +325,7 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
       status: 'in_progress',
       startedAt: finalStartedAt,
       started_at: finalStartedAt,
+      photoLogs: arrivalPhotos,
     };
 
     setAcceptedRequest(updated);
@@ -544,6 +684,32 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
           </TouchableOpacity>
         </View>
 
+        {/* Pre-Service Inspection Photo Strip */}
+        <View style={styles.arrivalPhotoCard}>
+          <View style={styles.arrivalPhotoLeft}>
+            <View style={styles.arrivalPhotoIconPod}>
+              <AppIcon name="Camera" size={18} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.arrivalPhotoTitle}>Pre-Service Inspection Photo</Text>
+              <Text style={styles.arrivalPhotoSub}>
+                {arrivalPhotos.length > 0
+                  ? `${arrivalPhotos.length} photo(s) captured • Ready for service`
+                  : 'Document chair condition on arrival (optional)'}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.arrivalPhotoActionBtn}
+            onPress={handleOpenArrivalPhotoPicker}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.arrivalPhotoActionBtnText}>
+              {arrivalPhotos.length > 0 ? '+ Add More' : '+ Add Photo'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Sticky Bottom Trigger Bar */}
         <View style={styles.bottomTriggerBar}>
           <TouchableOpacity
@@ -570,6 +736,64 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
           </Text>
         </View>
       </ScrollView>
+
+      {/* Pre-Service Photo Picker Modal */}
+      <Modal
+        visible={photoPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isCapturingPhoto && setPhotoPickerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.photoPickerCard}>
+            <View style={styles.photoPickerHeader}>
+              <View style={styles.photoPickerIconPod}>
+                <AppIcon name="Camera" size={24} color={Colors.primary} />
+              </View>
+              <Text style={styles.photoPickerTitle}>Add Pre-Service Photo</Text>
+              <Text style={styles.photoPickerSubtitle}>
+                Photograph chair condition before starting disassembly.
+              </Text>
+            </View>
+
+            {isCapturingPhoto ? (
+              <View style={styles.photoLoadingBox}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={styles.photoLoadingText}>Processing photo...</Text>
+              </View>
+            ) : (
+              <View style={styles.photoActionButtonsCol}>
+                <TouchableOpacity
+                  style={styles.photoOptionBtnPrimary}
+                  onPress={handleTakePhoto}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="Camera" size={20} color="#FFFFFF" />
+                  <Text style={styles.photoOptionBtnPrimaryText}>Take Photo with Camera</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.photoOptionBtnSecondary}
+                  onPress={handlePickFromGallery}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="Folder" size={20} color={Colors.primary} />
+                  <Text style={styles.photoOptionBtnSecondaryText}>Choose from Gallery</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={styles.photoPickerCancelBtn}
+              onPress={() => setPhotoPickerVisible(false)}
+              disabled={isCapturingPhoto}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.photoPickerCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1234,5 +1458,149 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 14,
     paddingHorizontal: 8,
+  },
+  arrivalPhotoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    gap: 12,
+    ...Shadows.level1,
+  },
+  arrivalPhotoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  arrivalPhotoIconPod: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrivalPhotoTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  arrivalPhotoSub: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+  arrivalPhotoActionBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+  },
+  arrivalPhotoActionBtnText: {
+    ...Typography.bodySm,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  photoPickerCard: {
+    width: '90%',
+    maxWidth: 420,
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    ...Shadows.level3,
+  },
+  photoPickerHeader: {
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  photoPickerIconPod: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.surfaceContainerHighest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  photoPickerTitle: {
+    ...Typography.titleLg,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  photoPickerSubtitle: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  photoLoadingBox: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photoLoadingText: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+  },
+  photoActionButtonsCol: {
+    gap: 10,
+    marginBottom: Spacing.md,
+  },
+  photoOptionBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+  },
+  photoOptionBtnPrimaryText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  photoOptionBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: Colors.surfaceContainerLow,
+    borderWidth: 1,
+    borderColor: Colors.surfaceContainerHigh,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.lg,
+  },
+  photoOptionBtnSecondaryText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  photoPickerCancelBtn: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  photoPickerCancelText: {
+    ...Typography.bodyMedium,
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
   },
 });

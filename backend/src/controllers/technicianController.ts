@@ -43,6 +43,7 @@ export const getAssignedJobs = async (
       sr.is_paid,
       sr.created_at,
       sr.started_at,
+      sr.photo_logs,
       cu.name as customer_name,
       cu.phone as customer_phone,
       s.title as service_title
@@ -82,6 +83,7 @@ export const getAssignedJobs = async (
       isAssignedToMe: r.technician_id === technicianId,
       createdAt: r.created_at,
       startedAt: r.started_at,
+      photoLogs: r.photo_logs || [],
     })),
   });
 };
@@ -802,6 +804,7 @@ export const getJobById = async (
       sr.is_paid,
       sr.created_at,
       sr.started_at,
+      sr.photo_logs,
       sr.technician_id,
       cu.name as customer_name,
       cu.phone as customer_phone,
@@ -862,8 +865,97 @@ export const getJobById = async (
       isAssignedToMe: r.technician_id === technicianId,
       createdAt: r.created_at,
       startedAt: r.started_at,
+      photoLogs: r.photo_logs || [],
     },
   });
+};
+
+export const addJobPhoto = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const cleanId = String(id || '').trim().replace(/^#/, '');
+  const { photo, photoUrl, tag, notes, timestamp } = req.body;
+
+  const finalPhoto = photo || {
+    id: `photo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    uri: photoUrl,
+    tag: tag || 'Pre-Repair Inspection',
+    notes: notes || '',
+    timestamp: timestamp || new Date().toISOString(),
+  };
+
+  if (!finalPhoto.uri) {
+    res.status(400).json({ success: false, error: 'Photo URI is required.' });
+    return;
+  }
+
+  try {
+    const result = await query(
+      `UPDATE service_requests
+       SET photo_logs = COALESCE(photo_logs, '[]'::jsonb) || $1::jsonb,
+           updated_at = NOW()
+       WHERE id::text = $2 OR tracking_code = $2 OR id::text = $3 OR tracking_code = $3
+       RETURNING id, photo_logs;`,
+      [JSON.stringify([finalPhoto]), id, cleanId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Service request job not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Photo log uploaded successfully.',
+      data: {
+        photoLogs: result.rows[0].photo_logs || [],
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to attach photo log:', err);
+    res.status(500).json({ success: false, error: 'Could not attach photo to service request.' });
+  }
+};
+
+export const updateJobPhotoLogs = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const cleanId = String(id || '').trim().replace(/^#/, '');
+  const { photoLogs } = req.body;
+
+  if (!Array.isArray(photoLogs)) {
+    res.status(400).json({ success: false, error: 'photoLogs array is required.' });
+    return;
+  }
+
+  try {
+    const result = await query(
+      `UPDATE service_requests
+       SET photo_logs = $1::jsonb,
+           updated_at = NOW()
+       WHERE id::text = $2 OR tracking_code = $2 OR id::text = $3 OR tracking_code = $3
+       RETURNING id, photo_logs;`,
+      [JSON.stringify(photoLogs), id, cleanId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Service request job not found.' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        photoLogs: result.rows[0].photo_logs || [],
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: 'Could not update photo logs.' });
+  }
 };
 
 export const getJobHistory = async (

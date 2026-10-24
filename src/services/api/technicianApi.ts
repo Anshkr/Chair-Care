@@ -57,6 +57,38 @@ export const technicianApi = {
     return res;
   },
 
+  uploadJobPhoto: async (
+    jobId: string,
+    photo: {
+      id?: string;
+      uri: string;
+      tag?: string;
+      notes?: string;
+      timestamp?: string;
+    }
+  ): Promise<ApiResponse<any>> => {
+    const cleanId = (jobId || '').trim().replace(/^#/, '');
+    const res = await apiRequest(`/technician/jobs/${cleanId}/photos`, {
+      method: 'POST',
+      body: JSON.stringify({ photo }),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
+  updateJobPhotoLogs: async (
+    jobId: string,
+    photoLogs: any[]
+  ): Promise<ApiResponse<any>> => {
+    const cleanId = (jobId || '').trim().replace(/^#/, '');
+    const res = await apiRequest(`/technician/jobs/${cleanId}/photos`, {
+      method: 'PUT',
+      body: JSON.stringify({ photoLogs }),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
   getEarnings: async (): Promise<ApiResponse<any>> => {
     return apiRequest('/technician/earnings');
   },
