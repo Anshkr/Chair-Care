@@ -265,212 +265,220 @@ export const updateJobStatus = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
-  const { id } = req.params;
-  const { status, notes, securityPin } = req.body;
-  const technicianId = req.user?.userId;
+  try {
+    const { id } = req.params;
+    const { status, notes, securityPin } = req.body;
+    const technicianId = req.user?.userId;
 
-  if (!id || typeof id !== 'string') {
-    res.status(404).json({ success: false, error: 'Job not found.' });
-    return;
-  }
-
-  if (!technicianId) {
-    res.status(401).json({ success: false, error: 'Authentication required' });
-    return;
-  }
-
-  const cleanId = String(id).trim().replace(/^#/, '');
-  const existing = await query(
-    `SELECT * FROM service_requests 
-     WHERE id::text = $1 OR id::text = $2 OR tracking_code = $1 OR tracking_code = $2;`,
-    [id, cleanId]
-  );
-  if (existing.rows.length === 0) {
-    res.status(404).json({ success: false, error: 'Job not found.' });
-    return;
-  }
-
-  const job = existing.rows[0];
-  const actualJobId = job.id;
-
-  if (job.technician_id && job.technician_id !== technicianId) {
-    res.status(403).json({
-      success: false,
-      error: 'You can only update jobs that are assigned to you.',
-    });
-    return;
-  }
-
-  // Allowed transitions (allowing flexible transition to in_progress from assigned, in_route, or arrived)
-  const validTransitions: Record<string, ServiceRequestStatus[]> = {
-    assigned: ['in_route', 'arrived', 'in_progress', 'cancelled'],
-    in_route: ['arrived', 'in_progress', 'cancelled'],
-    arrived: ['in_progress', 'cancelled'],
-    in_progress: ['completed', 'cancelled'],
-    completed: [],
-    cancelled: [],
-  };
-
-  const allowed = validTransitions[job.status] || [];
-  if (!allowed.includes(status as ServiceRequestStatus)) {
-    if (job.status === status) {
-      res.json({
-        success: true,
-        message: `Job is already in status ${status}.`,
-        data: { id: actualJobId, status, trackingCode: job.tracking_code },
-      });
-      return;
-    }
-    res.status(400).json({
-      success: false,
-      error: `Invalid status transition from ${job.status} to ${status}.`,
-    });
-    return;
-  }
-
-  // Validate Completion Security PIN from customer when finalizing repair
-  // RULE: The PIN given to customer MUST match with technician after completing work; only then work is marked complete
-  if (status === 'completed') {
-    const providedPin = securityPin ? String(securityPin).trim() : '';
-
-    if (!providedPin) {
-      res.status(400).json({
-        success: false,
-        error: 'Work Completion Security PIN is required. Please ask the customer for their 4-digit completion PIN displayed on their tracking screen.',
-      });
+    if (!id || typeof id !== 'string') {
+      res.status(404).json({ success: false, error: 'Job not found.' });
       return;
     }
 
-    let expectedPin = job.security_pin ? String(job.security_pin).trim() : '';
-    if (!expectedPin) {
-      // If legacy job had no PIN, generate a random one and persist it
-      expectedPin = String(Math.floor(1000 + Math.random() * 9000));
-      await query('UPDATE service_requests SET security_pin = $1 WHERE id = $2;', [expectedPin, actualJobId]);
-    }
-
-    if (providedPin !== expectedPin) {
-      res.status(400).json({
-        success: false,
-        error: `Incorrect Security PIN (${providedPin}). The PIN entered does not match the customer's completion PIN. Please re-check with the customer.`,
-      });
+    if (!technicianId) {
+      res.status(401).json({ success: false, error: 'Authentication required' });
       return;
     }
-  }
 
-  // Update request
-  const isCompleted = status === 'completed';
-  const isCancelled = status === 'cancelled';
-  const warrantyDays = isCompleted ? "NOW() + interval '90 days'" : 'NULL';
-  const payout = isCompleted ? Math.round(Number(job.total_amount || 599) * 0.70 * 100) / 100 : 0;
-
-  // Execute critical state updates concurrently
-  const coreUpdates: Promise<any>[] = [
-    query(
-      `UPDATE service_requests
-       SET status = $1,
-           warranty_valid_until = ${warrantyDays},
-           started_at = CASE 
-             WHEN $1 = 'in_progress' AND started_at IS NULL THEN NOW() 
-             ELSE started_at 
-           END,
-           updated_at = NOW()
-       WHERE id = $2;`,
-      [status, actualJobId]
-    ),
-    query(
-      `INSERT INTO service_status_history (request_id, status, updated_by, notes)
-       VALUES ($1, $2, $3, $4);`,
-      [actualJobId, status, technicianId, notes || `Status updated to ${status}`]
-    ),
-  ];
-
-  if (isCompleted) {
-    coreUpdates.push(
-      query(
-        `UPDATE technician_profiles
-         SET completed_jobs_count = completed_jobs_count + 1,
-             today_earnings = today_earnings + $1,
-             updated_at = NOW()
-         WHERE user_id = $2;`,
-        [payout, technicianId]
-      )
+    const cleanId = String(id).trim().replace(/^#/, '');
+    const existing = await query(
+      `SELECT * FROM service_requests 
+       WHERE id::text = $1 OR id::text = $2 OR tracking_code = $1 OR tracking_code = $2;`,
+      [id, cleanId]
     );
-  }
+    if (existing.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Job not found.' });
+      return;
+    }
 
-  await Promise.all(coreUpdates);
+    const job = existing.rows[0];
+    const actualJobId = job.id;
 
-  // Send fast HTTP response to prevent client timeouts
-  res.json({
-    success: true,
-    message: `Job status transitioned to ${status}.`,
-    data: { id: actualJobId, status, trackingCode: job.tracking_code },
-  });
+    if (job.technician_id && job.technician_id !== technicianId) {
+      res.status(403).json({
+        success: false,
+        error: 'You can only update jobs that are assigned to you.',
+      });
+      return;
+    }
 
-  // Non-blocking background notification & chat purge
-  (async () => {
-    try {
-      if (isCompleted || isCancelled) {
-        await query(
-          `DELETE FROM notifications
-           WHERE type = 'chat_message'
-             AND (
-               (data->>'requestId')::text = $1::text
-               OR (data->>'trackingCode')::text = $2::text
-             );`,
-          [actualJobId, job.tracking_code]
-        ).catch((cleanErr: any) =>
-          console.warn('⚠️ [Clean chat notifications background warning]:', cleanErr.message)
-        );
+    // Allowed transitions (allowing flexible transition to in_progress from assigned, in_route, or arrived)
+    const validTransitions: Record<string, ServiceRequestStatus[]> = {
+      assigned: ['in_route', 'arrived', 'in_progress', 'cancelled'],
+      in_route: ['arrived', 'in_progress', 'cancelled'],
+      arrived: ['in_progress', 'cancelled'],
+      in_progress: ['completed', 'cancelled'],
+      completed: [],
+      cancelled: [],
+    };
+
+    const allowed = validTransitions[job.status] || [];
+    if (!allowed.includes(status as ServiceRequestStatus)) {
+      if (job.status === status) {
+        res.json({
+          success: true,
+          message: `Job is already in status ${status}.`,
+          data: { id: actualJobId, status, trackingCode: job.tracking_code },
+        });
+        return;
+      }
+      res.status(400).json({
+        success: false,
+        error: `Invalid status transition from ${job.status} to ${status}.`,
+      });
+      return;
+    }
+
+    // Validate Completion Security PIN from customer when finalizing repair
+    // RULE: The PIN given to customer MUST match with technician after completing work; only then work is marked complete
+    if (status === 'completed') {
+      const providedPin = securityPin ? String(securityPin).trim() : '';
+
+      if (!providedPin) {
+        res.status(400).json({
+          success: false,
+          error: 'Work Completion Security PIN is required. Please ask the customer for their 4-digit completion PIN displayed on their tracking screen.',
+        });
+        return;
       }
 
-      const custId = job.customer_id;
-      if (custId) {
-        const techUserRes = await query('SELECT name, phone FROM users WHERE id = $1;', [technicianId]);
-        const techName = techUserRes.rows[0]?.name || 'Your technician';
-        const techPhone = techUserRes.rows[0]?.phone || '+91 98765 43210';
+      let expectedPin = job.security_pin ? String(job.security_pin).trim() : '';
+      if (!expectedPin) {
+        // If legacy job had no PIN, generate a random one and persist it
+        expectedPin = String(Math.floor(1000 + Math.random() * 9000));
+        await query('UPDATE service_requests SET security_pin = $1 WHERE id = $2;', [expectedPin, actualJobId]);
+      }
 
-        let notifTitle = '';
-        let notifMsg = '';
-        const notifType = `technician_${status}`;
+      if (providedPin !== expectedPin) {
+        res.status(400).json({
+          success: false,
+          error: `Incorrect Security PIN (${providedPin}). The PIN entered does not match the customer's completion PIN. Please re-check with the customer.`,
+        });
+        return;
+      }
+    }
 
-        if (status === 'arrived') {
-          notifTitle = `📍 Technician Has Arrived!`;
-          notifMsg = `${techName} has arrived at your address for Service #${job.tracking_code}. Ready to inspect your chair.`;
-        } else if (status === 'in_route') {
-          notifTitle = `🚗 Technician is On The Way`;
-          notifMsg = `${techName} is now en route to your address for Service #${job.tracking_code}.`;
-        } else if (status === 'in_progress') {
-          notifTitle = `🔧 Chair Repair In Progress`;
-          notifMsg = `${techName} has started repairing your chair (#${job.tracking_code}).`;
-        } else if (status === 'completed') {
-          notifTitle = `✅ Chair Service Completed`;
-          notifMsg = `Your chair service #${job.tracking_code} has been successfully completed. 90-day warranty is now active.`;
-        }
+    // Update request
+    const isCompleted = status === 'completed';
+    const isCancelled = status === 'cancelled';
+    const warrantyDays = isCompleted ? "NOW() + interval '90 days'" : 'NULL';
+    const payout = isCompleted ? Math.round(Number(job.total_amount || 599) * 0.70 * 100) / 100 : 0;
 
-        if (notifTitle) {
+    // Execute critical state updates concurrently
+    const coreUpdates: Promise<any>[] = [
+      query(
+        `UPDATE service_requests
+         SET status = $1::varchar,
+             warranty_valid_until = ${warrantyDays},
+             started_at = CASE 
+               WHEN $1::text = 'in_progress' AND started_at IS NULL THEN NOW() 
+               ELSE started_at 
+             END,
+             updated_at = NOW()
+         WHERE id = $2;`,
+        [status, actualJobId]
+      ),
+      query(
+        `INSERT INTO service_status_history (request_id, status, updated_by, notes)
+         VALUES ($1, $2, $3, $4);`,
+        [actualJobId, status, technicianId, notes || `Status updated to ${status}`]
+      ),
+    ];
+
+    if (isCompleted) {
+      coreUpdates.push(
+        query(
+          `UPDATE technician_profiles
+           SET completed_jobs_count = completed_jobs_count + 1,
+               today_earnings = today_earnings + $1,
+               updated_at = NOW()
+           WHERE user_id = $2;`,
+          [payout, technicianId]
+        )
+      );
+    }
+
+    await Promise.all(coreUpdates);
+
+    // Send fast HTTP response to prevent client timeouts
+    res.json({
+      success: true,
+      message: `Job status transitioned to ${status}.`,
+      data: { id: actualJobId, status, trackingCode: job.tracking_code },
+    });
+
+    // Non-blocking background notification & chat purge
+    (async () => {
+      try {
+        if (isCompleted || isCancelled) {
           await query(
-            `INSERT INTO notifications (user_id, title, message, type, data)
-             VALUES ($1, $2, $3, $4, $5);`,
-            [
-              custId,
-              notifTitle,
-              notifMsg,
-              notifType,
-              JSON.stringify({
-                requestId: actualJobId,
-                trackingCode: job.tracking_code,
-                technicianName: techName,
-                technicianPhone: techPhone,
-                status,
-              }),
-            ]
+            `DELETE FROM notifications
+             WHERE type = 'chat_message'
+               AND (
+                 (data->>'requestId')::text = $1::text
+                 OR (data->>'trackingCode')::text = $2::text
+               );`,
+            [actualJobId, job.tracking_code]
+          ).catch((cleanErr: any) =>
+            console.warn('⚠️ [Clean chat notifications background warning]:', cleanErr.message)
           );
         }
+
+        const custId = job.customer_id;
+        if (custId) {
+          const techUserRes = await query('SELECT name, phone FROM users WHERE id = $1;', [technicianId]);
+          const techName = techUserRes.rows[0]?.name || 'Your technician';
+          const techPhone = techUserRes.rows[0]?.phone || '+91 98765 43210';
+
+          let notifTitle = '';
+          let notifMsg = '';
+          const notifType = `technician_${status}`;
+
+          if (status === 'arrived') {
+            notifTitle = `📍 Technician Has Arrived!`;
+            notifMsg = `${techName} has arrived at your address for Service #${job.tracking_code}. Ready to inspect your chair.`;
+          } else if (status === 'in_route') {
+            notifTitle = `🚗 Technician is On The Way`;
+            notifMsg = `${techName} is now en route to your address for Service #${job.tracking_code}.`;
+          } else if (status === 'in_progress') {
+            notifTitle = `🔧 Chair Repair In Progress`;
+            notifMsg = `${techName} has started repairing your chair (#${job.tracking_code}).`;
+          } else if (status === 'completed') {
+            notifTitle = `✅ Chair Service Completed`;
+            notifMsg = `Your chair service #${job.tracking_code} has been successfully completed. 90-day warranty is now active.`;
+          }
+
+          if (notifTitle) {
+            await query(
+              `INSERT INTO notifications (user_id, title, message, type, data)
+               VALUES ($1, $2, $3, $4, $5);`,
+              [
+                custId,
+                notifTitle,
+                notifMsg,
+                notifType,
+                JSON.stringify({
+                  requestId: actualJobId,
+                  trackingCode: job.tracking_code,
+                  technicianName: techName,
+                  technicianPhone: techPhone,
+                  status,
+                }),
+              ]
+            );
+          }
+        }
+      } catch (err: any) {
+        console.warn('⚠️ [Customer status notification background warning]:', err.message);
       }
-    } catch (err: any) {
-      console.warn('⚠️ [Customer status notification background warning]:', err.message);
-    }
-  })();
+    })();
+  } catch (error: any) {
+    console.error('❌ [updateJobStatus Error]:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to update job status.',
+    });
+  }
 };
 
 export const getEarnings = async (
