@@ -42,6 +42,21 @@ export const technicianApi = {
     return res;
   },
 
+  updateLiveLocation: async (
+    jobId: string,
+    latitude: number,
+    longitude: number,
+    etaMinutes?: number
+  ): Promise<ApiResponse<any>> => {
+    const cleanId = (jobId || '').trim().replace(/^#/, '');
+    const res = await apiRequest(`/technician/jobs/${cleanId}/location`, {
+      method: 'POST',
+      body: JSON.stringify({ latitude, longitude, etaMinutes }),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
   getEarnings: async (): Promise<ApiResponse<any>> => {
     return apiRequest('/technician/earnings');
   },

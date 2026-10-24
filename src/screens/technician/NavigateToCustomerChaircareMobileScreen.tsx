@@ -18,6 +18,7 @@ import { TechnicianHeaderAvatar } from '../../components/common/TechnicianHeader
 import { useTechnician } from '../../context/TechnicianContext';
 import { technicianApi } from '../../services/api/technicianApi';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { LiveNavigationMap } from '../../components/common/LiveNavigationMap';
 
 interface NavigateToCustomerProps {
   navigation?: any;
@@ -88,11 +89,106 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
       ? `Unit / Floor: ${ticket.unitFloor} • Landmark: Cyber City Corridor`
       : ticket.addressLine2 || 'Sector 62, Gurugram, Haryana 122002';
 
+  // Customer Target Coordinates
+  const custLat =
+    typeof ticket?.latitude === 'number' && !isNaN(ticket.latitude)
+      ? ticket.latitude
+      : 28.4595;
+  const custLng =
+    typeof ticket?.longitude === 'number' && !isNaN(ticket.longitude)
+      ? ticket.longitude
+      : 77.0266;
+
+  // Technician Coordinates Initial Setup
+  const initialTechLat =
+    typeof ticket?.technicianLatitude === 'number' && !isNaN(ticket.technicianLatitude)
+      ? ticket.technicianLatitude
+      : typeof ticket?.technician_latitude === 'number' && !isNaN(ticket.technician_latitude)
+      ? ticket.technician_latitude
+      : custLat - 0.016;
+  const initialTechLng =
+    typeof ticket?.technicianLongitude === 'number' && !isNaN(ticket.technicianLongitude)
+      ? ticket.technicianLongitude
+      : typeof ticket?.technician_longitude === 'number' && !isNaN(ticket.technician_longitude)
+      ? ticket.technician_longitude
+      : custLng - 0.012;
+
+  const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const calculateEta = (distKm: number) => {
+    if (distKm <= 0.05) return 0;
+    return Math.max(1, Math.round(distKm * 2.8 + 1));
+  };
+
   // State
+  const [techCoords, setTechCoords] = useState({
+    latitude: initialTechLat,
+    longitude: initialTechLng,
+  });
+  const [currentDistKm, setCurrentDistKm] = useState(() =>
+    calculateDistanceKm(initialTechLat, initialTechLng, custLat, custLng)
+  );
+  const [currentEtaMin, setCurrentEtaMin] = useState(() =>
+    calculateEta(calculateDistanceKm(initialTechLat, initialTechLng, custLat, custLng))
+  );
   const [isNavigating, setIsNavigating] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(true);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [hasUnreadMessage, setHasUnreadMessage] = useState(true);
+
+  // Live movement simulation towards customer when technician is en route or navigating
+  useEffect(() => {
+    if (ticket.status === 'arrived' || ticket.status === 'completed') {
+      setCurrentDistKm(0);
+      setCurrentEtaMin(0);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTechCoords((prev) => {
+        const dLat = custLat - prev.latitude;
+        const dLng = custLng - prev.longitude;
+        const remainingDist = calculateDistanceKm(prev.latitude, prev.longitude, custLat, custLng);
+
+        if (remainingDist <= 0.05) {
+          setCurrentDistKm(0);
+          setCurrentEtaMin(0);
+          return prev;
+        }
+
+        // Step 6% closer along the vector towards destination each interval
+        const stepRatio = 0.06;
+        const nextLat = prev.latitude + dLat * stepRatio;
+        const nextLng = prev.longitude + dLng * stepRatio;
+        const nextDist = calculateDistanceKm(nextLat, nextLng, custLat, custLng);
+        const nextEta = calculateEta(nextDist);
+
+        setCurrentDistKm(nextDist);
+        setCurrentEtaMin(nextEta);
+
+        // Sync live location and ETA to database so customer tracking screen updates simultaneously
+        if (ticket.id) {
+          technicianApi.updateLiveLocation(ticket.id, nextLat, nextLng, nextEta).catch(() => {});
+        }
+
+        return { latitude: nextLat, longitude: nextLng };
+      });
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [ticket.id, ticket.status, custLat, custLng]);
 
   // Animations
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -207,6 +303,7 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
     if (ticket.id) {
       try {
         await technicianApi.updateJobStatus(ticket.id, 'in_route', 'Technician is en route.');
+        await technicianApi.updateLiveLocation(ticket.id, techCoords.latitude, techCoords.longitude, currentEtaMin);
         setAcceptedRequest({ ...ticket, status: 'in_route' });
       } catch {
         // continue
@@ -295,144 +392,115 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Interactive Simulated Navigation Map Section */}
+        {/* Interactive Live Navigation Map Section */}
         <View style={styles.mapSectionContainer}>
-          {/* Simulated Map Canvas Background */}
-          <View style={styles.mapCanvas}>
-            {/* Grid Arterial Road Lines */}
-            <View style={styles.arterialRoad1} />
-            <View style={styles.arterialRoad2} />
-            <View style={styles.arterialRoadDiagonal} />
+          <LiveNavigationMap
+            techCoords={techCoords}
+            customerCoords={{ latitude: custLat, longitude: custLng }}
+            customerName={destinationShort}
+            customerAddress={destinationAddress}
+            technicianName="You (Technician)"
+            etaMinutes={currentEtaMin}
+            distanceKm={currentDistKm}
+            height="100%"
+            role="technician"
+            isMoving={isNavigating || currentDistKm > 0.05}
+          />
 
-            {/* Simulated Route Polyline */}
-            <View style={styles.routeTrackUnderlay} />
-            <View style={styles.routeTrackMain} />
-            <View style={styles.routeTrackCongestion} />
-
-            {/* Turn-by-Turn Telemetry HUD Overlay */}
-            <View style={styles.hudOverlay}>
-              <View style={styles.hudCard}>
-                <View style={styles.hudLeft}>
-                  <View style={styles.turnIconPod}>
-                    <Text style={styles.turnArrowIcon}>↱</Text>
-                  </View>
-                  <View style={styles.hudTextCol}>
-                    <View style={styles.hudDistanceRow}>
-                      <Text style={styles.hudDistanceText}>400m</Text>
-                      <View style={styles.laneBadge}>
-                        <Text style={styles.laneBadgeText}>Lane 2</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.hudInstructionText} numberOfLines={1}>
-                      Turn right onto Golf Course Rd
+          {/* Turn-by-Turn Telemetry HUD Overlay */}
+          <View style={styles.hudOverlay} pointerEvents="box-none">
+            <View style={styles.hudCard}>
+              <View style={styles.hudLeft}>
+                <View style={styles.turnIconPod}>
+                  <Text style={styles.turnArrowIcon}>↱</Text>
+                </View>
+                <View style={styles.hudTextCol}>
+                  <View style={styles.hudDistanceRow}>
+                    <Text style={styles.hudDistanceText}>
+                      {currentDistKm <= 0.05
+                        ? '0m'
+                        : currentDistKm < 1
+                        ? `${Math.round(currentDistKm * 1000)}m`
+                        : `${currentDistKm.toFixed(1)}km`}
                     </Text>
+                    <View style={styles.laneBadge}>
+                      <Text style={styles.laneBadgeText}>Lane 2</Text>
+                    </View>
                   </View>
-                </View>
-
-                {/* Speed Limit Indicator */}
-                <View style={styles.speedLimitCircle}>
-                  <Text style={styles.speedLabel}>SPEED</Text>
-                  <Text style={styles.speedValue}>50</Text>
+                  <Text style={styles.hudInstructionText} numberOfLines={1}>
+                    {currentDistKm <= 0.05
+                      ? 'Arrived at Customer Doorstep'
+                      : 'Turn right onto Golf Course Rd'}
+                  </Text>
                 </View>
               </View>
-            </View>
 
-            {/* Destination Pin Anchor (Customer) */}
-            <Animated.View
-              style={[
-                styles.destinationPinAnchor,
-                { transform: [{ translateY: pinBounceAnim }] },
-              ]}
+              {/* Speed Limit Indicator */}
+              <View style={styles.speedLimitCircle}>
+                <Text style={styles.speedLabel}>SPEED</Text>
+                <Text style={styles.speedValue}>50</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Floating Quick Map Utilities (Right Rail) */}
+          <View style={styles.rightMapRail} pointerEvents="box-none">
+            <TouchableOpacity
+              style={styles.mapUtilBtn}
+              onPress={() => openExternalMap(destinationAddress)}
+              activeOpacity={0.8}
+              accessibilityLabel="Open in Google Maps"
             >
-              <TouchableOpacity
-                style={styles.destinationPillTag}
-                onPress={() => openExternalMap(destinationAddress)}
-                activeOpacity={0.8}
-              >
-                <AppIcon name="Building2" size={18} />
-                <Text style={styles.destinationPillText}>{destinationShort}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.destinationMarkerCircle}
-                onPress={() => openExternalMap(destinationAddress)}
-                activeOpacity={0.8}
-              >
-                <AppIcon name="MapPin" size={18} />
-              </TouchableOpacity>
-            </Animated.View>
+              <AppIcon name="Compass" size={18} color={Colors.primary} />
+            </TouchableOpacity>
 
-            {/* Technician GPS Marker with Animated Radar Pulse */}
-            <View style={styles.techGpsAnchor}>
-              <Animated.View
-                style={[
-                  styles.radarPulseOuter,
-                  {
-                    transform: [{ scale: pulseAnim }],
-                    opacity: radarAnim,
-                  },
-                ]}
-              />
-              <View style={styles.radarPulseInner} />
-              <View style={styles.techMarkerCircle}>
-                <AppIcon name="Navigation" size={18} />
-              </View>
+            <TouchableOpacity
+              style={styles.mapUtilBtn}
+              onPress={handleRecenter}
+              activeOpacity={0.8}
+              accessibilityLabel="Re-center map"
+            >
+              <AppIcon name="Target" size={18} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.mapUtilBtn}
+              onPress={() => setIsVoiceActive(!isVoiceActive)}
+              activeOpacity={0.8}
+              accessibilityLabel="Toggle voice guidance"
+            >
+              <Text style={styles.utilIcon}>
+                {isVoiceActive ? 'VOICE ON' : 'VOICE OFF'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.zoomControlsPod}>
+              <TouchableOpacity
+                style={styles.zoomBtn}
+                onPress={() => setZoomLevel((z) => Math.min(z + 0.2, 1.8))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.zoomBtnText}>+</Text>
+              </TouchableOpacity>
+              <View style={styles.zoomDivider} />
+              <TouchableOpacity
+                style={styles.zoomBtn}
+                onPress={() => setZoomLevel((z) => Math.max(z - 0.2, 0.8))}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.zoomBtnText}>−</Text>
+              </TouchableOpacity>
             </View>
+          </View>
 
-            {/* Floating Quick Map Utilities (Right Rail) */}
-            <View style={styles.rightMapRail}>
-              <TouchableOpacity
-                style={styles.mapUtilBtn}
-                onPress={() => openExternalMap(destinationAddress)}
-                activeOpacity={0.8}
-                accessibilityLabel="Open in Google Maps"
-              >
-                <AppIcon name="Compass" size={18} color={Colors.primary} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.mapUtilBtn}
-                onPress={handleRecenter}
-                activeOpacity={0.8}
-                accessibilityLabel="Re-center map"
-              >
-                <AppIcon name="Target" size={18} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.mapUtilBtn}
-                onPress={() => setIsVoiceActive(!isVoiceActive)}
-                activeOpacity={0.8}
-                accessibilityLabel="Toggle voice guidance"
-              >
-                <Text style={styles.utilIcon}>
-                  {isVoiceActive ? 'VOICE ON' : 'VOICE OFF'}
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.zoomControlsPod}>
-                <TouchableOpacity
-                  style={styles.zoomBtn}
-                  onPress={() => setZoomLevel((z) => Math.min(z + 0.2, 1.8))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.zoomBtnText}>+</Text>
-                </TouchableOpacity>
-                <View style={styles.zoomDivider} />
-                <TouchableOpacity
-                  style={styles.zoomBtn}
-                  onPress={() => setZoomLevel((z) => Math.max(z - 0.2, 0.8))}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.zoomBtnText}>−</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Live Traffic Chip Floating Badge */}
-            <View style={styles.trafficChip}>
-              <View style={styles.pulsingGreenDot} />
-              <Text style={styles.trafficChipText}>TRAFFIC OPTIMAL</Text>
-            </View>
+          {/* Live Traffic Chip Floating Badge */}
+          <View style={styles.trafficChip} pointerEvents="none">
+            <View style={styles.pulsingGreenDot} />
+            <Text style={styles.trafficChipText}>
+              {currentDistKm <= 0.05
+                ? 'ARRIVED AT SITE'
+                : 'TRAFFIC OPTIMAL • LIVE GPS'}
+            </Text>
           </View>
         </View>
 
@@ -510,12 +578,14 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
             <View style={styles.etaTextCol}>
               <View style={styles.etaHeroRow}>
                 <Text style={styles.etaHeroNumber}>
-                  {ticket.etaMinutes || '18'}
+                  {currentEtaMin}
                 </Text>
                 <Text style={styles.etaHeroUnit}>min</Text>
               </View>
               <Text style={styles.etaSubDetail}>
-                {ticket.distance || '2.4 km'} away • {ticket.routeSummary || 'Fast route via Golf Course Rd'}
+                {currentDistKm <= 0.05
+                  ? 'At customer location • Ready for service'
+                  : `${currentDistKm.toFixed(1)} km away • Fast route via Golf Course Rd`}
               </Text>
             </View>
 

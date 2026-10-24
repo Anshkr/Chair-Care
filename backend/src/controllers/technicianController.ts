@@ -33,6 +33,10 @@ export const getAssignedJobs = async (
       sr.unit_floor,
       sr.latitude,
       sr.longitude,
+      sr.technician_latitude,
+      sr.technician_longitude,
+      sr.technician_eta_minutes,
+      sr.technician_location_updated_at,
       sr.time_slot,
       sr.visit_date,
       sr.total_amount,
@@ -62,6 +66,10 @@ export const getAssignedJobs = async (
       unitFloor: r.unit_floor,
       latitude: r.latitude != null ? Number(r.latitude) : undefined,
       longitude: r.longitude != null ? Number(r.longitude) : undefined,
+      technicianLatitude: r.technician_latitude != null ? Number(r.technician_latitude) : undefined,
+      technicianLongitude: r.technician_longitude != null ? Number(r.technician_longitude) : undefined,
+      technicianEtaMinutes: r.technician_eta_minutes != null ? Number(r.technician_eta_minutes) : undefined,
+      technicianLocationUpdatedAt: r.technician_location_updated_at,
       timeSlot: r.time_slot,
       visitDate: r.visit_date,
       totalAmount: Number(r.total_amount),
@@ -777,6 +785,10 @@ export const getJobById = async (
       sr.unit_floor,
       sr.latitude,
       sr.longitude,
+      sr.technician_latitude,
+      sr.technician_longitude,
+      sr.technician_eta_minutes,
+      sr.technician_location_updated_at,
       sr.time_slot,
       sr.visit_date,
       sr.total_amount,
@@ -831,6 +843,10 @@ export const getJobById = async (
       unitFloor: r.unit_floor || '',
       latitude: r.latitude != null ? Number(r.latitude) : undefined,
       longitude: r.longitude != null ? Number(r.longitude) : undefined,
+      technicianLatitude: r.technician_latitude != null ? Number(r.technician_latitude) : undefined,
+      technicianLongitude: r.technician_longitude != null ? Number(r.technician_longitude) : undefined,
+      technicianEtaMinutes: r.technician_eta_minutes != null ? Number(r.technician_eta_minutes) : undefined,
+      technicianLocationUpdatedAt: r.technician_location_updated_at,
       timeSlot: r.time_slot || 'Flexible',
       visitDate: r.visit_date || 'Today',
       totalAmount: Number(r.total_amount) || 599,
@@ -911,6 +927,74 @@ export const getJobHistory = async (
         createdAt: r.created_at,
       };
     }),
+  });
+};
+
+export const updateLiveLocation = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const technicianId = req.user?.userId;
+  const { id } = req.params;
+  const { latitude, longitude, etaMinutes } = req.body;
+
+  if (!technicianId) {
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
+  }
+
+  const cleanId = String(id || '').trim().replace(/^#/, '');
+
+  // Verify the technician is assigned to this request or is admin
+  const checkRes = await query(
+    `SELECT id, technician_id, status FROM service_requests 
+     WHERE id::text = $1 OR id::text = $2 OR tracking_code = $1 OR tracking_code = $2;`,
+    [id, cleanId]
+  );
+
+  if (checkRes.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'Service request not found.' });
+    return;
+  }
+
+  const job = checkRes.rows[0];
+  if (job.technician_id !== technicianId && req.user?.role !== 'admin') {
+    res.status(403).json({ success: false, error: 'Unauthorized to update location for this job.' });
+    return;
+  }
+
+  // Update service request live location & ETA
+  await query(
+    `UPDATE service_requests
+     SET technician_latitude = $1,
+         technician_longitude = $2,
+         technician_eta_minutes = COALESCE($3, technician_eta_minutes),
+         technician_location_updated_at = NOW(),
+         updated_at = NOW()
+     WHERE id = $4;`,
+    [latitude, longitude, etaMinutes ?? null, job.id]
+  );
+
+  // Also update technician_profiles location
+  await query(
+    `UPDATE technician_profiles
+     SET latitude = $1,
+         longitude = $2,
+         location_updated_at = NOW(),
+         updated_at = NOW()
+     WHERE user_id = $3;`,
+    [latitude, longitude, technicianId]
+  );
+
+  res.json({
+    success: true,
+    data: {
+      requestId: job.id,
+      latitude,
+      longitude,
+      etaMinutes,
+      updatedAt: new Date().toISOString(),
+    },
   });
 };
 

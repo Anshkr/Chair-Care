@@ -10,10 +10,15 @@ import {
   getProfile,
   updateTechnicianProfile,
   getJobHistory,
+  updateLiveLocation,
 } from '../controllers/technicianController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
-import { updateJobStatusSchema, updateAvailabilitySchema } from '../validators/schemas';
+import {
+  updateJobStatusSchema,
+  updateAvailabilitySchema,
+  updateTechnicianLocationSchema,
+} from '../validators/schemas';
 
 const router = Router();
 
@@ -27,6 +32,7 @@ router.get('/jobs/:id', getJobById);
 router.post('/availability', validateBody(updateAvailabilitySchema), updateAvailability);
 router.post('/jobs/:id/accept', acceptJob);
 router.patch('/jobs/:id/status', validateBody(updateJobStatusSchema), updateJobStatus);
+router.post('/jobs/:id/location', validateBody(updateTechnicianLocationSchema), updateLiveLocation);
 router.get('/earnings', getEarnings);
 router.get('/reviews', getReviews);
 router.get('/profile', getProfile);

@@ -21,6 +21,7 @@ import { useBooking } from '../../context/BookingContext';
 import { customerApi } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { LiveNavigationMap } from '../../components/common/LiveNavigationMap';
 
 /**
  * Screen ID: C11
@@ -109,6 +110,56 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
       ? `${draft.unitOrFloor}, ${draft.serviceAddress.split(',')[0]}`
       : draft?.serviceAddress || 'Customer Service Location');
 
+  // Customer Target Coordinates
+  const custLat =
+    liveRequest?.latitude != null && !isNaN(Number(liveRequest.latitude))
+      ? Number(liveRequest.latitude)
+      : (draft as any)?.coordinates?.latitude || (draft as any)?.latitude || 28.4595;
+  const custLng =
+    liveRequest?.longitude != null && !isNaN(Number(liveRequest.longitude))
+      ? Number(liveRequest.longitude)
+      : (draft as any)?.coordinates?.longitude || (draft as any)?.longitude || 77.0266;
+
+  // Technician Live GPS Coordinates (polled from backend)
+  const techLat =
+    liveRequest?.technicianLatitude != null && !isNaN(Number(liveRequest.technicianLatitude))
+      ? Number(liveRequest.technicianLatitude)
+      : liveRequest?.technician_latitude != null && !isNaN(Number(liveRequest.technician_latitude))
+      ? Number(liveRequest.technician_latitude)
+      : custLat - 0.016;
+  const techLng =
+    liveRequest?.technicianLongitude != null && !isNaN(Number(liveRequest.technicianLongitude))
+      ? Number(liveRequest.technicianLongitude)
+      : liveRequest?.technician_longitude != null && !isNaN(Number(liveRequest.technician_longitude))
+      ? Number(liveRequest.technician_longitude)
+      : custLng - 0.012;
+
+  const calculateDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const currentDistKm = isArrived ? 0 : calculateDistanceKm(techLat, techLng, custLat, custLng);
+
+  const currentEtaMinutes = isArrived
+    ? 0
+    : liveRequest?.technicianEtaMinutes != null && !isNaN(Number(liveRequest.technicianEtaMinutes))
+    ? Number(liveRequest.technicianEtaMinutes)
+    : liveRequest?.technician_eta_minutes != null && !isNaN(Number(liveRequest.technician_eta_minutes))
+    ? Number(liveRequest.technician_eta_minutes)
+    : currentDistKm <= 0.05
+    ? 0
+    : Math.max(1, Math.round(currentDistKm * 2.8 + 1));
+
   // Pulse animation for marker
   const pingAnim = useRef(new Animated.Value(0.4)).current;
 
@@ -190,85 +241,28 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
       >
         {/* Interactive Live Map Viewport */}
         <View style={styles.mapViewport}>
-          <ImageBackground
-            source={{
-              uri: 'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=800&auto=format&fit=crop&q=80',
-            }}
-            style={styles.mapBackground}
-            imageStyle={styles.mapImage}
-          >
-            {/* Soft Glass Scrim */}
-            <View style={styles.mapScrim} />
+          <LiveNavigationMap
+            techCoords={{ latitude: techLat, longitude: techLng }}
+            customerCoords={{ latitude: custLat, longitude: custLng }}
+            customerName="Your Location"
+            customerAddress={serviceLocation}
+            technicianName={technician.name}
+            etaMinutes={currentEtaMinutes}
+            distanceKm={currentDistKm}
+            height="100%"
+            role="customer"
+            isMoving={!isArrived}
+          />
 
-            {/* Map Floating Telemetry Chip (Top Left) */}
-            <View style={styles.telemetryChip}>
-              <View style={styles.telemetryPingDot} />
-              <Text style={styles.telemetryChipText}>
-                LIVE GPS • UPDATED 5S AGO
-              </Text>
-            </View>
-
-            {/* Floating Map Controls (Top Right) */}
-            <View style={styles.mapControls}>
-              <TouchableOpacity style={styles.controlBtn} activeOpacity={0.8}>
-                <AppIcon name="MapPin" size={18} />
-              </TouchableOpacity>
-              <View style={styles.zoomControlGroup}>
-                <TouchableOpacity style={styles.zoomBtn} activeOpacity={0.7}>
-                  <Text style={styles.zoomIcon}>+</Text>
-                </TouchableOpacity>
-                <View style={styles.zoomDivider} />
-                <TouchableOpacity style={styles.zoomBtn} activeOpacity={0.7}>
-                  <Text style={styles.zoomIcon}>−</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Dynamic Technician Route Marker (Origin Point) */}
-            <View style={styles.techMarkerContainer}>
-              <View style={styles.etaCalloutBubble}>
-                <View style={styles.etaDot} />
-                <Text style={styles.etaBubbleText}>
-                  {technician.name} • 25 min
-                </Text>
-              </View>
-
-              <View style={styles.avatarMarkerBox}>
-                <Animated.View
-                  style={[
-                    styles.avatarRippleRing,
-                    { transform: [{ scale: pingAnim }], opacity: pingAnim },
-                  ]}
-                />
-                <View style={styles.avatarInnerBox}>
-                  <Image
-                    source={{
-                      uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-                    }}
-                    style={styles.techAvatarMap}
-                  />
-                  <View style={styles.vanBadge}>
-                    <AppIcon name="Car" size={20} color={Colors.primary} />
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Customer Location Pin (Destination) */}
-            <View style={styles.customerPinContainer}>
-              <View style={styles.customerPinOuter}>
-                <View style={styles.customerPinCircle}>
-                  <AppIcon name="MapPin" size={18} />
-                </View>
-              </View>
-              <View style={styles.customerLabelPill}>
-                <Text style={styles.customerLabelTitle}>Your Location</Text>
-                <Text style={styles.customerLabelSub} numberOfLines={1}>
-                  {draft?.unitOrFloor || 'Flat 402, Tower B'}
-                </Text>
-              </View>
-            </View>
-          </ImageBackground>
+          {/* Map Floating Telemetry Chip (Top Left) */}
+          <View style={styles.telemetryChip} pointerEvents="none">
+            <View style={styles.telemetryPingDot} />
+            <Text style={styles.telemetryChipText}>
+              {isArrived
+                ? 'TECHNICIAN ARRIVED AT SITE'
+                : 'LIVE GPS TRACKING • UPDATING REAL-TIME'}
+            </Text>
+          </View>
         </View>
 
         {/* Bottom Floating Operations Sheet */}
@@ -350,9 +344,13 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
 
               <View style={styles.arrivalStatGroup}>
                 <Text style={styles.arrivalMinutes}>
-                  25 <Text style={styles.arrivalUnit}>min</Text>
+                  {currentEtaMinutes} <Text style={styles.arrivalUnit}>min</Text>
                 </Text>
-                <Text style={styles.arrivalDistance}>2.4 km away</Text>
+                <Text style={styles.arrivalDistance}>
+                  {currentDistKm <= 0.05
+                    ? 'At your doorstep'
+                    : `${currentDistKm.toFixed(1)} km away`}
+                </Text>
               </View>
             </View>
 
@@ -361,7 +359,7 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
               <View style={styles.vanInfoRow}>
                 <AppIcon name="Car" size={16} color="#FFFFFF" />
                 <Text style={styles.vanPlateText}>
-                  Mobile Repair Van #DL-04-ERGO
+                  Mobile Repair Van • Live GPS Active
                 </Text>
               </View>
               <View style={styles.fastestRouteBadge}>
@@ -375,7 +373,12 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
             <View style={styles.journeyStepsRow}>
               {/* Progress Line */}
               <View style={styles.journeyLineTrack}>
-                <View style={[styles.journeyLineFill, { width: '50%' }]} />
+                <View
+                  style={[
+                    styles.journeyLineFill,
+                    { width: isArrived ? '100%' : '60%' },
+                  ]}
+                />
               </View>
 
               {/* Step 1: Dispatched */}
@@ -384,25 +387,61 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
                   <AppIcon name="Check" size={18} />
                 </View>
                 <Text style={styles.stepLabel}>Dispatched</Text>
-                <Text style={styles.stepTime}>03:10 PM</Text>
+                <Text style={styles.stepTime}>{timeSlot}</Text>
               </View>
 
               {/* Step 2: On The Way (Active) */}
               <View style={styles.journeyStepItem}>
-                <View style={styles.journeyStepActiveCircle}>
-                  <View style={styles.activeInnerDot} />
+                <View
+                  style={
+                    isArrived
+                      ? styles.journeyStepDoneCircle
+                      : styles.journeyStepActiveCircle
+                  }
+                >
+                  {isArrived ? (
+                    <AppIcon name="Check" size={18} />
+                  ) : (
+                    <View style={styles.activeInnerDot} />
+                  )}
                 </View>
-                <Text style={styles.stepLabelActive}>On the way</Text>
-                <Text style={styles.stepTimeActive}>In transit</Text>
+                <Text style={isArrived ? styles.stepLabel : styles.stepLabelActive}>
+                  On the way
+                </Text>
+                <Text style={isArrived ? styles.stepTime : styles.stepTimeActive}>
+                  {isArrived ? 'Completed' : 'In transit'}
+                </Text>
               </View>
 
               {/* Step 3: Arrived */}
               <View style={styles.journeyStepItem}>
-                <View style={styles.journeyStepPendingCircle}>
-                  <View style={styles.pendingInnerDot} />
+                <View
+                  style={
+                    isArrived
+                      ? styles.journeyStepActiveCircle
+                      : styles.journeyStepPendingCircle
+                  }
+                >
+                  {isArrived ? (
+                    <View style={styles.activeInnerDot} />
+                  ) : (
+                    <View style={styles.pendingInnerDot} />
+                  )}
                 </View>
-                <Text style={styles.stepLabelPending}>Arrived</Text>
-                <Text style={styles.stepTimePending}>Est. 03:45 PM</Text>
+                <Text
+                  style={
+                    isArrived ? styles.stepLabelActive : styles.stepLabelPending
+                  }
+                >
+                  Arrived
+                </Text>
+                <Text
+                  style={
+                    isArrived ? styles.stepTimeActive : styles.stepTimePending
+                  }
+                >
+                  {isArrived ? 'At Doorstep' : `Est. in ${currentEtaMinutes}m`}
+                </Text>
               </View>
             </View>
 
@@ -410,7 +449,9 @@ export const LiveTechnicianTrackingChaircareMobileScreen: React.FC<{
             <View style={styles.trafficMessageStrip}>
               <AppIcon name="Navigation" size={16} color="#059669" />
               <Text style={styles.trafficText} numberOfLines={1}>
-                Via Golf Course Rd • Moderate Traffic conditions
+                {isArrived
+                  ? 'Technician has reached your doorstep'
+                  : 'Via Golf Course Rd • Optimal Traffic Route'}
               </Text>
             </View>
           </View>

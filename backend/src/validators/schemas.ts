@@ -57,6 +57,12 @@ export const updateAvailabilitySchema = z.object({
   currentZone: z.string().optional(),
 });
 
+export const updateTechnicianLocationSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  etaMinutes: z.number().int().min(0).max(300).optional(),
+});
+
 export const createReviewSchema = z.object({
   requestId: z.string().min(1, 'Valid request ID or tracking code is required'),
   rating: z.number().int().min(1).max(5, 'Rating must be between 1 and 5 stars'),
