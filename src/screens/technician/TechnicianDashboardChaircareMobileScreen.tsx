@@ -113,12 +113,22 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
 
   const todaySchedule = schedules.find((s) => s.active)?.hours || '09:00 - 19:00';
 
+  // Active accepted jobs by this technician
+  // Unaccepted broadcast jobs (finding_technician) belong strictly in Queue (queuedJobs)
+  const activeJobs = useMemo(() => {
+    return jobs.filter((j) => {
+      if (j.status === 'finding_technician' || j.status === 'completed' || j.status === 'cancelled') {
+        return false;
+      }
+      const isAcceptedByMe = j.isAssignedToMe === true || Boolean(j.technician_id || j.technicianId);
+      const hasActiveStatus = ['assigned', 'technician_assigned', 'in_route', 'arrived', 'in_progress'].includes(j.status);
+      return isAcceptedByMe && hasActiveStatus;
+    });
+  }, [jobs]);
+
   // Active working job takes priority: in_progress > arrived > in_route > assigned
   const activeJob = useMemo(() => {
-    const activeCandidates = jobs.filter((j) =>
-      ['in_progress', 'arrived', 'in_route', 'assigned', 'technician_assigned'].includes(j.status)
-    );
-    if (activeCandidates.length === 0) return null;
+    if (activeJobs.length === 0) return null;
 
     const stageRank: Record<string, number> = {
       in_progress: 1,
@@ -128,23 +138,18 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
       technician_assigned: 4,
     };
 
-    return [...activeCandidates].sort(
+    return [...activeJobs].sort(
       (a, b) => (stageRank[a.status] || 99) - (stageRank[b.status] || 99)
     )[0];
-  }, [jobs]);
+  }, [activeJobs]);
 
   const hasActiveJob = Boolean(activeJob);
 
   // Queued jobs assigned by Admin for when current active job finishes
   const adminQueuedJobs = useMemo(() => {
     if (!activeJob) return [];
-    return jobs.filter(
-      (j) =>
-        j.id !== activeJob.id &&
-        ['assigned', 'technician_assigned'].includes(j.status) &&
-        (j.isAssignedToMe || j.technician_id || j.status === 'assigned')
-    );
-  }, [jobs, activeJob]);
+    return activeJobs.filter((j) => j.id !== activeJob.id);
+  }, [activeJobs, activeJob]);
 
   // Continuous rhythmic blinking animation for pending job recognition
   const blinkAnim = useRef(new Animated.Value(1)).current;
@@ -702,7 +707,7 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
               <AppIcon name="Wrench" size={16} color={Colors.secondaryCobalt} />
             </View>
             <AnimatedNumber
-              value={jobs.filter((j) => j.status !== 'completed' && j.status !== 'cancelled').length}
+              value={activeJobs.length}
               style={styles.kpiValue}
             />
             <Text style={styles.kpiSub}>Dispatches</Text>
@@ -766,7 +771,7 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
                 dashboardTab === 'active' && styles.dashboardTabBtnTextActive,
               ]}
             >
-              Active Dispatches ({jobs.length})
+              Active Dispatches ({activeJobs.length})
             </Text>
           </TouchableOpacity>
 
@@ -931,9 +936,9 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
           /* Tab 2: Active Dispatches Feed Section */
           <View style={styles.sectionContainer}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.sectionHeading}>Job Requests</Text>
+              <Text style={styles.sectionHeading}>Active Dispatches</Text>
               <TouchableOpacity onPress={() => navigation.navigate('JobRequestsTab')}>
-                <Text style={styles.seeAllText}>View All ({jobs.length}) →</Text>
+                <Text style={styles.seeAllText}>Radar Queue ({queuedJobs.length}) →</Text>
               </TouchableOpacity>
             </View>
 
@@ -987,13 +992,23 @@ export const TechnicianDashboardChaircareMobileScreen: React.FC<{ navigation: an
               <PrecisionCard style={[styles.jobRequestCard, { paddingVertical: 24, alignItems: 'center' }]}>
                 <AppIcon name="Wrench" size={24} color={Colors.outline} />
                 <Text style={[styles.jobTitle, { fontSize: 14, textAlign: 'center', marginTop: 8 }]}>
-                  No jobs assigned yet
+                  No active dispatches
                 </Text>
                 <Text style={[styles.jobSub, { textAlign: 'center' }]}>
-                  {isOnline
-                    ? 'You are active. New chair repair requests in your radius will show up here.'
+                  {queuedJobs.length > 0
+                    ? `You have ${queuedJobs.length} radar alert${queuedJobs.length > 1 ? 's' : ''} in queue waiting for technician acceptance.`
+                    : isOnline
+                    ? 'You are active. New chair repair requests in your radius will show up in Queue.'
                     : 'Toggle your availability online above to receive new job dispatches.'}
                 </Text>
+                {queuedJobs.length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.heroPrimaryBtn, { marginTop: 14, paddingHorizontal: 20 }]}
+                    onPress={() => navigation.navigate('JobRequestsTab')}
+                  >
+                    <Text style={styles.heroPrimaryBtnText}>Open Radar Queue ({queuedJobs.length}) →</Text>
+                  </TouchableOpacity>
+                )}
               </PrecisionCard>
             )}
           </View>

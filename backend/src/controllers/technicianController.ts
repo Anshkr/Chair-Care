@@ -59,6 +59,7 @@ export const getAssignedJobs = async (
     data: result.rows.map((r) => ({
       id: r.id,
       trackingCode: r.tracking_code,
+      technicianId: r.technician_id,
       chairModel: r.chair_model,
       issueDescription: r.issue_description,
       status: r.status,
