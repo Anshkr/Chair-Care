@@ -50,6 +50,7 @@ interface RequestCardItem {
   realTimeText?: string;
   visitDate?: string;
   timeSlot?: string;
+  rawStatus?: string;
 }
 
 const formatRequestRealTime = (isoString?: string): string => {
@@ -123,26 +124,30 @@ export const ServiceRequestsChaircareMobileScreen: React.FC<ServiceRequestsProps
       const res = await adminApi.getAllRequests();
       if (res.success && Array.isArray(res.data)) {
         const mapped: RequestCardItem[] = res.data.map((r: any) => {
+          const rawStatus = String(r.status || '').toLowerCase().trim();
           let status: 'unassigned' | 'assigned' | 'active' | 'completed' = 'unassigned';
           let statusLabel = 'Needs Assignment';
           let indicatorColor = Colors.error;
 
-          if (r.status === 'assigned') {
+          if (rawStatus === 'assigned') {
             status = 'assigned';
             statusLabel = 'Assigned';
             indicatorColor = '#4edea3';
           } else if (
-            r.status === 'in_route' ||
-            r.status === 'arrived' ||
-            r.status === 'in_progress'
+            rawStatus === 'in_route' ||
+            rawStatus === 'arrived' ||
+            rawStatus === 'in_progress'
           ) {
             status = 'active';
-            statusLabel = r.status === 'in_route' ? 'En Route' : 'In Progress';
+            statusLabel = rawStatus === 'in_route' ? 'En Route' : 'In Progress';
             indicatorColor = Colors.secondaryCobalt;
-          } else if (r.status === 'completed') {
+          } else if (rawStatus === 'completed') {
             status = 'completed';
             statusLabel = 'Completed';
             indicatorColor = '#005236';
+          } else if (rawStatus === 'cancelled') {
+            statusLabel = 'Cancelled';
+            indicatorColor = '#64748B';
           }
 
           const realTime = formatRequestRealTime(r.createdAt);
@@ -159,6 +164,7 @@ export const ServiceRequestsChaircareMobileScreen: React.FC<ServiceRequestsProps
             amount: r.totalAmount || 0,
             status,
             statusLabel,
+            rawStatus,
             slaText: realTime ? realTime : undefined,
             slaType: 'countdown' as const,
             customerName: r.customerName || 'Customer',
@@ -227,6 +233,14 @@ export const ServiceRequestsChaircareMobileScreen: React.FC<ServiceRequestsProps
   };
 
   const handleAssignTechnician = (item: RequestCardItem) => {
+    const s = String(item.rawStatus || item.status || '').toLowerCase();
+    if (s === 'in_progress' || s === 'completed' || s === 'active' || s === 'cancelled') {
+      Alert.alert(
+        'Action Not Allowed',
+        `Technicians cannot be assigned to jobs that are ${s === 'completed' ? 'completed' : s === 'cancelled' ? 'cancelled' : 'already in progress'}.`
+      );
+      return;
+    }
     if (navigation) {
       navigation.navigate('AssignTechnician', {
         requestId: item.id,
@@ -608,7 +622,10 @@ export const ServiceRequestsChaircareMobileScreen: React.FC<ServiceRequestsProps
                 )}
 
                 {/* Action Footer */}
-                {item.status === 'unassigned' ? (
+                {item.status === 'unassigned' &&
+                !['in_progress', 'completed', 'active', 'cancelled'].includes(
+                  String(item.rawStatus || item.status).toLowerCase()
+                ) ? (
                   <View style={styles.actionFooterGrid}>
                     <TouchableOpacity
                       style={styles.viewDetailsBtn}

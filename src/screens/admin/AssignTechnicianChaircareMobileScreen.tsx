@@ -66,6 +66,8 @@ export const AssignTechnicianChaircareMobileScreen: React.FC<AssignTechnicianPro
   const customerName = passedItem?.customerName || 'Priya Sharma';
   const locationText = passedItem?.locationText || 'DLF Phase 2, Gurugram';
   const scheduleText = passedItem?.scheduleText || 'Today • 4:00 PM';
+  const rawStatus = String(passedItem?.rawStatus || passedItem?.status || '').toLowerCase().trim();
+  const isLocked = rawStatus === 'in_progress' || rawStatus === 'completed' || rawStatus === 'active' || rawStatus === 'cancelled';
 
   const [activeFilter, setActiveFilter] = useState<FilterTag>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -130,6 +132,14 @@ export const AssignTechnicianChaircareMobileScreen: React.FC<AssignTechnicianPro
   }, [technicians, activeFilter, searchQuery]);
 
   const handleProceedToConfirmation = (candidate: TechCandidate) => {
+    if (isLocked) {
+      Alert.alert(
+        'Action Not Allowed',
+        `Technicians cannot be assigned to jobs that are ${rawStatus === 'completed' ? 'completed' : rawStatus === 'cancelled' ? 'cancelled' : 'already in progress'}.`
+      );
+      return;
+    }
+
     if (!candidate.isAvailable) {
       Alert.alert(
         'Technician Unavailable',
@@ -155,6 +165,14 @@ export const AssignTechnicianChaircareMobileScreen: React.FC<AssignTechnicianPro
   };
 
   const handleAutoDispatchBestMatch = () => {
+    if (isLocked) {
+      Alert.alert(
+        'Action Not Allowed',
+        `Technicians cannot be assigned to jobs that are ${rawStatus === 'completed' ? 'completed' : rawStatus === 'cancelled' ? 'cancelled' : 'already in progress'}.`
+      );
+      return;
+    }
+
     const bestMatch = technicians.find((t) => t.isAvailable) || technicians[0];
     if (bestMatch) {
       handleProceedToConfirmation(bestMatch);

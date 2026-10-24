@@ -625,7 +625,7 @@ export const assignTechnician = async (
 
   const cleanId = String(id).trim().replace(/^#/, '');
   const reqRes = await query(
-    `SELECT id, tracking_code, customer_id, chair_model, address 
+    `SELECT id, tracking_code, customer_id, chair_model, address, status 
      FROM service_requests
      WHERE id::text = $1 OR id::text = $2 OR tracking_code = $1 OR tracking_code = $2;`,
     [id, cleanId]
@@ -638,6 +638,14 @@ export const assignTechnician = async (
 
   const targetReq = reqRes.rows[0];
   const actualReqId = targetReq.id;
+
+  if (['in_progress', 'completed', 'cancelled'].includes(targetReq.status)) {
+    res.status(400).json({
+      success: false,
+      error: `Cannot assign technician. This service request is already ${targetReq.status.replace('_', ' ')}.`,
+    });
+    return;
+  }
 
   // Check if technician is already working on an active job
   const activeCheck = await query(

@@ -131,6 +131,13 @@ export const LiveOperationsOverviewChaircareMobileScreen: React.FC<LiveOperation
   };
 
   const handleOpenAssignModal = (job: any) => {
+    if (['in_progress', 'completed', 'cancelled'].includes(job?.status)) {
+      Alert.alert(
+        'Action Not Allowed',
+        `Technicians cannot be assigned to jobs that are ${job.status === 'completed' ? 'completed' : 'already in progress'}.`
+      );
+      return;
+    }
     setSelectedJobToAssign(job);
     setAssignModalVisible(true);
   };
@@ -612,7 +619,7 @@ export const LiveOperationsOverviewChaircareMobileScreen: React.FC<LiveOperation
                           <AppIcon name="Phone" size={18} />
                         </TouchableOpacity>
                       </View>
-                    ) : (
+                    ) : !['in_progress', 'completed', 'cancelled'].includes(item.status) ? (
                       <View style={styles.unassignedPromptBox}>
                         <View style={{ flex: 1, marginRight: 8 }}>
                           <Text style={styles.unassignedPromptTitle}>Awaiting Specialist Match</Text>
@@ -629,7 +636,7 @@ export const LiveOperationsOverviewChaircareMobileScreen: React.FC<LiveOperation
                           <Text style={styles.assignDirectBtnText}>Assign Tech</Text>
                         </TouchableOpacity>
                       </View>
-                    )}
+                    ) : null}
 
                     {/* Diagnostics & Inspection Line */}
                     <View style={styles.diagnosticsRow}>

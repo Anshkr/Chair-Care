@@ -40,8 +40,14 @@ export const ServiceRequestDetailsCc10483ChaircareMobileScreen: React.FC<Service
   const serviceTitle = passedItem?.serviceTitle || 'Hydraulic Replacement';
   const chairModel = passedItem?.chairModel || 'Steelcase Gesture • Heavy Duty Class-4 Cylinder';
   const amount = passedItem?.amount || 749;
+  const rawStatus = String(passedItem?.rawStatus || passedItem?.status || '').toLowerCase().trim();
   const status = passedItem?.status || 'unassigned';
-  const statusLabel = passedItem?.statusLabel || (status === 'unassigned' ? 'Needs Assignment' : 'Assigned');
+  const isInProgress = rawStatus === 'in_progress' || rawStatus === 'in_route' || rawStatus === 'arrived' || status === 'active';
+  const isCompleted = rawStatus === 'completed' || status === 'completed';
+  const isAssignable = !isInProgress && !isCompleted && rawStatus !== 'cancelled';
+  const assignedTechName = passedItem?.techName || passedItem?.technicianName || 'Field Specialist';
+  const assignedTechPhone = passedItem?.technicianPhone || '+91 98765 43210';
+  const statusLabel = passedItem?.statusLabel || (isCompleted ? 'Completed' : isInProgress ? 'In Progress' : status === 'unassigned' ? 'Needs Assignment' : 'Assigned');
   const slaText = passedItem?.slaText || '22m SLA';
 
   const customerName = passedItem?.customerName || 'Priya Sharma';
@@ -68,6 +74,13 @@ export const ServiceRequestDetailsCc10483ChaircareMobileScreen: React.FC<Service
   };
 
   const handleAssignTechnician = (techName?: string) => {
+    if (!isAssignable) {
+      Alert.alert(
+        'Action Not Allowed',
+        `Technicians cannot be assigned to jobs that are ${isCompleted ? 'completed' : 'already in progress'}.`
+      );
+      return;
+    }
     if (navigation) {
       navigation.navigate('AssignTechnician', {
         requestId: passedId || 'req-10483',
@@ -395,79 +408,128 @@ export const ServiceRequestDetailsCc10483ChaircareMobileScreen: React.FC<Service
         <View style={styles.card}>
           <View style={styles.cardHeaderRow}>
             <Text style={styles.cardEyebrow}>FIELD ASSIGNMENT</Text>
-            <Text style={styles.pendingMatchBadge}>Pending Match</Text>
+            {isCompleted ? (
+              <View style={[styles.pendingMatchBadge, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#15803D' }}>✅ Completed</Text>
+              </View>
+            ) : isInProgress ? (
+              <View style={[styles.pendingMatchBadge, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#1D4ED8' }}>
+                  {rawStatus === 'in_route' ? '🚗 En Route' : rawStatus === 'arrived' ? '📍 Arrived' : '🔧 In Progress'}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.pendingMatchBadge}>Pending Match</Text>
+            )}
           </View>
 
-          <View style={styles.unassignedPromptBox}>
-            <View style={styles.unassignedIconWrapper}>
-              <AppIcon name="User" size={18} />
-              <View style={styles.warningMiniDot}>
-                <AppIcon name="TriangleAlert" size={14} />
+          {isCompleted ? (
+            <View style={[styles.unassignedPromptBox, { borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' }]}>
+              <View style={[styles.unassignedIconWrapper, { backgroundColor: '#DCFCE7' }]}>
+                <AppIcon name="ShieldCheck" size={20} color="#15803D" />
               </View>
-            </View>
-
-            <Text style={styles.unassignedTitle}>Currently Unassigned</Text>
-            <Text style={styles.unassignedDescription}>
-              Customer awaiting technician match notification. Auto-dispatch paused for manual admin routing.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.selectTechBtn}
-              onPress={() => setTechSheetVisible((prev) => !prev)}
-              activeOpacity={0.85}
-            >
-              <AppIcon name="Plus" size={18} />
-              <Text style={styles.selectTechBtnText}>
-                {techSheetVisible ? 'Hide Recommended Techs' : 'Select & Assign Technician'}
+              <Text style={styles.unassignedTitle}>{assignedTechName}</Text>
+              <Text style={styles.unassignedDescription}>
+                Service completed and validated via customer PIN. 90-day comprehensive service warranty active. Assignment locked.
               </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Expandable Recommended Technicians List */}
-          {techSheetVisible && (
-            <View style={styles.techDrawerBox}>
-              <Text style={styles.techDrawerTitle}>AVAILABLE RECOMMENDED TECHS</Text>
-
-              {/* Tech 1 */}
-              <View style={styles.techRowItem}>
-                <View style={styles.techItemLeft}>
-                  <View style={styles.techAvatarPlaceholder}>
-                    <Text style={styles.techInitials}>VS</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.techNameTitle}>Vikram Sethi</Text>
-                    <Text style={styles.techSubMeta}>4.9 ★ • 1.2 km away (6m ETA)</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.assignActionBtn}
-                  onPress={() => handleAssignTechnician('Vikram Sethi')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.assignActionBtnText}>Assign</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Tech 2 */}
-              <View style={styles.techRowItem}>
-                <View style={styles.techItemLeft}>
-                  <View style={styles.techAvatarPlaceholder}>
-                    <Text style={styles.techInitials}>AR</Text>
-                  </View>
-                  <View>
-                    <Text style={styles.techNameTitle}>Ananya Roy</Text>
-                    <Text style={styles.techSubMeta}>4.95 ★ • 2.8 km away (14m ETA)</Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  style={styles.assignActionBtn}
-                  onPress={() => handleAssignTechnician('Ananya Roy')}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.assignActionBtnText}>Assign</Text>
-                </TouchableOpacity>
+              <View style={{ marginTop: 12, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#DCFCE7', alignSelf: 'center' }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#15803D' }}>
+                  ✓ Assignment Closed • Service Completed
+                </Text>
               </View>
             </View>
+          ) : isInProgress ? (
+            <View style={[styles.unassignedPromptBox, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}>
+              <View style={[styles.unassignedIconWrapper, { backgroundColor: '#DBEAFE' }]}>
+                <AppIcon name="UserCheck" size={20} color="#1D4ED8" />
+              </View>
+              <Text style={styles.unassignedTitle}>{assignedTechName}</Text>
+              <Text style={styles.unassignedDescription}>
+                Technician is currently working on this service request on-site. Re-assignment is locked while the service is in progress.
+              </Text>
+              <TouchableOpacity
+                style={[styles.selectTechBtn, { backgroundColor: '#1D4ED8', borderColor: '#1D4ED8', marginTop: 12, alignSelf: 'center' }]}
+                onPress={() => phoneCallService.callNumber(assignedTechPhone, assignedTechName)}
+                activeOpacity={0.85}
+              >
+                <AppIcon name="Phone" size={16} color="#FFFFFF" />
+                <Text style={[styles.selectTechBtnText, { color: '#FFFFFF' }]}>Call Technician ({assignedTechPhone})</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <View style={styles.unassignedPromptBox}>
+                <View style={styles.unassignedIconWrapper}>
+                  <AppIcon name="User" size={18} />
+                  <View style={styles.warningMiniDot}>
+                    <AppIcon name="TriangleAlert" size={14} />
+                  </View>
+                </View>
+
+                <Text style={styles.unassignedTitle}>Currently Unassigned</Text>
+                <Text style={styles.unassignedDescription}>
+                  Customer awaiting technician match notification. Auto-dispatch paused for manual admin routing.
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.selectTechBtn}
+                  onPress={() => setTechSheetVisible((prev) => !prev)}
+                  activeOpacity={0.85}
+                >
+                  <AppIcon name="Plus" size={18} />
+                  <Text style={styles.selectTechBtnText}>
+                    {techSheetVisible ? 'Hide Recommended Techs' : 'Select & Assign Technician'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Expandable Recommended Technicians List */}
+              {techSheetVisible && (
+                <View style={styles.techDrawerBox}>
+                  <Text style={styles.techDrawerTitle}>AVAILABLE RECOMMENDED TECHS</Text>
+
+                  {/* Tech 1 */}
+                  <View style={styles.techRowItem}>
+                    <View style={styles.techItemLeft}>
+                      <View style={styles.techAvatarPlaceholder}>
+                        <Text style={styles.techInitials}>VS</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.techNameTitle}>Vikram Sethi</Text>
+                        <Text style={styles.techSubMeta}>4.9 ★ • 1.2 km away (6m ETA)</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.assignActionBtn}
+                      onPress={() => handleAssignTechnician('Vikram Sethi')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.assignActionBtnText}>Assign</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Tech 2 */}
+                  <View style={styles.techRowItem}>
+                    <View style={styles.techItemLeft}>
+                      <View style={styles.techAvatarPlaceholder}>
+                        <Text style={styles.techInitials}>AR</Text>
+                      </View>
+                      <View>
+                        <Text style={styles.techNameTitle}>Ananya Roy</Text>
+                        <Text style={styles.techSubMeta}>4.95 ★ • 2.8 km away (14m ETA)</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.assignActionBtn}
+                      onPress={() => handleAssignTechnician('Ananya Roy')}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.assignActionBtnText}>Assign</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -552,14 +614,30 @@ export const ServiceRequestDetailsCc10483ChaircareMobileScreen: React.FC<Service
             <AppIcon name="Flag" size={16} color="#BA1A1A" />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.mainAssignCtaBtn}
-            onPress={() => handleAssignTechnician()}
-            activeOpacity={0.88}
-          >
-            <Text style={styles.mainAssignCtaText}>Assign Technician</Text>
-            <Text style={styles.mainAssignCtaArrow}>→</Text>
-          </TouchableOpacity>
+          {isAssignable ? (
+            <TouchableOpacity
+              style={styles.mainAssignCtaBtn}
+              onPress={() => handleAssignTechnician()}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.mainAssignCtaText}>Assign Technician</Text>
+              <Text style={styles.mainAssignCtaArrow}>→</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[
+                styles.mainAssignCtaBtn,
+                { backgroundColor: isCompleted ? '#059669' : '#2563EB' },
+              ]}
+              onPress={() => (navigation?.canGoBack() ? navigation.goBack() : navigation?.navigate('ServiceRequests'))}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.mainAssignCtaText}>
+                {isCompleted ? '✓ Completed • Back to Requests' : '🔧 In Progress • Back to Requests'}
+              </Text>
+              <Text style={styles.mainAssignCtaArrow}>←</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </View>
