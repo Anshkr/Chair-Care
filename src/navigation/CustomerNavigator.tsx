@@ -30,6 +30,7 @@ import {
   CustomerProfileChaircareMobileScreen,
 } from '../screens/customer';
 import { TechnicianOnboardingChaircareMobileScreen } from '../screens/technician';
+import { SupportConversationChaircareMobileScreen } from '../screens/admin/SupportConversationChaircareMobileScreen';
 import { useAuth } from '../context/AuthContext';
 
 const Tab = createBottomTabNavigator();
@@ -176,6 +177,7 @@ export const CustomerNavigator: React.FC = () => {
       <Stack.Screen name="RateYourExperience" component={RateYourExperienceChaircareMobileScreen} />
       <Stack.Screen name="RateExperience" component={RateYourExperienceChaircareMobileScreen} />
       <Stack.Screen name="ChatWithTechnician" component={ChatWithTechnicianChaircareMobileScreen} />
+      <Stack.Screen name="SupportConversation" component={SupportConversationChaircareMobileScreen} />
       <Stack.Screen name="RequestDetails" component={RequestDetailsChaircareMobileScreen} />
     </Stack.Navigator>
   );

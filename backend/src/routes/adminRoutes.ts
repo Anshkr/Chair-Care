@@ -12,6 +12,8 @@ import {
   getAdminUsers,
   getActivityLogs,
   getSupportTickets,
+  getSupportTicketById,
+  openSupportChat,
   assignSupportTicket,
   resolveSupportTicket,
   getDisputes,
@@ -48,6 +50,8 @@ router.get('/admins', getAdminUsers);
 router.post('/admins', createAdminUser);
 router.get('/logs', getActivityLogs);
 router.get('/support', getSupportTickets);
+router.get('/support/:id', getSupportTicketById);
+router.post('/support/:id/open-chat', openSupportChat);
 router.patch('/support/:id/assign', assignSupportTicket);
 router.patch('/support/:id/resolve', resolveSupportTicket);
 router.get('/disputes', getDisputes);

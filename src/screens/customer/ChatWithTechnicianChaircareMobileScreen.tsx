@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { Colors, BorderRadius, Shadows } from '../../constants/theme';
@@ -21,11 +22,13 @@ import { chatApi, ChatMessageItem } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
 interface ChatMessage {
   id: string;
   sender: 'technician' | 'customer';
   text: string;
+  imageUrl?: string | null;
   timestamp: string;
   isDelivered?: boolean;
   specCard?: {
@@ -81,6 +84,7 @@ export const ChatWithTechnicianChaircareMobileScreen: React.FC<{
           id: m.id,
           sender: m.senderRole === 'customer' ? 'customer' : 'technician',
           text: m.message,
+          imageUrl: m.imageUrl || null,
           timestamp: formatCurrentTime(m.createdAt),
           isDelivered: true,
         }));
@@ -132,15 +136,78 @@ export const ChatWithTechnicianChaircareMobileScreen: React.FC<{
   };
 
   const handleAttach = () => {
-    Alert.alert('Attach File', 'Attach photo of chair or voice memo?', [
+    Alert.alert('Share Photo', 'Choose an option to share a photo with your technician', [
+      { text: 'Take Photo', onPress: handleCameraPhoto },
+      { text: 'Choose from Gallery', onPress: handleGalleryPhoto },
       { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Photo of Chair',
-        onPress: () => {
-          handleSendMessage('Attached photo of chair mechanism');
-        },
-      },
     ]);
+  };
+
+  const handleCameraPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Camera access is required to take photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to capture photo.');
+    }
+  };
+
+  const handleGalleryPhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Gallery access is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to select photo.');
+    }
+  };
+
+  const processAndSendImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : await fileUriToBase64DataUrl(asset.uri);
+
+      const newMessage: ChatMessage = {
+        id: `msg-${Date.now()}`,
+        sender: 'customer',
+        text: '',
+        imageUrl: imageUri,
+        timestamp: formatCurrentTime(),
+        isDelivered: true,
+      };
+
+      setMessages((prev) => [...prev, newMessage]);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      await chatApi.sendMessage(rawRequestId, 'Photo attached', 'customer', imageUri);
+      fetchLiveMessages();
+    } catch {
+      Alert.alert('Error', 'Failed to send photo.');
+    }
   };
 
   return (
@@ -298,16 +365,32 @@ export const ChatWithTechnicianChaircareMobileScreen: React.FC<{
                         isTech ? styles.bubbleTech : styles.bubbleCustomer,
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.messageText,
-                          isTech
-                            ? styles.messageTextTech
-                            : styles.messageTextCustomer,
-                        ]}
-                      >
-                        {msg.text}
-                      </Text>
+                      {!!msg.text && (
+                        <Text
+                          style={[
+                            styles.messageText,
+                            isTech
+                              ? styles.messageTextTech
+                              : styles.messageTextCustomer,
+                          ]}
+                        >
+                          {msg.text}
+                        </Text>
+                      )}
+
+                      {/* Photo Attachment if present */}
+                      {msg.imageUrl && (
+                        <Image
+                          source={{ uri: msg.imageUrl }}
+                          style={{
+                            width: 220,
+                            height: 160,
+                            borderRadius: 12,
+                            marginTop: msg.text ? 8 : 0,
+                          }}
+                          resizeMode="cover"
+                        />
+                      )}
 
                       {/* Micro Spec Preview Card if present */}
                       {msg.specCard && (

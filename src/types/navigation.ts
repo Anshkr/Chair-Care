@@ -26,7 +26,8 @@ export type CustomerStackParamList = {
   PaymentSuccess: { requestId?: string };
   RateExperience: { requestId?: string };
   RateYourExperience: { requestId?: string };
-  ChatWithTechnician: { recipientName?: string };
+  ChatWithTechnician: { recipientName?: string; requestId?: string; technicianPhone?: string; trackingCode?: string };
+  SupportConversation: { ticketId?: string; ticket?: any };
   MyRequests: undefined;
   RequestDetails: { requestId?: string };
   Notifications: undefined;

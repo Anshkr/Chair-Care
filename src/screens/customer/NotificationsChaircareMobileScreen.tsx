@@ -40,8 +40,10 @@ interface NotificationItem {
   iconTextColor: string;
   badge?: string;
   etaNote?: string;
-  actionType?: 'details' | 'track' | 'rate' | 'receipt';
+  actionType?: 'details' | 'track' | 'rate' | 'receipt' | 'support_chat' | 'chat';
   actionLabel?: string;
+  ticketId?: string;
+  ticket?: any;
   subMeta?: string;
   stars?: number;
   warrantyPill?: string;
@@ -237,10 +239,24 @@ export const NotificationsChaircareMobileScreen: React.FC<{
             else if (dbNotif.type === 'system' || dbNotif.type === 'promo') cat = 'system';
 
             const isChat = dbNotif.type === 'chat_message';
+            const isSupportChat = dbNotif.type === 'support_chat';
+
+            let actionType: NotificationItem['actionType'] = 'details';
+            let actionLabel = 'View Details';
+
+            if (isSupportChat) {
+              actionType = 'support_chat';
+              actionLabel = 'Open Support Chat';
+            } else if (isChat) {
+              actionType = 'chat';
+              actionLabel = 'Open Chat';
+            }
 
             generated.push({
               id: dbNotif.id,
               requestId: dbNotif.data?.requestId,
+              ticketId: dbNotif.data?.ticketId,
+              ticket: dbNotif.data,
               category: cat,
               section: timeInfo.section,
               title: dbNotif.title,
@@ -248,13 +264,17 @@ export const NotificationsChaircareMobileScreen: React.FC<{
               subMeta: timeInfo.subMeta,
               timestamp: timeInfo.timestamp,
               message: dbNotif.message,
-              ticketNumber: dbNotif.data?.trackingCode ? `#${dbNotif.data.trackingCode}` : undefined,
+              ticketNumber: dbNotif.data?.ticketCode
+                ? `#${dbNotif.data.ticketCode}`
+                : dbNotif.data?.trackingCode
+                ? `#${dbNotif.data.trackingCode}`
+                : undefined,
               isUnread: !dbNotif.isRead,
-              icon: isChat ? 'MessageSquare' : 'Bell',
-              iconBgColor: isChat ? '#EEF2FF' : Colors.secondaryCobalt,
-              iconTextColor: isChat ? '#4F46E5' : Colors.onSecondary,
-              actionType: 'details',
-              actionLabel: isChat ? 'Open Chat' : 'View Details',
+              icon: isSupportChat ? 'Headphones' : isChat ? 'MessageSquare' : 'Bell',
+              iconBgColor: isSupportChat ? '#E0F2FE' : isChat ? '#EEF2FF' : Colors.secondaryCobalt,
+              iconTextColor: isSupportChat ? '#0284C7' : isChat ? '#4F46E5' : Colors.onSecondary,
+              actionType,
+              actionLabel,
             });
           });
       }
@@ -436,7 +456,14 @@ export const NotificationsChaircareMobileScreen: React.FC<{
     }
 
     const reqId = item.requestId || item.id;
-    if (item.actionType === 'details') {
+    if (item.actionType === 'support_chat') {
+      navigation.navigate('SupportConversation', {
+        ticketId: item.ticketId || item.requestId,
+        ticket: item.ticket,
+      });
+    } else if (item.actionType === 'chat') {
+      navigation.navigate('ChatWithTechnician', { requestId: reqId });
+    } else if (item.actionType === 'details') {
       navigation.navigate('RequestDetails', { requestId: reqId });
     } else if (item.actionType === 'track') {
       navigation.navigate('LiveTechnicianTracking', { requestId: reqId });
@@ -449,7 +476,14 @@ export const NotificationsChaircareMobileScreen: React.FC<{
 
   const handleActionBtnPress = (item: NotificationItem) => {
     const reqId = item.requestId || item.id;
-    if (item.actionType === 'details') {
+    if (item.actionType === 'support_chat') {
+      navigation.navigate('SupportConversation', {
+        ticketId: item.ticketId || item.requestId,
+        ticket: item.ticket,
+      });
+    } else if (item.actionType === 'chat') {
+      navigation.navigate('ChatWithTechnician', { requestId: reqId });
+    } else if (item.actionType === 'details') {
       navigation.navigate('RequestDetails', { requestId: reqId });
     } else if (item.actionType === 'track') {
       navigation.navigate('LiveTechnicianTracking', { requestId: reqId });

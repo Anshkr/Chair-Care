@@ -987,40 +987,275 @@ export const getSupportTickets = async (
       st.priority,
       st.status,
       st.created_at,
+      st.updated_at,
       u.name as user_name,
       u.email as user_email,
+      u.phone as user_phone,
       u.role as user_role,
       sr.tracking_code,
-      sr.chair_model
+      sr.chair_model,
+      sr.issue_description,
+      sr.address as service_address,
+      sr.unit_floor,
+      sr.time_slot,
+      sr.visit_date,
+      sr.total_amount,
+      sr.payment_method,
+      sr.status as service_status,
+      tech.name as tech_name,
+      tech.phone as tech_phone
      FROM support_tickets st
      JOIN users u ON st.user_id = u.id
      LEFT JOIN service_requests sr ON st.request_id = sr.id
+     LEFT JOIN users tech ON sr.technician_id = tech.id
      ORDER BY st.created_at DESC
      LIMIT 50;`
   );
 
   res.json({
     success: true,
-    data: result.rows.map((row) => ({
-      id: row.id,
-      code: row.ticket_code,
-      priority: row.priority === 'urgent' || row.priority === 'high' ? 'high' : row.priority === 'low' ? 'low' : 'med',
-      priorityLabel: `${(row.priority || 'medium').toUpperCase()} Priority`,
-      status: row.status === 'open' ? 'Open' : row.status === 'under_review' ? 'In Progress' : 'Closed',
-      userType: row.user_role === 'technician' ? 'Technician' : 'Customer',
-      userName: row.user_name || 'Customer',
-      title: row.subject,
-      description: row.message,
-      category: 'services',
-      categoryLabel: 'Service Support',
-      timeLabel: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      trackingCode: row.tracking_code,
-      chairModel: row.chair_model,
-      accentColor: row.priority === 'urgent' || row.priority === 'high' ? '#ba1a1a' : '#005ac1',
-      primaryActionLabel: 'Investigate Ticket',
-      createdAt: row.created_at,
-    })),
+    data: result.rows.map((row) => {
+      const priority = (row.priority || 'medium').toLowerCase();
+      const status = (row.status || 'open').toLowerCase();
+      const mappedStatus =
+        status === 'resolved' || status === 'closed'
+          ? 'Closed'
+          : status === 'under_review' || status === 'in_progress'
+          ? 'In Progress'
+          : status === 'waiting'
+          ? 'Waiting'
+          : 'Open';
+
+      const fullAddress = [row.unit_floor, row.service_address].filter(Boolean).join(', ') || 'Address on file';
+      const escrowFormatted = row.total_amount ? `₹${Number(row.total_amount).toFixed(2)}` : '₹499.00';
+      const paymentMethodFormatted = row.payment_method ? `Settled via ${row.payment_method}` : 'Settled via Razorpay UPI';
+
+      return {
+        id: row.id,
+        code: row.ticket_code,
+        priority: priority === 'urgent' || priority === 'high' ? 'high' : priority === 'low' ? 'low' : 'med',
+        priorityLabel: `${(row.priority || 'medium').toUpperCase()} Priority`,
+        status: mappedStatus,
+        userType: row.user_role === 'technician' ? 'Technician' : 'Customer',
+        userName: row.user_name || 'Customer',
+        customerName: row.user_name || 'Customer',
+        customerEmail: row.user_email || '',
+        customerPhone: row.user_phone || '+91 91234 56789',
+        customerAddress: fullAddress,
+        title: row.subject,
+        subject: row.subject,
+        description: row.message,
+        statement: row.message,
+        category: 'services',
+        categoryLabel: 'Service Support',
+        timeLabel: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        trackingCode: row.tracking_code || '',
+        serviceCode: row.tracking_code || '',
+        chairModel: row.chair_model || 'Office Chair',
+        serviceTitle: row.chair_model ? `${row.chair_model} Repair` : 'ChairCare Repair & Service',
+        assignedTech: row.tech_name || 'Unassigned',
+        assignedTechPhone: row.tech_phone || '',
+        serviceSlotDate: row.visit_date || 'Scheduled Visit',
+        serviceSlotTime: row.time_slot || 'Regular Hours',
+        escrowAmount: escrowFormatted,
+        escrowStatus: paymentMethodFormatted,
+        disputeFlag: row.subject || 'Service Discrepancy',
+        accentColor: priority === 'urgent' || priority === 'high' ? '#ba1a1a' : '#005ac1',
+        primaryActionLabel: 'Investigate Ticket',
+        createdAt: row.created_at,
+      };
+    }),
   });
+};
+
+export const getSupportTicketById = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const result = await query(
+      `SELECT 
+        st.id,
+        st.ticket_code,
+        st.user_id,
+        st.request_id,
+        st.subject,
+        st.message,
+        st.priority,
+        st.status,
+        st.created_at,
+        st.updated_at,
+        u.name as user_name,
+        u.email as user_email,
+        u.phone as user_phone,
+        u.role as user_role,
+        sr.tracking_code,
+        sr.chair_model,
+        sr.issue_description,
+        sr.address as service_address,
+        sr.unit_floor,
+        sr.time_slot,
+        sr.visit_date,
+        sr.total_amount,
+        sr.payment_method,
+        sr.status as service_status,
+        tech.name as tech_name,
+        tech.phone as tech_phone
+       FROM support_tickets st
+       JOIN users u ON st.user_id = u.id
+       LEFT JOIN service_requests sr ON st.request_id = sr.id
+       LEFT JOIN users tech ON sr.technician_id = tech.id
+       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Support ticket not found.' });
+      return;
+    }
+
+    const row = result.rows[0];
+    const fullAddress = [row.unit_floor, row.service_address].filter(Boolean).join(', ') || 'Address on file';
+    const escrowFormatted = row.total_amount ? `₹${Number(row.total_amount).toFixed(2)}` : '₹499.00';
+    const paymentMethodFormatted = row.payment_method ? `Settled via ${row.payment_method}` : 'Settled via Razorpay UPI';
+
+    res.json({
+      success: true,
+      data: {
+        id: row.id,
+        code: row.ticket_code,
+        priority: row.priority === 'urgent' || row.priority === 'high' ? 'high' : row.priority === 'low' ? 'low' : 'med',
+        priorityLabel: `${(row.priority || 'medium').toUpperCase()} Priority`,
+        status: row.status === 'open' ? 'Open' : row.status === 'under_review' ? 'In Progress' : 'Closed',
+        userType: row.user_role === 'technician' ? 'Technician' : 'Customer',
+        userName: row.user_name || 'Customer',
+        customerName: row.user_name || 'Customer',
+        customerEmail: row.user_email || '',
+        customerPhone: row.user_phone || '+91 91234 56789',
+        customerAddress: fullAddress,
+        title: row.subject,
+        subject: row.subject,
+        description: row.message,
+        statement: row.message,
+        category: 'services',
+        categoryLabel: 'Service Support',
+        timeLabel: new Date(row.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        trackingCode: row.tracking_code || '',
+        serviceCode: row.tracking_code || '',
+        chairModel: row.chair_model || 'Office Chair',
+        serviceTitle: row.chair_model ? `${row.chair_model} Repair` : 'ChairCare Repair & Service',
+        assignedTech: row.tech_name || 'Unassigned',
+        assignedTechPhone: row.tech_phone || '',
+        serviceSlotDate: row.visit_date || 'Scheduled Visit',
+        serviceSlotTime: row.time_slot || 'Regular Hours',
+        escrowAmount: escrowFormatted,
+        escrowStatus: paymentMethodFormatted,
+        disputeFlag: row.subject || 'Service Discrepancy',
+        accentColor: row.priority === 'urgent' || row.priority === 'high' ? '#ba1a1a' : '#005ac1',
+        createdAt: row.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('❌ [getSupportTicketById error]:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to fetch ticket details' });
+  }
+};
+
+export const openSupportChat = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const adminId = req.user?.userId;
+
+  try {
+    const ticketRes = await query(
+      `SELECT st.*, u.name as customer_name, u.id as customer_id
+       FROM support_tickets st
+       JOIN users u ON st.user_id = u.id
+       WHERE st.id::text = $1 OR st.ticket_code = $1;`,
+      [id]
+    );
+
+    if (ticketRes.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Support ticket not found.' });
+      return;
+    }
+
+    const ticket = ticketRes.rows[0];
+
+    // 1. Mark ticket as under_review
+    await query(
+      `UPDATE support_tickets SET status = 'under_review', updated_at = NOW() WHERE id = $1;`,
+      [ticket.id]
+    );
+
+    // 2. Insert notification for the customer
+    await query(
+      `INSERT INTO notifications (user_id, title, message, type, data)
+       VALUES ($1, $2, $3, 'support_chat', $4);`,
+      [
+        ticket.customer_id,
+        '🎧 Support Chat Opened',
+        `ChairCare Admin has opened a live support chat for your ticket ${ticket.ticket_code}. Tap to chat directly with admin.`,
+        JSON.stringify({
+          ticketId: ticket.id,
+          ticketCode: ticket.ticket_code,
+          requestId: ticket.request_id,
+        }),
+      ]
+    );
+
+    // 3. Ensure initial messages in support_messages
+    const existingMsgs = await query(
+      `SELECT id FROM support_messages WHERE ticket_id = $1 LIMIT 1;`,
+      [ticket.id]
+    );
+
+    if (existingMsgs.rows.length === 0) {
+      // Customer's initial problem statement
+      await query(
+        `INSERT INTO support_messages (ticket_id, sender_id, sender_role, sender_name, message)
+         VALUES ($1, $2, 'customer', $3, $4);`,
+        [ticket.id, ticket.customer_id, ticket.customer_name || 'Customer', ticket.message]
+      );
+      // Admin session greeting
+      if (adminId) {
+        await query(
+          `INSERT INTO support_messages (ticket_id, sender_id, sender_role, sender_name, message)
+           VALUES ($1, $2, 'admin', 'Super Admin (You)', $3);`,
+          [
+            ticket.id,
+            adminId,
+            `Hello ${ticket.customer_name || 'there'}, I am reviewing your ticket regarding ${ticket.subject}. How can I assist you right now?`,
+          ]
+        );
+      }
+    }
+
+    // 4. Log admin activity
+    if (adminId) {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'OPEN_SUPPORT_CHAT', 'support_ticket', $2, $3);`,
+        [adminId, ticket.id, JSON.stringify({ ticketCode: ticket.ticket_code, customerName: ticket.customer_name })]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: `Support chat opened and customer ${ticket.customer_name} notified.`,
+      data: {
+        ticketId: ticket.id,
+        ticketCode: ticket.ticket_code,
+      },
+    });
+  } catch (err: any) {
+    console.error('❌ [openSupportChat error]:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to open support chat' });
+  }
 };
 
 export const assignSupportTicket = async (

@@ -12,6 +12,7 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
@@ -21,12 +22,14 @@ import { chatApi, ChatMessageItem } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
 import { VoiceCallModal } from '../../components/common/VoiceCallModal';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
 interface Message {
   id: string;
   sender: 'operative' | 'client';
   senderName: string;
   text: string;
+  imageUrl?: string | null;
   timestamp: string;
   status?: 'sent' | 'delivered' | 'read';
 }
@@ -95,6 +98,7 @@ export const TechnicianChatChaircareMobileScreen: React.FC<{
           sender: m.senderRole === 'technician' ? 'operative' : 'client',
           senderName: m.senderName || (m.senderRole === 'technician' ? 'Operative (You)' : customerName),
           text: m.message,
+          imageUrl: m.imageUrl || null,
           timestamp: formatCurrentTime(m.createdAt),
           status: 'delivered',
         }));
@@ -161,11 +165,79 @@ export const TechnicianChatChaircareMobileScreen: React.FC<{
       'Attach Media',
       'Upload diagnostic photo or mechanical calibration snapshot for customer verification.',
       [
-        { text: 'Camera', onPress: () => Alert.alert('Camera Opened', 'Diagnostic snapshot captured.') },
-        { text: 'Gallery', onPress: () => Alert.alert('Gallery Selected', 'Photo attached.') },
+        { text: 'Camera', onPress: handleCameraAttachment },
+        { text: 'Gallery', onPress: handleGalleryAttachment },
         { text: 'Cancel', style: 'cancel' },
       ]
     );
+  };
+
+  const handleCameraAttachment = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Camera access is required to take photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to capture photo.');
+    }
+  };
+
+  const handleGalleryAttachment = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Gallery access is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to select photo.');
+    }
+  };
+
+  const processAndSendImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : await fileUriToBase64DataUrl(asset.uri);
+
+      const optimistic: Message = {
+        id: `msg-${Date.now()}`,
+        sender: 'operative',
+        senderName: 'Operative (You)',
+        text: '',
+        imageUrl: imageUri,
+        timestamp: formatCurrentTime(),
+        status: 'sent',
+      };
+
+      setMessages((prev) => [...prev, optimistic]);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      await chatApi.sendMessage(rawRequestId, 'Diagnostic photo attached', 'technician', imageUri);
+      fetchLiveMessages();
+    } catch {
+      Alert.alert('Upload Error', 'Failed to send photo.');
+    }
   };
 
   const handleMic = () => {
@@ -399,14 +471,29 @@ export const TechnicianChatChaircareMobileScreen: React.FC<{
             isOperative ? styles.bubbleOperative : styles.bubbleClient,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isOperative ? styles.messageTextOperative : styles.messageTextClient,
-            ]}
-          >
-            {msg.text}
-          </Text>
+          {!!msg.text && (
+            <Text
+              style={[
+                styles.messageText,
+                isOperative ? styles.messageTextOperative : styles.messageTextClient,
+              ]}
+            >
+              {msg.text}
+            </Text>
+          )}
+
+          {msg.imageUrl && (
+            <Image
+              source={{ uri: msg.imageUrl }}
+              style={{
+                width: 220,
+                height: 160,
+                borderRadius: 12,
+                marginTop: msg.text ? 8 : 0,
+              }}
+              resizeMode="cover"
+            />
+          )}
         </View>
         <View style={styles.messageFooterRow}>
           <Text style={styles.messageTimeText}>{msg.timestamp}</Text>

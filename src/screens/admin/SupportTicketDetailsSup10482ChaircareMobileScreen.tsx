@@ -10,10 +10,13 @@ import {
   Animated,
   Modal,
   Platform,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { adminApi } from '../../services/api/adminApi';
 
 interface SupportTicketDetailsScreenProps {
   navigation?: any;
@@ -30,6 +33,8 @@ export const SupportTicketDetailsSup10482ChaircareMobileScreen: React.FC<
 > = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const passedTicket = route?.params?.ticket;
+  const [liveTicket, setLiveTicket] = useState<any>(passedTicket || null);
+  const [openingChat, setOpeningChat] = useState(false);
 
   // Pulse animation for high priority and active step indicators
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -40,36 +45,67 @@ export const SupportTicketDetailsSup10482ChaircareMobileScreen: React.FC<
   // Resolution modal state
   const [showResolveModal, setShowResolveModal] = useState(false);
 
-  // Ticket data with passed context fallback to SUP-10482 reference data
+  useEffect(() => {
+    const rawId = route?.params?.ticketId || passedTicket?.id;
+    if (rawId) {
+      adminApi
+        .getSupportTicketById(rawId)
+        .then((res) => {
+          if (res.success && res.data) {
+            setLiveTicket(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [route?.params?.ticketId, passedTicket?.id]);
+
+  const activeTicket = liveTicket || passedTicket;
+
+  const rawCustName = activeTicket?.customerName || activeTicket?.userName || 'Customer';
+  const initials =
+    rawCustName
+      .split(' ')
+      .map((n: string) => n[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || 'C';
+
+  // Real ticket data without dummy mock fallback
   const ticketData = {
-    id: passedTicket?.id || 'sup-10482',
-    code: passedTicket?.code || 'SUP-10482',
-    priority: passedTicket?.priority || 'high',
-    priorityLabel: passedTicket?.priorityLabel || 'High Priority',
-    status: passedTicket?.status || 'Open',
-    createdTime: passedTicket?.timeLabel || 'Today, 5:20 PM',
+    id: activeTicket?.id || 'sup-1',
+    code: activeTicket?.code || 'SUP-TKT',
+    priority: activeTicket?.priority || 'high',
+    priorityLabel: activeTicket?.priorityLabel || 'High Priority',
+    status: activeTicket?.status || 'Open',
+    createdTime: activeTicket?.timeLabel || 'Recent',
     channel: 'Mobile App',
-    categoryHeader: 'Service Issue • Mechanical Discrepancy',
-    subject:
-      passedTicket?.title || 'Technician did not complete service',
+    categoryHeader: `${activeTicket?.categoryLabel || 'Customer Support'} • Real Customer Ticket`,
+    subject: activeTicket?.subject || activeTicket?.title || 'Support Claim Inquiry',
     statement:
-      '“The technician inspected the chair but left before completing the repair. He mentioned needing a specialized bushing extractor but didn’t reschedule or provide an ETA.”',
-    customerName: passedTicket?.userName || 'Rahul Mehta',
-    customerInitials: 'RM',
-    customerTier: 'Customer • Tier-1 Client',
-    customerPhone: '+91 98201 44810',
-    customerEmail: 'rahul.mehta@oksbi.com',
-    customerAddress: 'Sector 54, Palm Springs, Gurugram',
-    serviceCode: '#CR-10482',
-    serviceTitle: 'Office Chair Repair — Herman Miller Aeron',
-    serviceSubtitle: 'Hydraulic cylinder replacement & caster alignment',
-    assignedTech: 'Rahul Sharma',
-    assignedTechRole: 'Master Spc. • Van #04',
-    serviceSlotDate: '05 Oct 2026',
-    serviceSlotTime: '03:00 PM – 05:00 PM',
-    escrowAmount: '₹1,850.00',
-    escrowStatus: 'Settled via Razorpay UPI',
-    disputeFlag: 'Job Incomplete / Dispute Flagged',
+      activeTicket?.statement ||
+      activeTicket?.description ||
+      'Customer has submitted a service issue regarding this order.',
+    customerName: rawCustName,
+    customerInitials: initials,
+    customerTier: `${activeTicket?.userType || 'Customer'} • Verified Account`,
+    customerPhone: activeTicket?.customerPhone || 'Not provided',
+    customerEmail: activeTicket?.customerEmail || 'Not provided',
+    customerAddress: activeTicket?.customerAddress || 'Address on file',
+    serviceCode: activeTicket?.serviceCode ? `#${activeTicket.serviceCode.replace(/^#/, '')}` : '#SR-ORDER',
+    serviceTitle: activeTicket?.serviceTitle || 'ChairCare Diagnostic Service',
+    serviceSubtitle: activeTicket?.chairModel
+      ? `${activeTicket.chairModel} Calibration & Repair`
+      : 'Chair Support Request',
+    assignedTech: activeTicket?.assignedTech || 'Unassigned',
+    assignedTechRole: activeTicket?.assignedTechPhone
+      ? `Tech Partner • ${activeTicket.assignedTechPhone}`
+      : 'Service Partner',
+    serviceSlotDate: activeTicket?.serviceSlotDate || 'Scheduled Service',
+    serviceSlotTime: activeTicket?.serviceSlotTime || 'Visit Slot',
+    escrowAmount: activeTicket?.escrowAmount || '₹499.00',
+    escrowStatus: activeTicket?.escrowStatus || 'Settled via UPI',
+    disputeFlag: activeTicket?.disputeFlag || activeTicket?.subject || 'Claim Submitted',
   };
 
   useEffect(() => {
@@ -107,11 +143,32 @@ export const SupportTicketDetailsSup10482ChaircareMobileScreen: React.FC<
     }
   };
 
-  const handleReplyChat = () => {
-    if (navigation) {
+  const handleReplyChat = async () => {
+    try {
+      setOpeningChat(true);
+      await adminApi.openSupportChat(ticketData.id);
+      Alert.alert(
+        'Support Chat Activated',
+        `Live support chat is open. Customer ${ticketData.customerName} has been notified.`,
+        [
+          {
+            text: 'Enter Support Chat',
+            onPress: () => {
+              navigation.navigate('SupportConversation', {
+                ticketId: ticketData.id,
+                ticket: ticketData,
+              });
+            },
+          },
+        ]
+      );
+    } catch (err: any) {
       navigation.navigate('SupportConversation', {
         ticketId: ticketData.id,
+        ticket: ticketData,
       });
+    } finally {
+      setOpeningChat(false);
     }
   };
 

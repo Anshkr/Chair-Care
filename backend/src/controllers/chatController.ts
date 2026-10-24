@@ -52,7 +52,7 @@ export const getChatMessages = async (
     }
 
     const result = await query(
-      `SELECT id, request_id, sender_id, sender_role, sender_name, message, created_at
+      `SELECT id, request_id, sender_id, sender_role, sender_name, message, image_url, created_at
        FROM chat_messages
        WHERE request_id = $1
        ORDER BY created_at ASC;`,
@@ -68,6 +68,7 @@ export const getChatMessages = async (
         senderRole: r.sender_role,
         senderName: r.sender_name,
         message: r.message,
+        imageUrl: r.image_url || null,
         createdAt: r.created_at,
       })),
     });
@@ -82,7 +83,7 @@ export const sendChatMessage = async (
   res: Response
 ): Promise<void> => {
   const requestId = String(req.params.requestId || '');
-  const { message, senderRole } = req.body;
+  const { message, senderRole, imageUrl } = req.body;
   const userId = req.user?.userId;
 
   if (!userId) {
@@ -90,8 +91,8 @@ export const sendChatMessage = async (
     return;
   }
 
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    res.status(400).json({ success: false, error: 'Message content is required.' });
+  if ((!message || typeof message !== 'string' || !message.trim()) && !imageUrl) {
+    res.status(400).json({ success: false, error: 'Message content or image is required.' });
     return;
   }
 
@@ -122,10 +123,10 @@ export const sendChatMessage = async (
     const resolvedRole = senderRole || (userRes.rows[0]?.role === 'technician' ? 'technician' : 'customer');
 
     const insertRes = await query(
-      `INSERT INTO chat_messages (request_id, sender_id, sender_role, sender_name, message)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, request_id, sender_id, sender_role, sender_name, message, created_at;`,
-      [request.id, userId, resolvedRole, senderName, message.trim()]
+      `INSERT INTO chat_messages (request_id, sender_id, sender_role, sender_name, message, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, request_id, sender_id, sender_role, sender_name, message, image_url, created_at;`,
+      [request.id, userId, resolvedRole, senderName, (message || '').trim(), imageUrl || null]
     );
 
     const newMsg = insertRes.rows[0];
@@ -140,7 +141,7 @@ export const sendChatMessage = async (
           [
             recipientId,
             `💬 New message from ${senderName}`,
-            message.trim().slice(0, 120),
+            (message || 'Sent a photo attachment').trim().slice(0, 120),
             JSON.stringify({
               requestId: request.id,
               trackingCode: request.tracking_code,
@@ -164,6 +165,7 @@ export const sendChatMessage = async (
         senderRole: newMsg.sender_role,
         senderName: newMsg.sender_name,
         message: newMsg.message,
+        imageUrl: newMsg.image_url || null,
         createdAt: newMsg.created_at,
       },
     });

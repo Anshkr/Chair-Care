@@ -115,6 +115,7 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
               : 'low';
 
           return {
+            ...item,
             id: item.id || `sup-${idx}`,
             code: item.code || `SUP-${(item.id || '').toString().slice(0, 6).toUpperCase()}`,
             isClosed: mappedStatus === 'Closed',
@@ -128,17 +129,32 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
                 ? 'Resolved'
                 : 'Low Priority',
             status: mappedStatus,
-            userType: item.user_role === 'technician' ? 'Technician' : 'Customer',
-            userName: item.user_name || item.userName || 'ChairCare User',
-            title: item.subject || item.title || 'Support ticket inquiry',
-            description: item.description || 'No description provided.',
+            userType: item.userType || (item.user_role === 'technician' ? 'Technician' : 'Customer'),
+            userName: item.customerName || item.user_name || item.userName || 'ChairCare User',
+            customerName: item.customerName || item.user_name || item.userName || 'ChairCare User',
+            customerEmail: item.customerEmail || item.user_email || '',
+            customerPhone: item.customerPhone || item.user_phone || '',
+            customerAddress: item.customerAddress || 'Address on file',
+            title: item.title || item.subject || 'Support ticket inquiry',
+            subject: item.subject || item.title || 'Support ticket inquiry',
+            description: item.statement || item.description || 'No description provided.',
+            statement: item.statement || item.description || 'No description provided.',
+            serviceCode: item.serviceCode || item.trackingCode || '',
+            chairModel: item.chairModel || 'Office Chair',
+            serviceTitle: item.serviceTitle || (item.chairModel ? `${item.chairModel} Repair` : 'ChairCare Repair & Service'),
+            assignedTech: item.assignedTech || item.assignee || 'Unassigned',
+            assignedTechPhone: item.assignedTechPhone || '',
+            serviceSlotDate: item.serviceSlotDate || '',
+            serviceSlotTime: item.serviceSlotTime || '',
+            escrowAmount: item.escrowAmount || '₹499.00',
+            escrowStatus: item.escrowStatus || 'Settled via Razorpay UPI',
             category: (item.category as any) || 'services',
             categoryLabel: item.categoryLabel || 'Service Issue',
-            timeLabel: item.created_at
+            timeLabel: item.timeLabel || (item.created_at
               ? new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : 'Recent',
-            assignedTo: item.assignee || undefined,
-            isUnassigned: !item.assignee,
+              : 'Recent'),
+            assignedTo: item.assignedTech || item.assignee || undefined,
+            isUnassigned: !item.assignedTech && !item.assignee,
             accentColor:
               mappedPriority === 'high'
                 ? '#ba1a1a'

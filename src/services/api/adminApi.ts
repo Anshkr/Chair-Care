@@ -111,6 +111,20 @@ export const adminApi = {
     return apiRequest<any[]>('/admin/support');
   },
 
+  getSupportTicketById: async (ticketId: string): Promise<ApiResponse<any>> => {
+    const cleanId = (ticketId || '').trim();
+    return apiRequest<any>(`/admin/support/${cleanId}`);
+  },
+
+  openSupportChat: async (ticketId: string): Promise<ApiResponse<any>> => {
+    const cleanId = (ticketId || '').trim();
+    const res = await apiRequest(`/admin/support/${cleanId}/open-chat`, {
+      method: 'POST',
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
   assignSupportTicket: async (ticketId: string, assignee: string): Promise<ApiResponse<any>> => {
     const res = await apiRequest(`/admin/support/${ticketId}/assign`, {
       method: 'PATCH',

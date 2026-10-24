@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/common/AppIcon';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { useAuth } from '../../context/AuthContext';
+import { chatApi, SupportMessageItem } from '../../services/api/chatApi';
+import { useAdminSync } from '../../services/adminSync';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 
 interface SupportConversationScreenProps {
   navigation?: any;
@@ -44,94 +51,111 @@ export interface ChatMessageItem {
   };
 }
 
-const INITIAL_MESSAGES: ChatMessageItem[] = [
-  {
-    id: 'msg-1',
-    sender: 'customer',
-    senderName: 'Rahul Mehta',
-    senderRole: 'Customer',
-    senderInitials: 'RM',
-    text: 'The technician came but the repair was not completed. He said he had to get another part from his van and then drove off.',
-    timestamp: '05:20 PM',
-  },
-  {
-    id: 'msg-2',
-    sender: 'admin',
-    senderName: 'Super Admin (You)',
-    text: 'Thanks for reporting this, Rahul. I’m checking the service details and GPS dispatch logs right now with technician Rahul Sharma.',
-    timestamp: '05:22 PM',
-  },
-  {
-    id: 'msg-3',
-    sender: 'customer',
-    senderName: 'Rahul Mehta',
-    senderRole: 'Customer',
-    senderInitials: 'RM',
-    text: 'I also have photos of the chair after the technician left. The cylinder is completely unfastened.',
-    timestamp: '05:24 PM',
-    mediaAttachment: {
-      filename: 'IMG_9042_cylinder.jpg',
-      filesize: '2.4 MB',
-      imageUri:
-        'https://images.unsplash.com/photo-1580481077195-c3a8a04295c0?auto=format&fit=crop&w=600&q=80',
-    },
-  },
-  {
-    id: 'msg-4',
-    sender: 'system',
-    senderName: 'System',
-    text: 'Admin S. Raman flagged ticket for Tier-2 supervisory dispatch inspection • 05:26 PM',
-    timestamp: '05:26 PM',
-  },
-  {
-    id: 'msg-5',
-    sender: 'admin',
-    senderName: 'Super Admin (You)',
-    text: 'I see the photo clearly. I have placed the escrow on hold so no funds will be released until this is completely resolved. Would you prefer a free priority re-dispatch tomorrow or an instant refund?',
-    timestamp: '05:30 PM',
-    hasReadReceipt: true,
-    readReceiptTime: '05:31 PM',
-  },
-  {
-    id: 'msg-6',
-    sender: 'customer',
-    senderName: 'Rahul Mehta',
-    senderRole: 'Customer',
-    senderInitials: 'RM',
-    text: 'A re-dispatch tomorrow morning between 10 AM - 12 PM would be great if possible. I really need this chair for work.',
-    timestamp: '05:33 PM',
-  },
-];
-
 export const SupportConversationChaircareMobileScreen: React.FC<
   SupportConversationScreenProps
 > = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin' || (currentUser?.role as string) === 'superadmin';
+
   const passedTicket = route?.params?.ticket;
+  const rawTicketId = route?.params?.ticketId || passedTicket?.id || 'sup-10482';
 
-  // Selected ticket context with graceful fallback
-  const ticketData = {
-    id: passedTicket?.id || 'sup-10482',
-    code: passedTicket?.code || 'SUP-10482',
-    priority: passedTicket?.priority || 'high',
-    priorityLabel: passedTicket?.priorityLabel || 'High Priority',
-    status: passedTicket?.status || 'Open',
-    customerName: passedTicket?.customerName || passedTicket?.userName || 'Rahul Mehta',
-    serviceTitle: 'Office Chair Repair',
-    assignedTo: passedTicket?.assignedTo || 'Priya Sharma',
-  };
-
-  // Pulse animation for high-priority live beacon
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  // Chat state
-  const [messages, setMessages] = useState<ChatMessageItem[]>(INITIAL_MESSAGES);
+  const [ticketDetails, setTicketDetails] = useState<any>(passedTicket || null);
+  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [inputText, setInputText] = useState('');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showMacrosModal, setShowMacrosModal] = useState(false);
   const [showImageViewer, setShowImageViewer] = useState(false);
+  const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [selectedImageCaption, setSelectedImageCaption] = useState<string>('Attached Photo');
 
+  // Selected ticket context with graceful fallback
+  const ticketData = {
+    id: ticketDetails?.id || passedTicket?.id || rawTicketId,
+    code: ticketDetails?.ticketCode || passedTicket?.code || 'SUP-10482',
+    priority: ticketDetails?.priority || passedTicket?.priority || 'high',
+    priorityLabel: passedTicket?.priorityLabel || 'High Priority',
+    status: ticketDetails?.status || passedTicket?.status || 'Open',
+    customerName: ticketDetails?.customerName || passedTicket?.customerName || 'Customer',
+    serviceTitle: passedTicket?.chairModel || passedTicket?.serviceTitle || 'Chair Service Claim',
+    assignedTo: passedTicket?.assignedTo || 'Super Admin',
+  };
+
+  // Pulse animation for high-priority live beacon
+  const pulseAnim = useRef(new Animated.Value(1)).current;
   const scrollViewRef = useRef<ScrollView>(null);
+
+  const fetchLiveMessages = useCallback(async () => {
+    if (!rawTicketId) return;
+    try {
+      const res = await chatApi.getSupportMessages(rawTicketId);
+      if (res.success && res.data) {
+        if ((res as any).ticket && !ticketDetails) {
+          setTicketDetails((res as any).ticket);
+        }
+        const mapped: ChatMessageItem[] = res.data.map((m: SupportMessageItem) => {
+          const isFromAdmin = m.senderRole === 'admin';
+          const isFromSystem = m.senderRole === 'system';
+          const sender: 'customer' | 'admin' | 'system' = isFromSystem
+            ? 'system'
+            : isFromAdmin
+            ? 'admin'
+            : 'customer';
+
+          const rawDate = m.createdAt ? new Date(m.createdAt) : new Date();
+          const hours = rawDate.getHours().toString().padStart(2, '0');
+          const minutes = rawDate.getMinutes().toString().padStart(2, '0');
+          const timestamp = `${hours}:${minutes}`;
+
+          const initials = (m.senderName || (isFromAdmin ? 'SA' : 'CU'))
+            .split(' ')
+            .map((p) => p[0])
+            .join('')
+            .substring(0, 2)
+            .toUpperCase();
+
+          return {
+            id: m.id,
+            sender,
+            senderName: isFromAdmin
+              ? isAdmin
+                ? 'Super Admin (You)'
+                : 'ChairCare Support'
+              : !isAdmin
+              ? 'You'
+              : m.senderName || ticketData.customerName,
+            senderRole: isFromAdmin ? 'Admin Support' : 'Customer',
+            senderInitials: initials,
+            text: m.message,
+            timestamp,
+            hasReadReceipt: true,
+            mediaAttachment: m.imageUrl
+              ? {
+                  filename: 'Attached Photo',
+                  filesize: 'Image',
+                  imageUri: m.imageUrl,
+                }
+              : undefined,
+          };
+        });
+        setMessages(mapped);
+      }
+    } catch {
+      // network fallback
+    } finally {
+      setIsLoading(false);
+    }
+  }, [rawTicketId, isAdmin, ticketDetails, ticketData.customerName]);
+
+  useEffect(() => {
+    fetchLiveMessages();
+    const interval = setInterval(fetchLiveMessages, 2500);
+    return () => clearInterval(interval);
+  }, [fetchLiveMessages]);
+
+  useAdminSync(navigation, fetchLiveMessages);
 
   useEffect(() => {
     const pulse = Animated.loop(
@@ -159,39 +183,39 @@ export const SupportConversationChaircareMobileScreen: React.FC<
       label: 'Offer Reschedule',
       icon: 'calendar_today',
       colorType: 'blue',
-      text: 'I have booked a free priority re-dispatch for tomorrow, 10:00 AM – 12:00 PM with Senior Specialist Marcus Cole. You will receive live GPS tracking once he departs.',
+      text: 'I have booked a free priority re-dispatch for tomorrow. You will receive live GPS tracking once the technician departs.',
     },
     {
       id: 'refund',
       label: 'Start Refund',
       icon: 'payments',
       colorType: 'red',
-      text: 'Initiated an immediate 100% full refund of ₹1,850 to your primary payment method. Transaction Ref: RF-92817.',
+      text: 'Initiated an immediate review for full refund to your primary payment method.',
     },
     {
       id: 'contact_tech',
       label: 'Contact Technician',
       icon: 'support_agent',
       colorType: 'gray',
-      text: 'Technician Rahul Sharma is currently on audio bridge with Tier-2 dispatch ops to verify replacement cylinder specs.',
+      text: 'Our operations team has reached out directly to the specialist to verify replacement parts.',
     },
     {
       id: 'more_details',
       label: 'Request More Details',
       icon: 'assignment',
       colorType: 'gray',
-      text: 'Could you please verify the chair manufacturer model number located on the underside barcode tag?',
+      text: 'Could you please verify the chair manufacturer model number located on the underside tag?',
     },
     {
       id: 'request_photo',
       label: 'Request Photo',
       icon: 'add_a_photo',
       colorType: 'gray',
-      text: 'Please snap a photo of the base star-caster sockets so we bring the exact retaining clips.',
+      text: 'Please snap a photo of the mechanism or defective part so we bring the exact replacement.',
     },
   ];
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const text = (textToSend || inputText).trim();
     if (!text) return;
 
@@ -202,8 +226,8 @@ export const SupportConversationChaircareMobileScreen: React.FC<
 
     const newMsg: ChatMessageItem = {
       id: `msg-${Date.now()}`,
-      sender: 'admin',
-      senderName: 'Super Admin (You)',
+      sender: isAdmin ? 'admin' : 'customer',
+      senderName: isAdmin ? 'Super Admin (You)' : 'You',
       text,
       timestamp: timeStr,
       hasReadReceipt: false,
@@ -215,12 +239,111 @@ export const SupportConversationChaircareMobileScreen: React.FC<
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
     }, 100);
+
+    try {
+      await chatApi.sendSupportMessage(ticketData.id, text);
+      fetchLiveMessages();
+    } catch {
+      // optimistic state retained
+    }
   };
 
   const handleAttachFile = () => {
-    const attachText =
-      'Attaching Ergonomic Diagnostic Telemetry Sheet SUP-10482_revA.pdf (420 KB)';
-    handleSendMessage(attachText);
+    Alert.alert(
+      'Attach Photo',
+      'Choose an option to share a photo in support chat',
+      [
+        {
+          text: 'Take Photo',
+          onPress: handleCameraCapture,
+        },
+        {
+          text: 'Choose from Gallery',
+          onPress: handleGalleryPick,
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+      ]
+    );
+  };
+
+  const handleCameraCapture = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Camera access is required to take photos.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to capture photo.');
+    }
+  };
+
+  const handleGalleryPick = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Gallery access is required to select photos.');
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        base64: true,
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        await processAndSendImage(result.assets[0]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to select photo.');
+    }
+  };
+
+  const processAndSendImage = async (asset: ImagePicker.ImagePickerAsset) => {
+    try {
+      const imageUri = asset.base64
+        ? `data:image/jpeg;base64,${asset.base64}`
+        : await fileUriToBase64DataUrl(asset.uri);
+
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      const timeStr = `${hours}:${minutes}`;
+
+      const newMsg: ChatMessageItem = {
+        id: `msg-${Date.now()}`,
+        sender: isAdmin ? 'admin' : 'customer',
+        senderName: isAdmin ? 'Super Admin (You)' : 'You',
+        text: '',
+        timestamp: timeStr,
+        mediaAttachment: {
+          filename: 'Photo Attachment',
+          filesize: 'JPEG',
+          imageUri,
+        },
+        hasReadReceipt: false,
+      };
+
+      setMessages((prev) => [...prev, newMsg]);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+
+      await chatApi.sendSupportMessage(ticketData.id, '', imageUri);
+      fetchLiveMessages();
+    } catch {
+      Alert.alert('Upload Error', 'Failed to send image attachment.');
+    }
   };
 
   const handleResolveTicket = () => {
@@ -258,7 +381,7 @@ export const SupportConversationChaircareMobileScreen: React.FC<
             <AppIcon name="arrow_back" size={20} />
           </TouchableOpacity>
           <Text style={styles.headerTitleText} numberOfLines={1}>
-            Support Conversation
+            {isAdmin ? `Support: ${ticketData.customerName}` : 'Support Desk'}
           </Text>
         </View>
 
@@ -316,117 +439,179 @@ export const SupportConversationChaircareMobileScreen: React.FC<
             scrollViewRef.current?.scrollToEnd({ animated: false })
           }
         >
-          {/* 2. Date Divider */}
+          {/* Date Divider */}
           <View style={styles.dateDividerWrapper}>
             <View style={styles.dateDividerPill}>
-              <Text style={styles.dateDividerText}>Today, October 5</Text>
+              <Text style={styles.dateDividerText}>Support Session • Active</Text>
             </View>
           </View>
 
-          {/* Chat Messages */}
-          {messages.map((msg) => {
-            if (msg.sender === 'system') {
-              return (
-                <View key={msg.id} style={styles.systemNoticeRow}>
-                  <View style={styles.systemNoticePill}>
-                    <AppIcon name="verified_user" size={20} />
-                    <Text style={styles.systemNoticeText}>{msg.text}</Text>
+          {/* Empty state or Chat Messages */}
+          {messages.length === 0 ? (
+            <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 48, paddingHorizontal: 24 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <AppIcon name="support_agent" size={28} color="#0051D5" />
+              </View>
+              <Text style={{ ...Typography.h3, color: Colors.onSurface, marginBottom: 6, textAlign: 'center' }}>
+                Live Support Chat
+              </Text>
+              <Text style={{ ...Typography.bodySmall, color: Colors.onSurfaceVariant, textAlign: 'center', lineHeight: 18 }}>
+                Direct real-time communication between customer and support.
+              </Text>
+            </View>
+          ) : (
+            messages.map((msg) => {
+              if (msg.sender === 'system') {
+                return (
+                  <View key={msg.id} style={styles.systemNoticeRow}>
+                    <View style={styles.systemNoticePill}>
+                      <AppIcon name="verified_user" size={20} />
+                      <Text style={styles.systemNoticeText}>{msg.text}</Text>
+                    </View>
                   </View>
-                </View>
-              );
-            }
+                );
+              }
 
-            if (msg.sender === 'customer') {
-              return (
-                <View key={msg.id} style={styles.customerMsgRow}>
-                  <View style={styles.customerAvatar}>
-                    <Text style={styles.customerAvatarText}>
-                      {msg.senderInitials || 'RM'}
-                    </Text>
-                  </View>
-                  <View style={styles.customerMsgCol}>
-                    <View style={styles.customerMsgMetaRow}>
-                      <Text
-                        style={styles.customerSenderName}
-                        numberOfLines={1}
-                      >
-                        {msg.senderName}
-                      </Text>
-                      <Text style={styles.customerRoleText}>• Customer</Text>
-                      <Text style={styles.customerTimestamp}>
-                        {msg.timestamp}
+              const isOutgoing = isAdmin
+                ? msg.sender === 'admin'
+                : msg.sender === 'customer';
+
+              if (!isOutgoing) {
+                // Incoming Message (Left Aligned)
+                return (
+                  <View key={msg.id} style={styles.customerMsgRow}>
+                    <View style={styles.customerAvatar}>
+                      <Text style={styles.customerAvatarText}>
+                        {msg.senderInitials || (isAdmin ? 'CU' : 'SA')}
                       </Text>
                     </View>
-
-                    <View style={styles.customerBubble}>
-                      <Text style={styles.customerMsgText}>{msg.text}</Text>
-
-                      {/* Attached Media Card */}
-                      {msg.mediaAttachment && (
-                        <TouchableOpacity
-                          style={styles.mediaCard}
-                          onPress={() => setShowImageViewer(true)}
-                          activeOpacity={0.9}
+                    <View style={styles.customerMsgCol}>
+                      <View style={styles.customerMsgMetaRow}>
+                        <Text
+                          style={styles.customerSenderName}
+                          numberOfLines={1}
                         >
-                          <View style={styles.mediaImageWrapper}>
-                            <Image
-                              source={{ uri: msg.mediaAttachment.imageUri }}
-                              style={styles.mediaImage}
-                            />
-                            <View style={styles.zoomOverlay}>
-                              <AppIcon name="zoom_in" size={20} />
+                          {msg.senderName}
+                        </Text>
+                        <Text style={styles.customerRoleText}>
+                          • {msg.senderRole || (isAdmin ? 'Customer' : 'Admin Support')}
+                        </Text>
+                        <Text style={styles.customerTimestamp}>
+                          {msg.timestamp}
+                        </Text>
+                      </View>
+
+                      <View style={styles.customerBubble}>
+                        {!!msg.text && <Text style={styles.customerMsgText}>{msg.text}</Text>}
+
+                        {/* Attached Media Card */}
+                        {msg.mediaAttachment && (
+                          <TouchableOpacity
+                            style={[styles.mediaCard, { marginTop: msg.text ? 8 : 0 }]}
+                            onPress={() => {
+                              setSelectedImageUri(msg.mediaAttachment!.imageUri);
+                              setSelectedImageCaption(msg.mediaAttachment!.filename || 'Attached Photo');
+                              setShowImageViewer(true);
+                            }}
+                            activeOpacity={0.9}
+                          >
+                            <View style={styles.mediaImageWrapper}>
+                              <Image
+                                source={{ uri: msg.mediaAttachment.imageUri }}
+                                style={styles.mediaImage}
+                              />
+                              <View style={styles.zoomOverlay}>
+                                <AppIcon name="zoom_in" size={20} />
+                              </View>
                             </View>
-                          </View>
-                          <View style={styles.mediaInfoStrip}>
-                            <View style={styles.mediaNameGroup}>
-                              <AppIcon name="image" size={20} />
-                              <Text
-                                style={styles.mediaFilename}
-                                numberOfLines={1}
-                              >
-                                {msg.mediaAttachment.filename}
+                            <View style={styles.mediaInfoStrip}>
+                              <View style={styles.mediaNameGroup}>
+                                <AppIcon name="image" size={20} />
+                                <Text
+                                  style={styles.mediaFilename}
+                                  numberOfLines={1}
+                                >
+                                  {msg.mediaAttachment.filename}
+                                </Text>
+                              </View>
+                              <Text style={styles.mediaFilesize}>
+                                {msg.mediaAttachment.filesize}
                               </Text>
                             </View>
-                            <Text style={styles.mediaFilesize}>
-                              {msg.mediaAttachment.filesize}
-                            </Text>
-                          </View>
-                        </TouchableOpacity>
-                      )}
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </View>
+                );
+              }
+
+              // Outgoing Messages (Right Aligned)
+              return (
+                <View key={msg.id} style={styles.adminMsgRow}>
+                  <View style={styles.adminMsgMetaRow}>
+                    <Text style={styles.adminSenderName}>{msg.senderName}</Text>
+                    <Text style={styles.adminTimestamp}>{msg.timestamp}</Text>
+                  </View>
+
+                  <View style={styles.adminBubble}>
+                    {!!msg.text && <Text style={styles.adminMsgText}>{msg.text}</Text>}
+
+                    {/* Attached Media Card for Outgoing */}
+                    {msg.mediaAttachment && (
+                      <TouchableOpacity
+                        style={[styles.mediaCard, { marginTop: msg.text ? 8 : 0 }]}
+                        onPress={() => {
+                          setSelectedImageUri(msg.mediaAttachment!.imageUri);
+                          setSelectedImageCaption(msg.mediaAttachment!.filename || 'Attached Photo');
+                          setShowImageViewer(true);
+                        }}
+                        activeOpacity={0.9}
+                      >
+                        <View style={styles.mediaImageWrapper}>
+                          <Image
+                            source={{ uri: msg.mediaAttachment.imageUri }}
+                            style={styles.mediaImage}
+                          />
+                          <View style={styles.zoomOverlay}>
+                            <AppIcon name="zoom_in" size={20} />
+                          </View>
+                        </View>
+                        <View style={styles.mediaInfoStrip}>
+                          <View style={styles.mediaNameGroup}>
+                            <AppIcon name="image" size={20} />
+                            <Text
+                              style={styles.mediaFilename}
+                              numberOfLines={1}
+                            >
+                              {msg.mediaAttachment.filename}
+                            </Text>
+                          </View>
+                          <Text style={styles.mediaFilesize}>
+                            {msg.mediaAttachment.filesize}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {msg.hasReadReceipt ? (
+                    <View style={styles.readReceiptRow}>
+                      <Text style={styles.readReceiptTime}>
+                        {msg.readReceiptTime || msg.timestamp}
+                      </Text>
+                      <AppIcon name="done_all" size={20} />
+                    </View>
+                  ) : (
+                    <View style={styles.readReceiptRow}>
+                      <Text style={styles.readReceiptTime}>{msg.timestamp}</Text>
+                      <AppIcon name="done" size={20} />
+                    </View>
+                  )}
                 </View>
               );
-            }
-
-            // Admin Messages (Right Aligned)
-            return (
-              <View key={msg.id} style={styles.adminMsgRow}>
-                <View style={styles.adminMsgMetaRow}>
-                  <Text style={styles.adminSenderName}>{msg.senderName}</Text>
-                  <Text style={styles.adminTimestamp}>{msg.timestamp}</Text>
-                </View>
-
-                <View style={styles.adminBubble}>
-                  <Text style={styles.adminMsgText}>{msg.text}</Text>
-                </View>
-
-                {msg.hasReadReceipt ? (
-                  <View style={styles.readReceiptRow}>
-                    <Text style={styles.readReceiptTime}>
-                      {msg.readReceiptTime || msg.timestamp}
-                    </Text>
-                    <AppIcon name="done_all" size={20} />
-                  </View>
-                ) : (
-                  <View style={styles.readReceiptRow}>
-                    <Text style={styles.readReceiptTime}>{msg.timestamp}</Text>
-                    <AppIcon name="done" size={20} />
-                  </View>
-                )}
-              </View>
-            );
-          })}
+            })
+          )}
         </ScrollView>
 
         {/* 4. Quick Action Chips (Horizontal Scrollable) */}
@@ -649,15 +834,15 @@ export const SupportConversationChaircareMobileScreen: React.FC<
           >
             <AppIcon name="close" size={20} />
           </TouchableOpacity>
-          <Image
-            source={{
-              uri: 'https://images.unsplash.com/photo-1580481077195-c3a8a04295c0?auto=format&fit=crop&w=1200&q=90',
-            }}
-            style={styles.fullScreenImage}
-            resizeMode="contain"
-          />
+          {selectedImageUri ? (
+            <Image
+              source={{ uri: selectedImageUri }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+            />
+          ) : null}
           <Text style={styles.imageViewerCaption}>
-            IMG_9042_cylinder.jpg • 2.4 MB • Unseated Hydraulic Cylinder
+            {selectedImageCaption}
           </Text>
         </View>
       </Modal>

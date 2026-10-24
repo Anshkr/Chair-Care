@@ -13,6 +13,7 @@ import technicianRoutes from './routes/technicianRoutes';
 import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
+import supportRoutes from './routes/supportRoutes';
 
 export const createApp = (): Express => {
   const app = express();
@@ -88,6 +89,7 @@ export const createApp = (): Express => {
   apiV1.use('/admin', adminRoutes);
   apiV1.use('/notifications', notificationRoutes);
   apiV1.use('/chat', chatRoutes);
+  apiV1.use('/support', supportRoutes);
 
   app.use('/api/v1', apiV1);
 
