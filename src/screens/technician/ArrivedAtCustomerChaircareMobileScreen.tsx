@@ -47,6 +47,7 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
     chairModel: 'Ergonomic Task Chair',
     chairConfig: 'Standard Configuration',
     customerName: 'Customer',
+    customerPhone: '+91 91234 56789',
     customerRating: 5.0,
     memberTag: 'VERIFIED MEMBER',
     slaBadge: 'Standard SLA',
