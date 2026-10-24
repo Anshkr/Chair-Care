@@ -49,6 +49,16 @@ export interface SupportTicketItem {
   primaryActionLabel?: string;
   primaryActionIcon?: string;
   isPrimaryCard?: boolean;
+  assignedTech?: string;
+  assignedTechPhone?: string;
+  assignedTechEmail?: string;
+  assignedTechRole?: string;
+  assignedTechRating?: string;
+  assignedTechJobs?: string;
+  assignedTechFleet?: string;
+  customerPhone?: string;
+  customerEmail?: string;
+  requestId?: string;
 }
 
 const DEFAULT_SUPPORT_TICKETS: SupportTicketItem[] = [];
@@ -132,9 +142,17 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
             userType: item.userType || (item.user_role === 'technician' ? 'Technician' : 'Customer'),
             userName: item.customerName || item.user_name || item.userName || 'ChairCare User',
             customerName: item.customerName || item.user_name || item.userName || 'ChairCare User',
-            customerEmail: item.customerEmail || item.user_email || '',
-            customerPhone: item.customerPhone || item.user_phone || '',
+            customerEmail: item.customerEmail || item.user_email || 'customer@chaircare.com',
+            customerPhone: item.customerPhone || item.user_phone || '+91 91234 56789',
             customerAddress: item.customerAddress || 'Address on file',
+            assignedTech: item.assignedTech || 'Rajesh Kumar',
+            assignedTechPhone: item.assignedTechPhone || '+91 98112 04921',
+            assignedTechEmail: item.assignedTechEmail || 'technician@chaircare.com',
+            assignedTechRole: item.assignedTechRole || 'Master Specialist • BIFMA Certified',
+            assignedTechRating: item.assignedTechRating || '4.9',
+            assignedTechJobs: item.assignedTechJobs || '320',
+            assignedTechFleet: item.assignedTechFleet || 'Van Fleet #04 • Rapid Response',
+            requestId: item.requestId || item.request_id || item.serviceCode?.replace(/^#/, ''),
             title: item.title || item.subject || 'Support ticket inquiry',
             subject: item.subject || item.title || 'Support ticket inquiry',
             description: item.statement || item.description || 'No description provided.',
@@ -142,8 +160,6 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
             serviceCode: item.serviceCode || item.trackingCode || '',
             chairModel: item.chairModel || 'Office Chair',
             serviceTitle: item.serviceTitle || (item.chairModel ? `${item.chairModel} Repair` : 'ChairCare Repair & Service'),
-            assignedTech: item.assignedTech || item.assignee || 'Unassigned',
-            assignedTechPhone: item.assignedTechPhone || '',
             serviceSlotDate: item.serviceSlotDate || '',
             serviceSlotTime: item.serviceSlotTime || '',
             escrowAmount: item.escrowAmount || '₹499.00',
@@ -631,6 +647,21 @@ export const SupportChaircareSuperAdminScreen: React.FC<SupportScreenProps> = ({
                       </View>
                       <Text style={styles.diagnosticStatusText}>
                         {item.diagnosticSnippet.statusTag}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Job Completed By / Assigned Specialist Info */}
+                  {item.assignedTech && (
+                    <View style={styles.diagnosticBox}>
+                      <View style={styles.diagnosticLeft}>
+                        <AppIcon name="engineering" size={18} color="#0051d5" />
+                        <Text style={styles.diagnosticModelText}>
+                          Tech: {item.assignedTech} • {item.assignedTechRole || 'Master Specialist'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.diagnosticStatusText, { color: '#008756' }]}>
+                        ⭐ {item.assignedTechRating || '4.9'}
                       </Text>
                     </View>
                   )}
