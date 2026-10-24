@@ -161,6 +161,7 @@ export const getMyRequests = async (req: AuthenticatedRequest, res: Response): P
       sr.technician_eta_minutes,
       sr.technician_location_updated_at,
       sr.created_at,
+      sr.started_at,
       s.title as service_title,
       s.code as service_code,
       tu.id as technician_id,
@@ -223,6 +224,8 @@ export const getMyRequests = async (req: AuthenticatedRequest, res: Response): P
         technicianLocationUpdatedAt: row.technician_location_updated_at,
         createdAt: row.created_at,
         created_at: row.created_at,
+        startedAt: row.started_at,
+        started_at: row.started_at,
         serviceTitle: row.service_title,
         service_title: row.service_title,
         technicianName: row.technician_name,
@@ -392,6 +395,7 @@ export const getRequestById = async (req: AuthenticatedRequest, res: Response): 
       technicianLocationUpdatedAt: reqData.technician_location_updated_at,
       cancellationReason: reqData.cancellation_reason,
       createdAt: reqData.created_at,
+      startedAt: reqData.started_at,
       service: reqData.service_title
         ? {
             title: reqData.service_title,

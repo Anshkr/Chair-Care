@@ -165,11 +165,27 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
       }
     }
 
+    const existingStartedAt =
+      ticket.startedAt ||
+      ticket.started_at ||
+      (typeof window !== 'undefined' && targetJobId
+        ? window.localStorage.getItem(`chaircare_job_start_${targetJobId}`)
+        : null);
+
+    const finalStartedAt = existingStartedAt || new Date().toISOString();
+
+    if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        window.localStorage.setItem(`chaircare_job_start_${targetJobId}`, finalStartedAt);
+      } catch {}
+    }
+
     const updated = {
       ...ticket,
       id: targetJobId || ticket.id,
       status: 'in_progress',
-      startedAt: new Date().toISOString(),
+      startedAt: finalStartedAt,
+      started_at: finalStartedAt,
     };
 
     setAcceptedRequest(updated);
@@ -539,7 +555,11 @@ export const ArrivedAtCustomerChaircareMobileScreen: React.FC<
             activeOpacity={0.88}
           >
             <Text style={styles.startServiceBtnText}>
-              {isStartingService ? 'Starting Session...' : 'Start Service'}
+              {isStartingService
+                ? 'Opening Session...'
+                : ticket.status === 'in_progress' || ticket.startedAt || ticket.started_at
+                ? 'Resume Service'
+                : 'Start Service'}
             </Text>
             <Text style={styles.startServiceArrow}>→</Text>
           </TouchableOpacity>

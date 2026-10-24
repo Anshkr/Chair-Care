@@ -42,6 +42,7 @@ export const getAssignedJobs = async (
       sr.total_amount,
       sr.is_paid,
       sr.created_at,
+      sr.started_at,
       cu.name as customer_name,
       cu.phone as customer_phone,
       s.title as service_title
@@ -80,6 +81,7 @@ export const getAssignedJobs = async (
       serviceTitle: r.service_title,
       isAssignedToMe: r.technician_id === technicianId,
       createdAt: r.created_at,
+      startedAt: r.started_at,
     })),
   });
 };
@@ -362,6 +364,10 @@ export const updateJobStatus = async (
     `UPDATE service_requests
      SET status = $1,
          warranty_valid_until = ${warrantyDays},
+         started_at = CASE 
+           WHEN $1 = 'in_progress' AND started_at IS NULL THEN NOW() 
+           ELSE started_at 
+         END,
          updated_at = NOW()
      WHERE id = $2;`,
     [status, actualJobId]
@@ -795,6 +801,7 @@ export const getJobById = async (
       sr.total_amount,
       sr.is_paid,
       sr.created_at,
+      sr.started_at,
       sr.technician_id,
       cu.name as customer_name,
       cu.phone as customer_phone,
@@ -854,6 +861,7 @@ export const getJobById = async (
       isPaid: Boolean(r.is_paid),
       isAssignedToMe: r.technician_id === technicianId,
       createdAt: r.created_at,
+      startedAt: r.started_at,
     },
   });
 };

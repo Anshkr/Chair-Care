@@ -57,18 +57,75 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
     status: 'in_progress',
   };
 
-  // Live Timer state calculated from actual job start or starting at 0
-  const initialSeconds = ticket.startedAt
-    ? Math.max(0, Math.floor((Date.now() - new Date(ticket.startedAt).getTime()) / 1000))
-    : 0;
-  const [elapsedSeconds, setElapsedSeconds] = useState(initialSeconds);
+  const targetJobId = String(ticket.id || passedId || '').trim().replace(/^#/, '');
 
+  // Persistent service start timestamp resolution
+  const resolvedStartedAt =
+    ticket?.startedAt ||
+    ticket?.started_at ||
+    acceptedRequest?.startedAt ||
+    acceptedRequest?.started_at ||
+    (typeof window !== 'undefined' && targetJobId
+      ? window.localStorage.getItem(`chaircare_job_start_${targetJobId}`)
+      : null);
+
+  const calculateCurrentSeconds = (startTime?: string | null) => {
+    if (!startTime) return 0;
+    const ms = Date.now() - new Date(startTime).getTime();
+    return isNaN(ms) ? 0 : Math.max(0, Math.floor(ms / 1000));
+  };
+
+  const [serviceStartTime, setServiceStartTime] = useState<string | null>(resolvedStartedAt || null);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => calculateCurrentSeconds(resolvedStartedAt));
+
+  // Initialize and persist service start timestamp
   useEffect(() => {
+    if (!serviceStartTime) {
+      const nowIso = new Date().toISOString();
+      setServiceStartTime(nowIso);
+      setElapsedSeconds(0);
+      if (typeof window !== 'undefined' && targetJobId) {
+        try {
+          window.localStorage.setItem(`chaircare_job_start_${targetJobId}`, nowIso);
+        } catch {}
+      }
+    } else if (typeof window !== 'undefined' && targetJobId) {
+      try {
+        window.localStorage.setItem(`chaircare_job_start_${targetJobId}`, serviceStartTime);
+      } catch {}
+    }
+  }, [serviceStartTime, targetJobId]);
+
+  // Sync latest authoritative startedAt from server
+  useEffect(() => {
+    if (targetJobId) {
+      technicianApi.getJobDetails(targetJobId).then((res) => {
+        if (res.success && res.data) {
+          const serverStart = res.data.startedAt || res.data.started_at;
+          if (serverStart) {
+            setServiceStartTime(serverStart);
+            setElapsedSeconds(calculateCurrentSeconds(serverStart));
+            if (typeof window !== 'undefined') {
+              try {
+                window.localStorage.setItem(`chaircare_job_start_${targetJobId}`, serverStart);
+              } catch {}
+            }
+          }
+        }
+      }).catch(() => {});
+    }
+  }, [targetJobId]);
+
+  // Live Timer: runs every second calculating actual elapsed time against serviceStartTime
+  useEffect(() => {
+    if (!serviceStartTime) return;
+
     const timerInterval = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
+      setElapsedSeconds(calculateCurrentSeconds(serviceStartTime));
     }, 1000);
+
     return () => clearInterval(timerInterval);
-  }, []);
+  }, [serviceStartTime]);
 
   const formatTimer = (totalSec: number) => {
     const minutes = Math.floor(totalSec / 60);
