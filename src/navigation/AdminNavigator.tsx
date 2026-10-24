@@ -5,6 +5,7 @@ import { AppIcon } from '../components/common/AppIcon';
 import { Colors } from '../constants/theme';
 import { useTheme } from '../context/ThemeContext';
 import * as AdminScreens from '../screens/admin';
+import { ChatWithTechnicianChaircareMobileScreen } from '../screens/customer/ChatWithTechnicianChaircareMobileScreen';
 import { NoNetworkOfflineScreen } from '../screens/common';
 
 const Tab = createBottomTabNavigator();
@@ -176,6 +177,7 @@ export const AdminNavigator: React.FC = () => {
       <Stack.Screen name="AdminProfilePriyaSharma" component={AdminScreens.AdminProfilePriyaSharmaChaircareMobileScreen} />
       <Stack.Screen name="AdminProfileSystemStatus" component={AdminScreens.AdminProfileSystemStatusChaircareMobileScreen} />
       <Stack.Screen name="AdminSettings" component={AdminScreens.AdminSettingsChaircareMobileScreen} />
+      <Stack.Screen name="ChatWithTechnician" component={ChatWithTechnicianChaircareMobileScreen} />
       <Stack.Screen name="NoNetworkOffline" component={NoNetworkOfflineScreen} />
     </Stack.Navigator>
   );

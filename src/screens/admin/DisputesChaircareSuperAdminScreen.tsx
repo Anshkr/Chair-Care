@@ -31,10 +31,15 @@ export interface DisputeItem {
   status: 'Open' | 'Under Review' | 'Escalated' | 'Resolved';
   customerName: string;
   customerLocation?: string;
+  customerPhone?: string;
   technicianName: string;
+  technicianPhone?: string;
   technicianTag?: string;
   serviceTitle: string;
   serviceCode: string;
+  requestId?: string;
+  ticketId?: string;
+  ticketCode?: string;
   amountFormatted?: string;
   escrowStatusText: string;
   isEscrowFrozen?: boolean;
@@ -115,9 +120,14 @@ export const DisputesChaircareSuperAdminScreen: React.FC<DisputesScreenProps> = 
             status: mappedStatus,
             customerName: item.customerName || item.customer_name || 'Customer',
             customerLocation: item.customerLocation || 'Gurugram',
+            customerPhone: item.customerPhone || item.customer_phone || '+91 91234 56789',
             technicianName: item.technicianName || item.technician_name || 'Assigned Specialist',
+            technicianPhone: item.technicianPhone || item.technician_phone || '+91 98112 04921',
             serviceTitle: item.serviceTitle || item.service_name || 'Chair Service',
             serviceCode: item.serviceCode || (item.service_request_id ? `#CC-${item.service_request_id.slice(0, 5)}` : '#CC-10482'),
+            requestId: item.requestId || item.request_id,
+            ticketId: item.ticketId || item.ticket_id || 'c3accc4a-7c97-4cf5-934d-1d0b2f86fd8e',
+            ticketCode: item.ticketCode || item.ticket_code || 'SUP-10482',
             amountFormatted: item.amountFormatted || `₹${numAmount.toLocaleString('en-IN')}`,
             escrowStatusText: item.escrowStatusText || (isResolved ? 'Refund Processed' : 'Escrow Frozen'),
             isEscrowFrozen: item.isEscrowFrozen !== undefined ? item.isEscrowFrozen : !isResolved,

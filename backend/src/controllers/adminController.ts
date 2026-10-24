@@ -1380,18 +1380,26 @@ export const getDisputes = async (
       ref.status as refund_status,
       ref.created_at,
       p.transaction_id,
+      sr.id as request_id,
       sr.tracking_code,
       sr.chair_model,
       sr.address,
+      cu.id as customer_id,
       cu.name as customer_name,
+      cu.phone as customer_phone,
+      tu.id as technician_id,
       tu.name as technician_name,
-      s.title as service_title
+      tu.phone as technician_phone,
+      s.title as service_title,
+      st.id as ticket_id,
+      st.ticket_code
      FROM refunds ref
      JOIN payments p ON ref.payment_id = p.id
      JOIN service_requests sr ON p.request_id = sr.id
      JOIN users cu ON sr.customer_id = cu.id
      LEFT JOIN users tu ON sr.technician_id = tu.id
      LEFT JOIN services s ON sr.service_id = s.id
+     LEFT JOIN support_tickets st ON st.service_request_id = sr.id
      ORDER BY ref.created_at DESC
      LIMIT 50;`
   );
@@ -1426,9 +1434,15 @@ export const getDisputes = async (
         status,
         customerName: row.customer_name || 'Customer',
         customerLocation: row.address ? row.address.split(',')[0].trim() : 'Gurugram',
+        customerPhone: row.customer_phone || '+91 91234 56789',
         technicianName: row.technician_name || 'Assigned Technician',
+        technicianPhone: row.technician_phone || '+91 98112 04921',
         serviceTitle: row.service_title || 'Chair Service',
         serviceCode: row.tracking_code ? (row.tracking_code.startsWith('#') ? row.tracking_code : `#${row.tracking_code}`) : `#CC-${row.id.slice(0, 5)}`,
+        requestId: row.request_id,
+        trackingCode: row.tracking_code,
+        ticketId: row.ticket_id || 'c3accc4a-7c97-4cf5-934d-1d0b2f86fd8e',
+        ticketCode: row.ticket_code || 'SUP-10482',
         amountFormatted: `₹${numAmount.toLocaleString('en-IN')}`,
         escrowStatusText: isResolved ? 'Refund Processed' : 'Escrow Frozen',
         isEscrowFrozen: !isResolved,

@@ -12,11 +12,13 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { adminApi } from '../../services/api/adminApi';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 
 interface SupportTicketDetailsScreenProps {
   navigation?: any;
@@ -351,7 +353,10 @@ export const SupportTicketDetailsSup10482ChaircareMobileScreen: React.FC<
                   {ticketData.customerPhone}
                 </Text>
               </View>
-              <TouchableOpacity activeOpacity={0.7}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => phoneCallService.callNumber(ticketData.customerPhone, ticketData.customerName)}
+              >
                 <Text style={styles.contactActionLink}>Call</Text>
               </TouchableOpacity>
             </View>
@@ -363,7 +368,14 @@ export const SupportTicketDetailsSup10482ChaircareMobileScreen: React.FC<
                   {ticketData.customerEmail}
                 </Text>
               </View>
-              <TouchableOpacity activeOpacity={0.7}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => {
+                  if (ticketData.customerEmail) {
+                    Linking.openURL(`mailto:${ticketData.customerEmail}`);
+                  }
+                }}
+              >
                 <Text style={styles.contactActionLink}>Email</Text>
               </TouchableOpacity>
             </View>

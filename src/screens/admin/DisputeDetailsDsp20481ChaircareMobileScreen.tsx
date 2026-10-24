@@ -9,10 +9,19 @@ import {
   Image,
   Animated,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { phoneCallService } from '../../services/phone/phoneCallService';
+
+const getInitials = (name?: string) => {
+  if (!name) return 'CU';
+  const parts = name.trim().split(' ').filter(Boolean);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 interface DisputeDetailsScreenProps {
   navigation?: any;
@@ -64,26 +73,28 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
       passedDispute?.quoteSummary || 'Customer Contests Incomplete Repair & Surcharge',
     serviceTitle:
       passedDispute?.serviceTitle || 'Office Chair Repair',
-    serviceCode: passedDispute?.serviceCode || '#CC-10482',
-    amountFormatted: passedDispute?.amountFormatted || '₹1,850.00',
+    serviceCode: passedDispute?.serviceCode || '#CC-8810',
+    amountFormatted: passedDispute?.amountFormatted || '₹899.00',
     escrowStatus: passedDispute?.escrowStatusText || (passedDispute?.isResolved ? 'Settled' : 'Frozen'),
     gatewayName: 'Razorpay PG',
     gatewayTxn: 'Txn #RZP-90214',
-    customerName: passedDispute?.customerName || 'Rahul Mehta',
-    customerLocation: passedDispute?.customerLocation || 'Gurugram Sector 54',
+    customerName: passedDispute?.customerName || 'Ananya Sharma',
+    customerLocation: passedDispute?.customerLocation || 'Tower 2',
     customerTier: 'Tier-1 Client',
-    customerPhone: '+91 98201 44810',
-    technicianName: passedDispute?.technicianName || 'Rahul Sharma',
+    customerPhone: passedDispute?.customerPhone || '+91 91234 56789',
+    technicianName: passedDispute?.technicianName || 'Rajesh Kumar',
     technicianRole: 'Master Specialist',
     technicianFleet: 'Van Fleet #04 • Rapid Response',
-    technicianPhone: '+91 98765 43210',
+    technicianPhone: passedDispute?.technicianPhone || '+91 98112 04921',
+    ticketId: passedDispute?.ticketId || 'c3accc4a-7c97-4cf5-934d-1d0b2f86fd8e',
+    ticketCode: passedDispute?.ticketCode || 'SUP-10482',
     statement: passedDispute?.quoteSummary
       ? `“${passedDispute.quoteSummary}”`
-      : '“The technician replaced the cylinder bushing but the chair continues to sink under weight. Furthermore, an extra ₹100 was billed for tension tuning that was never demonstrated or calibrated properly.”',
-    submissionDate: passedDispute?.timestamp || '05 Oct 2026, 07:15 PM',
-    premises: passedDispute?.customerLocation ? `${passedDispute.customerLocation}, DLF NCR` : 'Flat 402, Palm Springs, Sec 54',
-    workWindow: '05 Oct 2026, 03:00 PM – 05:00 PM',
-    serviceModel: passedDispute?.serviceTitle || 'Herman Miller Aeron Overhaul',
+      : '“The technician stripped the hex screw on tilt lock mechanism and arrived 40 mins late. The chair continues to sink under weight and adjustment was never calibrated.”',
+    submissionDate: passedDispute?.timestamp || 'Today, 10:20 AM',
+    premises: passedDispute?.customerLocation ? `${passedDispute.customerLocation}, DLF NCR` : 'Tower 2, DLF Phase 5',
+    workWindow: 'Today, 03:00 PM – 05:00 PM',
+    serviceModel: passedDispute?.serviceTitle || 'Ergonomic Office Chair Overhaul',
   };
 
   const handleCopyCode = () => {
@@ -98,6 +109,75 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
         dispute: disputeData,
       });
     }
+  };
+
+  const handleCallCustomer = () => {
+    phoneCallService.callNumber(disputeData.customerPhone, disputeData.customerName);
+  };
+
+  const handleOpenCustomerChat = () => {
+    if (navigation) {
+      navigation.navigate('SupportConversation', {
+        ticketId: disputeData.ticketCode || 'SUP-10482',
+        ticket: {
+          id: disputeData.ticketId || 'c3accc4a-7c97-4cf5-934d-1d0b2f86fd8e',
+          code: disputeData.ticketCode || 'SUP-10482',
+          customerName: disputeData.customerName,
+          serviceTitle: disputeData.serviceTitle,
+        },
+      });
+    }
+  };
+
+  const handleCallTechnician = () => {
+    phoneCallService.callNumber(disputeData.technicianPhone, disputeData.technicianName);
+  };
+
+  const handleOpenTechChannel = () => {
+    if (navigation) {
+      navigation.navigate('ChatWithTechnician', {
+        requestId: disputeData.serviceCode.replace(/^#/, ''),
+        recipientName: disputeData.technicianName,
+        technicianPhone: disputeData.technicianPhone,
+        trackingCode: disputeData.serviceCode,
+      });
+    }
+  };
+
+  const handleContactCustomer = () => {
+    Alert.alert(
+      `Contact ${disputeData.customerName}`,
+      `Choose action to reach customer (${disputeData.customerPhone})`,
+      [
+        {
+          text: 'Voice Call',
+          onPress: handleCallCustomer,
+        },
+        {
+          text: 'Open Support Chat',
+          onPress: handleOpenCustomerChat,
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleContactTech = () => {
+    Alert.alert(
+      `Contact ${disputeData.technicianName}`,
+      `Choose action to reach technician (${disputeData.technicianPhone})`,
+      [
+        {
+          text: 'Voice Call',
+          onPress: handleCallTechnician,
+        },
+        {
+          text: 'Tech Channel Chat',
+          onPress: handleOpenTechChannel,
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
   };
 
   return (
@@ -255,7 +335,9 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
         <View style={styles.participantCard}>
           <View style={styles.participantTopRow}>
             <View style={styles.customerAvatar}>
-              <Text style={styles.customerAvatarText}>RM</Text>
+              <Text style={styles.customerAvatarText}>
+                {getInitials(disputeData.customerName)}
+              </Text>
             </View>
             <View style={styles.participantInfoCol}>
               <View style={styles.participantNameRow}>
@@ -296,20 +378,18 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
 
           {/* Contact Drawer */}
           <View style={styles.contactDrawerRow}>
-            <TouchableOpacity style={styles.contactDrawerBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.contactDrawerBtn}
+              activeOpacity={0.7}
+              onPress={handleCallCustomer}
+            >
               <AppIcon name="call" size={20} />
               <Text style={styles.drawerBtnText}>Call Customer</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.contactDrawerBtn}
-              onPress={() => {
-                if (navigation) {
-                  navigation.navigate('SupportConversation', {
-                    ticketId: 'sup-10482',
-                  });
-                }
-              }}
+              onPress={handleOpenCustomerChat}
               activeOpacity={0.7}
             >
               <AppIcon name="chat" size={20} />
@@ -374,12 +454,20 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
 
           {/* Contact Drawer */}
           <View style={styles.contactDrawerRow}>
-            <TouchableOpacity style={styles.contactDrawerBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.contactDrawerBtn}
+              activeOpacity={0.7}
+              onPress={handleCallTechnician}
+            >
               <AppIcon name="call" size={20} />
               <Text style={styles.drawerBtnText}>Call Technician</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.contactDrawerBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.contactDrawerBtn}
+              activeOpacity={0.7}
+              onPress={handleOpenTechChannel}
+            >
               <AppIcon name="forum" size={20} />
               <Text style={styles.drawerBtnText}>Tech Channel</Text>
             </TouchableOpacity>
@@ -681,6 +769,7 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
           <TouchableOpacity
             style={styles.contactActionBtn}
             activeOpacity={0.7}
+            onPress={handleContactCustomer}
           >
             <AppIcon name="support_agent" size={20} />
             <Text style={styles.contactActionText}>Contact Customer</Text>
@@ -689,6 +778,7 @@ export const DisputeDetailsDsp20481ChaircareMobileScreen: React.FC<
           <TouchableOpacity
             style={styles.contactActionBtn}
             activeOpacity={0.7}
+            onPress={handleContactTech}
           >
             <AppIcon name="engineering" size={20} />
             <Text style={styles.contactActionText}>Contact Tech</Text>
