@@ -65,6 +65,7 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
   const [isLocatingGps, setIsLocatingGps] = useState(false);
 
   const searchTimerRef = useRef<any>(null);
+  const reverseTimerRef = useRef<any>(null);
   const iframeRef = useRef<any>(null);
   const webViewRef = useRef<any>(null);
 
@@ -138,17 +139,20 @@ export const MapLocationPickerModal: React.FC<MapLocationPickerModalProps> = ({
     sendPanToMap(place.latitude, place.longitude);
   };
 
-  // Reverse geocode whenever pin coordinates change
-  const reverseGeocodeCoords = async (lat: number, lng: number) => {
-    setIsReverseGeocoding(true);
-    try {
-      const res = await geocodingService.reverseGeocode(lat, lng);
-      setDetectedAddressSummary(res.formattedAddress);
-    } catch {
-      setDetectedAddressSummary(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-    } finally {
-      setIsReverseGeocoding(false);
-    }
+  // Reverse geocode whenever pin coordinates change (debounced)
+  const reverseGeocodeCoords = (lat: number, lng: number) => {
+    if (reverseTimerRef.current) clearTimeout(reverseTimerRef.current);
+    reverseTimerRef.current = setTimeout(async () => {
+      setIsReverseGeocoding(true);
+      try {
+        const res = await geocodingService.reverseGeocode(lat, lng);
+        setDetectedAddressSummary(res.formattedAddress);
+      } catch {
+        setDetectedAddressSummary(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      } finally {
+        setIsReverseGeocoding(false);
+      }
+    }, 250);
   };
 
   // GPS Current Location Button with high accuracy and zero cached age

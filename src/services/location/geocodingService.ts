@@ -1,8 +1,4 @@
-/**
- * Geocoding Service for ChairCare
- * Provides place search, reverse geocoding, and forward geocoding
- * using OpenStreetMap Nominatim with caching and error resilience.
- */
+import { Platform } from 'react-native';
 
 export interface GeocodedPlace {
   placeId: string;
@@ -165,8 +161,9 @@ export const geocodingService = {
         }
       })(),
 
-      // 2. Nominatim (Official OpenStreetMap with countrycodes=in)
+      // 2. Nominatim (Mobile Native only - skipped on web to prevent browser CORS and 429 errors)
       (async () => {
+        if (Platform.OS === 'web') return [];
         try {
           const url = `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(
             trimmed
@@ -239,27 +236,10 @@ export const geocodingService = {
 
   /**
    * Reverse geocode coordinates into address components
+   * Uses 100% CORS-friendly Photon and BigDataCloud to avoid browser CORS / 429 errors
    */
   reverseGeocode: async (lat: number, lon: number): Promise<ReverseGeocodeResult> => {
-    // 1. Try Nominatim reverse
-    try {
-      const url = `${NOMINATIM_BASE}/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&zoom=18`;
-      const res = await fetch(url, {
-        headers: {
-          'Accept-Language': 'en',
-          'User-Agent': USER_AGENT,
-        },
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && !data.error) {
-          return parseAddressComponents(data, lat, lon);
-        }
-      }
-    } catch {}
-
-    // 2. Fallback to Photon Reverse Geocoding
+    // 1. Primary: Photon Reverse Geocode (100% CORS enabled, OSM Elasticsearch data)
     try {
       const photonUrl = `https://photon.komoot.io/reverse?lat=${lat}&lon=${lon}`;
       const res = await fetch(photonUrl);
@@ -269,8 +249,8 @@ export const geocodingService = {
         if (first?.properties) {
           const p = first.properties;
           const buildingName = p.name || '';
-          const streetArea = p.street || p.locality || p.district || '';
-          const city = p.city || p.town || 'Gurgaon';
+          const streetArea = [p.street, p.district, p.locality].filter(Boolean).join(', ') || p.street || '';
+          const city = p.city || p.town || p.district || 'Gurgaon';
           const state = p.state || 'Haryana';
           const pincode = p.postcode || '';
 
@@ -290,16 +270,62 @@ export const geocodingService = {
       }
     } catch {}
 
-    // 3. Graceful fallback coordinates
+    // 2. Secondary: BigDataCloud Reverse Geocoding (100% CORS enabled client API)
+    try {
+      const bdcUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+      const res = await fetch(bdcUrl);
+      if (res.ok) {
+        const d = await res.json();
+        const locality = d.locality || d.localityInfo?.administrative?.[3]?.name || '';
+        const city = d.city || d.localityInfo?.administrative?.[2]?.name || 'Gurgaon';
+        const state = d.principalSubdivision || 'Haryana';
+        const pincode = d.postcode || '';
+
+        const parts = [locality, city, state, pincode].filter(Boolean);
+
+        return {
+          latitude: lat,
+          longitude: lon,
+          buildingName: '',
+          streetArea: locality,
+          city,
+          state,
+          pincode,
+          formattedAddress: parts.join(', ') || `${lat.toFixed(4)}, ${lon.toFixed(4)}`,
+        };
+      }
+    } catch {}
+
+    // 3. Fallback: Nominatim (mobile native only - skipped on web to prevent browser CORS)
+    if (Platform.OS !== 'web') {
+      try {
+        const url = `${NOMINATIM_BASE}/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&zoom=18`;
+        const res = await fetch(url, {
+          headers: {
+            'Accept-Language': 'en',
+            'User-Agent': USER_AGENT,
+          },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data && !data.error) {
+            return parseAddressComponents(data, lat, lon);
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Graceful fallback coordinates
     return {
       latitude: lat,
       longitude: lon,
       buildingName: '',
-      streetArea: 'Sector 54, Golf Course Road',
+      streetArea: 'Selected Doorstep Location',
       city: 'Gurgaon',
       state: 'Haryana',
       pincode: '122002',
-      formattedAddress: `Location (${lat.toFixed(4)}, ${lon.toFixed(4)}), Gurgaon, Haryana`,
+      formattedAddress: `📍 Pinned Location (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
     };
   },
 
@@ -342,31 +368,50 @@ export const geocodingService = {
       const clean = query.replace(/[#()]/g, '').trim();
       if (!clean) continue;
 
+      // 1. Primary: Photon search (100% CORS friendly)
       try {
-        const url = `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(
-          clean
-        )}&limit=1&countrycodes=in`;
-
-        const res = await fetch(url, {
-          headers: {
-            'Accept-Language': 'en',
-            'User-Agent': USER_AGENT,
-          },
-        });
-
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(clean)}&limit=1`;
+        const res = await fetch(photonUrl);
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            const first = data[0];
+          const first = data?.features?.[0];
+          if (first?.geometry?.coordinates) {
+            const [lon, lat] = first.geometry.coordinates;
             return {
-              latitude: parseFloat(first.lat),
-              longitude: parseFloat(first.lon),
-              formattedAddress: first.display_name,
+              latitude: lat,
+              longitude: lon,
+              formattedAddress: first.properties?.name || clean,
             };
           }
         }
-      } catch {
-        // try next candidate
+      } catch {}
+
+      // 2. Mobile Native fallback: Nominatim
+      if (Platform.OS !== 'web') {
+        try {
+          const url = `${NOMINATIM_BASE}/search?format=json&q=${encodeURIComponent(
+            clean
+          )}&limit=1&countrycodes=in`;
+
+          const res = await fetch(url, {
+            headers: {
+              'Accept-Language': 'en',
+              'User-Agent': USER_AGENT,
+            },
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            if (Array.isArray(data) && data.length > 0) {
+              const first = data[0];
+              return {
+                latitude: parseFloat(first.lat),
+                longitude: parseFloat(first.lon),
+                formattedAddress: first.display_name,
+              };
+            }
+          }
+        } catch {}
       }
     }
 
