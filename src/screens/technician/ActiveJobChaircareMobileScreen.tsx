@@ -287,6 +287,29 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
       );
 
       if (!res.success) {
+        // If network timed out or glitched, check if the job was actually completed on the server
+        try {
+          const verifyCheck = await technicianApi.getJobDetails(String(targetJobId));
+          if (verifyCheck.success && verifyCheck.data?.status === 'completed') {
+            setPinModalVisible(false);
+            const updated = {
+              ...ticket,
+              id: targetJobId,
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+              durationSeconds: elapsedSeconds,
+            };
+            setAcceptedRequest(updated);
+            navigation.navigate('JobCompleted', {
+              requestId: targetJobId || ticket.ticketNumber,
+              request: updated,
+            });
+            return;
+          }
+        } catch {
+          // ignore fallback verification error
+        }
+
         setPinError(res.error || 'Incorrect Security PIN. Please obtain the 4-digit PIN from the customer.');
         setIsVerifyingPin(false);
         return;

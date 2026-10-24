@@ -165,7 +165,8 @@ export async function apiRequest<T = any>(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const timeoutMs = (options as any)?.timeout || 30000; // 30s timeout for cloud resilience
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     const response = await fetch(url, {
       ...options,

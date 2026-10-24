@@ -361,124 +361,116 @@ export const updateJobStatus = async (
   const isCompleted = status === 'completed';
   const isCancelled = status === 'cancelled';
   const warrantyDays = isCompleted ? "NOW() + interval '90 days'" : 'NULL';
+  const payout = isCompleted ? Math.round(Number(job.total_amount || 599) * 0.70 * 100) / 100 : 0;
 
-  await query(
-    `UPDATE service_requests
-     SET status = $1,
-         warranty_valid_until = ${warrantyDays},
-         started_at = CASE 
-           WHEN $1 = 'in_progress' AND started_at IS NULL THEN NOW() 
-           ELSE started_at 
-         END,
-         updated_at = NOW()
-     WHERE id = $2;`,
-    [status, actualJobId]
-  );
-
-  // If completed or cancelled, automatically purge all chat messages for this job
-  if (isCompleted || isCancelled) {
-    try {
-      await query(
-        `DELETE FROM notifications
-         WHERE type = 'chat_message'
-           AND (
-             (data->>'requestId')::text = $1::text
-             OR (data->>'trackingCode')::text = $2::text
-           );`,
-        [actualJobId, job.tracking_code]
-      );
-    } catch (cleanErr: any) {
-      console.warn('⚠️ [Clean chat notifications error on job status update]:', cleanErr.message);
-    }
-  }
-
-  // If completed, update technician profile metrics in real-time
-  if (isCompleted) {
-    await query(
-      `UPDATE technician_profiles
-       SET completed_jobs_count = completed_jobs_count + 1,
-           today_earnings = today_earnings + $1,
+  // Execute critical state updates concurrently
+  const coreUpdates: Promise<any>[] = [
+    query(
+      `UPDATE service_requests
+       SET status = $1,
+           warranty_valid_until = ${warrantyDays},
+           started_at = CASE 
+             WHEN $1 = 'in_progress' AND started_at IS NULL THEN NOW() 
+             ELSE started_at 
+           END,
            updated_at = NOW()
-       WHERE user_id = $2;`,
-      [Number(job.total_amount || 599), technicianId]
+       WHERE id = $2;`,
+      [status, actualJobId]
+    ),
+    query(
+      `INSERT INTO service_status_history (request_id, status, updated_by, notes)
+       VALUES ($1, $2, $3, $4);`,
+      [actualJobId, status, technicianId, notes || `Status updated to ${status}`]
+    ),
+  ];
+
+  if (isCompleted) {
+    coreUpdates.push(
+      query(
+        `UPDATE technician_profiles
+         SET completed_jobs_count = completed_jobs_count + 1,
+             today_earnings = today_earnings + $1,
+             updated_at = NOW()
+         WHERE user_id = $2;`,
+        [payout, technicianId]
+      )
     );
   }
 
-  // Insert history
-  await query(
-    `INSERT INTO service_status_history (request_id, status, updated_by, notes)
-     VALUES ($1, $2, $3, $4);`,
-    [actualJobId, status, technicianId, notes || `Status updated to ${status}`]
-  );
+  await Promise.all(coreUpdates);
 
-  // Notify customer with live real-time notification
-  try {
-    const custId = job.customer_id;
-    if (custId) {
-      const techUserRes = await query('SELECT name, phone FROM users WHERE id = $1;', [technicianId]);
-      const techName = techUserRes.rows[0]?.name || 'Your technician';
-      const techPhone = techUserRes.rows[0]?.phone || '+91 98765 43210';
-
-      let notifTitle = '';
-      let notifMsg = '';
-      const notifType = `technician_${status}`;
-
-      if (status === 'arrived') {
-        notifTitle = `📍 Technician Has Arrived!`;
-        notifMsg = `${techName} has arrived at your address for Service #${job.tracking_code}. Ready to inspect your chair.`;
-      } else if (status === 'in_route') {
-        notifTitle = `🚗 Technician is On The Way`;
-        notifMsg = `${techName} is now en route to your address for Service #${job.tracking_code}.`;
-      } else if (status === 'in_progress') {
-        notifTitle = `🔧 Chair Repair In Progress`;
-        notifMsg = `${techName} has started repairing your chair (#${job.tracking_code}).`;
-      } else if (status === 'completed') {
-        notifTitle = `✅ Chair Service Completed`;
-        notifMsg = `Your chair service #${job.tracking_code} has been successfully completed. 90-day warranty is now active.`;
-      }
-
-      if (notifTitle) {
-        await query(
-          `INSERT INTO notifications (user_id, title, message, type, data)
-           VALUES ($1, $2, $3, $4, $5);`,
-          [
-            custId,
-            notifTitle,
-            notifMsg,
-            notifType,
-            JSON.stringify({
-              requestId: actualJobId,
-              trackingCode: job.tracking_code,
-              technicianName: techName,
-              technicianPhone: techPhone,
-              status,
-            }),
-          ]
-        );
-      }
-    }
-  } catch (err: any) {
-    console.warn('⚠️ [Customer status notification error]:', err.message);
-  }
-
-  // If completed, update technician profile earnings & completed jobs
-  if (isCompleted) {
-    const payout = Number(job.total_amount) * 0.7; // 70% commission payout
-    await query(
-      `UPDATE technician_profiles
-       SET completed_jobs_count = completed_jobs_count + 1,
-           today_earnings = today_earnings + $1,
-           updated_at = NOW()
-       WHERE user_id = $2;`,
-      [payout, technicianId]
-    );
-  }
-
+  // Send fast HTTP response to prevent client timeouts
   res.json({
     success: true,
     message: `Job status transitioned to ${status}.`,
-    data: { id, status },
+    data: { id: actualJobId, status, trackingCode: job.tracking_code },
   });
+
+  // Non-blocking background notification & chat purge
+  (async () => {
+    try {
+      if (isCompleted || isCancelled) {
+        await query(
+          `DELETE FROM notifications
+           WHERE type = 'chat_message'
+             AND (
+               (data->>'requestId')::text = $1::text
+               OR (data->>'trackingCode')::text = $2::text
+             );`,
+          [actualJobId, job.tracking_code]
+        ).catch((cleanErr: any) =>
+          console.warn('⚠️ [Clean chat notifications background warning]:', cleanErr.message)
+        );
+      }
+
+      const custId = job.customer_id;
+      if (custId) {
+        const techUserRes = await query('SELECT name, phone FROM users WHERE id = $1;', [technicianId]);
+        const techName = techUserRes.rows[0]?.name || 'Your technician';
+        const techPhone = techUserRes.rows[0]?.phone || '+91 98765 43210';
+
+        let notifTitle = '';
+        let notifMsg = '';
+        const notifType = `technician_${status}`;
+
+        if (status === 'arrived') {
+          notifTitle = `📍 Technician Has Arrived!`;
+          notifMsg = `${techName} has arrived at your address for Service #${job.tracking_code}. Ready to inspect your chair.`;
+        } else if (status === 'in_route') {
+          notifTitle = `🚗 Technician is On The Way`;
+          notifMsg = `${techName} is now en route to your address for Service #${job.tracking_code}.`;
+        } else if (status === 'in_progress') {
+          notifTitle = `🔧 Chair Repair In Progress`;
+          notifMsg = `${techName} has started repairing your chair (#${job.tracking_code}).`;
+        } else if (status === 'completed') {
+          notifTitle = `✅ Chair Service Completed`;
+          notifMsg = `Your chair service #${job.tracking_code} has been successfully completed. 90-day warranty is now active.`;
+        }
+
+        if (notifTitle) {
+          await query(
+            `INSERT INTO notifications (user_id, title, message, type, data)
+             VALUES ($1, $2, $3, $4, $5);`,
+            [
+              custId,
+              notifTitle,
+              notifMsg,
+              notifType,
+              JSON.stringify({
+                requestId: actualJobId,
+                trackingCode: job.tracking_code,
+                technicianName: techName,
+                technicianPhone: techPhone,
+                status,
+              }),
+            ]
+          );
+        }
+      }
+    } catch (err: any) {
+      console.warn('⚠️ [Customer status notification background warning]:', err.message);
+    }
+  })();
 };
 
 export const getEarnings = async (
