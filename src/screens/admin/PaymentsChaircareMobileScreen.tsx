@@ -1,4 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View,
@@ -242,9 +243,7 @@ export const PaymentsChaircareMobileScreen: React.FC<PaymentsScreenProps> = ({
           >
             <AppIcon name="notifications" size={20} />
           </TouchableOpacity>
-          <View style={styles.headerAvatarContainer}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
