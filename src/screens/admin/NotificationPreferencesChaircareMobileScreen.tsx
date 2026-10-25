@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/common/AppIcon';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { adminApi, NotificationChannelStatus } from '../../services/api/adminApi';
+import { useAdminSync } from '../../services/adminSync';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface ChannelStatus {
   id: 'console' | 'push' | 'email';
@@ -256,13 +260,42 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
   // Preference switches state
   const [preferences, setPreferences] =
     useState<Record<string, boolean>>(DEFAULT_PREFERENCES);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [showToast, setShowToast] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string>('Notification preferences synced');
 
   const activeChannelCount = useMemo(
     () => channels.filter((c) => c.isActive).length,
     [channels]
   );
+
+  const loadPreferences = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await adminApi.getNotificationPreferences();
+      if (res.success && res.data) {
+        const data = res.data;
+        if (Array.isArray(data.channels) && data.channels.length > 0) {
+          setChannels(data.channels);
+        }
+        if (data.preferences && Object.keys(data.preferences).length > 0) {
+          const loadedPrefs = data.preferences;
+          setPreferences((prev) => ({ ...prev, ...loadedPrefs }));
+        }
+      }
+    } catch {
+      // Keep defaults
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPreferences();
+  }, [loadPreferences]);
+
+  useAdminSync(navigation, loadPreferences);
 
   const toggleChannel = (id: 'console' | 'push' | 'email') => {
     setChannels((prev) =>
@@ -291,47 +324,53 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isSaving) return;
     setIsSaving(true);
-    setTimeout(() => {
-      setIsSaving(false);
+    try {
+      const res = await adminApi.updateNotificationPreferences({
+        channels,
+        preferences,
+      });
+      if (res.success) {
+        setToastMessage('Notification preferences saved to live database.');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3200);
+      } else {
+        setToastMessage(res.error || 'Failed to save preferences.');
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 3200);
+      }
+    } catch (err: any) {
+      setToastMessage(err?.message || 'Error saving notification preferences.');
       setShowToast(true);
-      setTimeout(() => {
-        setShowToast(false);
-      }, 3200);
-    }, 450);
+      setTimeout(() => setShowToast(false), 3200);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleRestoreDefaults = () => {
+  const handleRestoreDefaults = async () => {
+    const defaultChannels: ChannelStatus[] = [
+      { id: 'console', title: 'In-App Console', statusLabel: 'Syncing', icon: 'terminal', isActive: true },
+      { id: 'push', title: 'Push Device', statusLabel: 'FCM Active', icon: 'notifications_active', isActive: true },
+      { id: 'email', title: 'Corp Email', statusLabel: 'SMTP Pool', icon: 'mark_email_unread', isActive: true },
+    ];
     setPreferences(DEFAULT_PREFERENCES);
-    setChannels([
-      {
-        id: 'console',
-        title: 'In-App Console',
-        statusLabel: 'Syncing',
-        icon: 'terminal',
-        isActive: true,
-      },
-      {
-        id: 'push',
-        title: 'Push Device',
-        statusLabel: 'FCM Active',
-        icon: 'notifications_active',
-        isActive: true,
-      },
-      {
-        id: 'email',
-        title: 'Corp Email',
-        statusLabel: 'SMTP Pool',
-        icon: 'mark_email_unread',
-        isActive: true,
-      },
-    ]);
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 3200);
+    setChannels(defaultChannels);
+    try {
+      await adminApi.updateNotificationPreferences({
+        channels: defaultChannels,
+        preferences: DEFAULT_PREFERENCES,
+      });
+      setToastMessage('Restored regional defaults & updated live database.');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3200);
+    } catch {
+      setToastMessage('Restored local defaults.');
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3200);
+    }
   };
 
   return (
@@ -367,13 +406,12 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
           <TouchableOpacity
             style={styles.headerActionBtn}
             activeOpacity={0.7}
-            accessibilityLabel="More actions"
+            onPress={() => navigation?.navigate('CreateNotification')}
+            accessibilityLabel="Send broadcast notification"
           >
-            <AppIcon name="more_vert" size={20} />
+            <AppIcon name="campaign" size={20} color="#0051d5" />
           </TouchableOpacity>
-          <View style={styles.headerAvatarContainer}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
@@ -406,6 +444,31 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
             Configure alerts, urgency rules, and broadcast channels
           </Text>
         </View>
+
+        {/* Quick Broadcast Notification Banner */}
+        <TouchableOpacity
+          style={styles.broadcastBanner}
+          activeOpacity={0.88}
+          onPress={() => navigation?.navigate('CreateNotification')}
+        >
+          <View style={styles.broadcastBannerLeft}>
+            <View style={styles.broadcastIconBox}>
+              <AppIcon name="campaign" size={24} color="#0051d5" />
+            </View>
+            <View style={styles.broadcastTextGroup}>
+              <Text style={styles.broadcastBannerTitle}>
+                Send Notification Broadcast
+              </Text>
+              <Text style={styles.broadcastBannerSubtitle}>
+                Deploy announcements or emergency alerts to Admins, Customers, Technicians, or Selected Members
+              </Text>
+            </View>
+          </View>
+          <View style={styles.broadcastActionPill}>
+            <Text style={styles.broadcastActionPillText}>Broadcast</Text>
+            <AppIcon name="arrow_forward" size={14} color="#ffffff" />
+          </View>
+        </TouchableOpacity>
 
         {/* Delivery Channels Matrix */}
         <View style={styles.sectionContainer}>
@@ -620,7 +683,7 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
               <AppIcon name="check" size={20} />
             </View>
             <Text style={styles.toastMessageText}>
-              Notification preferences saved to profile
+              {toastMessage}
             </Text>
           </View>
           <TouchableOpacity
@@ -650,9 +713,13 @@ export const NotificationPreferencesChaircareMobileScreen: React.FC<
             activeOpacity={0.88}
             disabled={isSaving}
           >
-            <AppIcon name={isSaving ? 'sync' : 'save'} size={20} />
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+            ) : (
+              <AppIcon name="save" size={20} color="#ffffff" />
+            )}
             <Text style={styles.saveButtonText}>
-              {isSaving ? 'Applying Rules...' : 'Save Preferences (Confirm)'}
+              {isSaving ? 'Saving to Database...' : 'Save Preferences (Confirm)'}
             </Text>
           </TouchableOpacity>
 
@@ -1287,5 +1354,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#bec6e0',
     includeFontPadding: false,
+  },
+
+  /* Quick Broadcast Banner */
+  broadcastBanner: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#dbe1ff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    shadowColor: '#0051d5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  broadcastBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  broadcastIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#edf0ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  broadcastTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  broadcastBannerTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    color: '#131b2e',
+  },
+  broadcastBannerSubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#565e74',
+    lineHeight: 16,
+  },
+  broadcastActionPill: {
+    backgroundColor: '#0051d5',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  broadcastActionPillText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 12,
+    color: '#ffffff',
   },
 });

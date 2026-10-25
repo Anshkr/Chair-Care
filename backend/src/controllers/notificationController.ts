@@ -59,7 +59,7 @@ export const getNotifications = async (
     // Notifications are strictly bound to the authenticated user's ID AND isolated to their own bookings/assigned jobs.
     let roleFilter = '';
     if (requestedRole === 'customer') {
-      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_status', 'chat_message', 'service_update', 'promo') OR type IS NULL)
+      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_status', 'chat_message', 'service_update', 'promo', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'customer')
                     AND (
                       (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)
@@ -70,7 +70,7 @@ export const getNotifications = async (
                       )
                     )`;
     } else if (requestedRole === 'technician') {
-      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'system', 'payout') OR type IS NULL)
+      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'technician')
                     AND (
                       (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)

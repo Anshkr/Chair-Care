@@ -2532,4 +2532,340 @@ export const updateDispatchConfig = async (
   }
 };
 
+export const getAdminNotificationPreferences = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.userId;
+    const prefRes = await query(
+      'SELECT * FROM admin_notification_preferences WHERE admin_id = $1 LIMIT 1;',
+      [adminId]
+    );
+
+    const defaultChannels = [
+      { id: 'console', title: 'In-App Console', statusLabel: 'Syncing', icon: 'terminal', isActive: true },
+      { id: 'push', title: 'Push Device', statusLabel: 'FCM Active', icon: 'notifications_active', isActive: true },
+      { id: 'email', title: 'Corp Email', statusLabel: 'SMTP Pool', icon: 'mark_email_unread', isActive: true },
+    ];
+
+    const defaultPrefs = {
+      'op-new': true, 'op-unassigned': true, 'op-assignment': true, 'op-active': true, 'op-delays': true,
+      'fin-success': false, 'fin-failed': true, 'fin-refunds': true, 'fin-disputes': true,
+      'gov-apps': true, 'gov-verify': true, 'gov-customer': true, 'gov-tech': true,
+      'sys-api': true, 'sys-gateway': true, 'sys-notification': true, 'sys-downtime': true,
+    };
+
+    if (prefRes.rows.length === 0) {
+      res.json({
+        success: true,
+        data: {
+          channels: defaultChannels,
+          preferences: defaultPrefs,
+          updatedAt: null,
+        },
+      });
+      return;
+    }
+
+    const row = prefRes.rows[0];
+    const savedChannels = row.channels || {};
+    const channels = [
+      {
+        id: 'console',
+        title: 'In-App Console',
+        statusLabel: savedChannels.console !== false ? 'Syncing' : 'Paused',
+        icon: 'terminal',
+        isActive: savedChannels.console !== false,
+      },
+      {
+        id: 'push',
+        title: 'Push Device',
+        statusLabel: savedChannels.push !== false ? 'FCM Active' : 'Paused',
+        icon: 'notifications_active',
+        isActive: savedChannels.push !== false,
+      },
+      {
+        id: 'email',
+        title: 'Corp Email',
+        statusLabel: savedChannels.email !== false ? 'SMTP Pool' : 'Paused',
+        icon: 'mark_email_unread',
+        isActive: savedChannels.email !== false,
+      },
+    ];
+
+    res.json({
+      success: true,
+      data: {
+        channels,
+        preferences: { ...defaultPrefs, ...(row.preferences || {}) },
+        updatedAt: row.updated_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get notification preferences:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve notification preferences.' });
+  }
+};
+
+export const updateAdminNotificationPreferences = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.userId;
+    if (!adminId) {
+      res.status(401).json({ success: false, error: 'Unauthorized' });
+      return;
+    }
+
+    const { channels, preferences } = req.body;
+
+    const channelsJson = typeof channels === 'object' && channels !== null
+      ? Array.isArray(channels)
+        ? channels.reduce((acc: any, c: any) => ({ ...acc, [c.id]: Boolean(c.isActive) }), {})
+        : channels
+      : { console: true, push: true, email: true };
+
+    const prefsJson = typeof preferences === 'object' && preferences !== null ? preferences : {};
+
+    const upsertRes = await query(
+      `INSERT INTO admin_notification_preferences (admin_id, channels, preferences, updated_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, CURRENT_TIMESTAMP)
+       ON CONFLICT (admin_id) DO UPDATE SET
+         channels = EXCLUDED.channels,
+         preferences = EXCLUDED.preferences,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING *;`,
+      [adminId, JSON.stringify(channelsJson), JSON.stringify(prefsJson)]
+    );
+
+    await query(
+      `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+       VALUES ($1, 'NOTIFICATION_PREFERENCES_UPDATE', 'admin_notification_preferences', $1::text, $2::jsonb);`,
+      [adminId, JSON.stringify({ channels: channelsJson, preferencesCount: Object.keys(prefsJson).length })]
+    ).catch(() => {});
+
+    res.json({
+      success: true,
+      message: 'Notification preferences saved successfully.',
+      data: upsertRes.rows[0],
+    });
+  } catch (err: any) {
+    console.error('Failed to update notification preferences:', err);
+    res.status(500).json({ success: false, error: 'Failed to save notification preferences.' });
+  }
+};
+
+export const getNotificationAudiences = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const [techsRes, customersRes, adminsRes] = await Promise.all([
+      query(`SELECT u.id, u.name, u.phone, u.email, tp.is_online, tp.verification_status
+             FROM users u
+             LEFT JOIN technician_profiles tp ON tp.user_id = u.id
+             WHERE u.role = 'technician' AND u.is_active = TRUE
+             ORDER BY u.name ASC;`),
+      query(`SELECT u.id, u.name, u.phone, u.email
+             FROM users u
+             WHERE u.role = 'customer' AND u.is_active = TRUE
+             ORDER BY u.name ASC;`),
+      query(`SELECT u.id, u.name, u.phone, u.email
+             FROM users u
+             WHERE u.role = 'admin' AND u.is_active = TRUE
+             ORDER BY u.name ASC;`),
+    ]);
+
+    const techs = techsRes.rows.map((t) => ({
+      id: t.id,
+      name: t.name || 'Technician',
+      phone: t.phone || '',
+      email: t.email || '',
+      isOnline: Boolean(t.is_online),
+      status: t.verification_status || 'unverified',
+    }));
+
+    const customers = customersRes.rows.map((c) => ({
+      id: c.id,
+      name: c.name || 'Customer',
+      phone: c.phone || '',
+      email: c.email || '',
+    }));
+
+    const admins = adminsRes.rows.map((a) => ({
+      id: a.id,
+      name: a.name || 'Admin',
+      phone: a.phone || '',
+      email: a.email || '',
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        counts: {
+          allTechs: techs.length,
+          activeTechsOnline: techs.filter((t) => t.isOnline).length,
+          allCustomers: customers.length,
+          adminTeam: admins.length,
+        },
+        members: {
+          technicians: techs,
+          customers,
+          admins,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get notification audiences:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve notification audience data.' });
+  }
+};
+
+export const sendBroadcastNotification = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.userId;
+    const {
+      title,
+      message,
+      audience,
+      audienceLabel,
+      notificationType,
+      deliverySchedule,
+      scheduledTime,
+      channels,
+      selectedUserIds,
+    } = req.body;
+
+    if (!title || !title.trim() || !message || !message.trim()) {
+      res.status(400).json({ success: false, error: 'Title and message are required.' });
+      return;
+    }
+
+    // Resolve target user IDs
+    let targetUserIds: string[] = [];
+
+    if (audience === 'all_techs') {
+      const uRes = await query("SELECT id FROM users WHERE role = 'technician' AND is_active = TRUE;");
+      targetUserIds = uRes.rows.map((r) => r.id);
+    } else if (audience === 'all_customers') {
+      const uRes = await query("SELECT id FROM users WHERE role = 'customer' AND is_active = TRUE;");
+      targetUserIds = uRes.rows.map((r) => r.id);
+    } else if (audience === 'admin_team') {
+      const uRes = await query("SELECT id FROM users WHERE role = 'admin' AND is_active = TRUE;");
+      targetUserIds = uRes.rows.map((r) => r.id);
+    } else if (audience === 'selected_users' || audience === 'selected_techs') {
+      if (Array.isArray(selectedUserIds) && selectedUserIds.length > 0) {
+        const uRes = await query("SELECT id FROM users WHERE id = ANY($1::uuid[]) AND is_active = TRUE;", [selectedUserIds]);
+        targetUserIds = uRes.rows.map((r) => r.id);
+      }
+    }
+
+    const randCode = `#NOT-${Math.floor(10000 + Math.random() * 90000)}`;
+
+    // Insert broadcast record
+    const broadcastInsert = await query(
+      `INSERT INTO notification_broadcasts (
+         broadcast_code, sender_id, title, message, audience, audience_label,
+         notification_type, target_count, delivered_count, channels, delivery_schedule, scheduled_time, status
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, 'sent')
+       RETURNING *;`,
+      [
+        randCode,
+        adminId || null,
+        title.trim(),
+        message.trim(),
+        audience || 'all_techs',
+        audienceLabel || 'All Technicians',
+        notificationType || 'Service Alert',
+        targetUserIds.length,
+        targetUserIds.length,
+        JSON.stringify(channels || { push: true, inbox: true }),
+        deliverySchedule || 'now',
+        scheduledTime || 'Immediate',
+      ]
+    );
+
+    const broadcast = broadcastInsert.rows[0];
+
+    // Normalize notification type
+    let notifType = 'announcement';
+    const lowerType = (notificationType || '').toLowerCase();
+    if (lowerType.includes('service alert') || lowerType.includes('emergency')) {
+      notifType = 'service_alert';
+    } else if (lowerType.includes('maintenance')) {
+      notifType = 'maintenance';
+    }
+
+    // Dispatch to all target users in DB
+    if (targetUserIds.length > 0) {
+      for (const targetId of targetUserIds) {
+        await query(
+          `INSERT INTO notifications (user_id, title, message, type, data, is_read)
+           VALUES ($1, $2, $3, $4, $5::jsonb, FALSE);`,
+          [
+            targetId,
+            title.trim(),
+            message.trim(),
+            notifType,
+            JSON.stringify({
+              broadcastId: broadcast.id,
+              broadcastCode: randCode,
+              audience,
+              senderAdminId: adminId,
+              notificationType,
+            }),
+          ]
+        );
+      }
+    }
+
+    // Audit log
+    if (adminId) {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'NOTIFICATION_BROADCAST_SENT', 'notification_broadcasts', $2, $3::jsonb);`,
+        [
+          adminId,
+          broadcast.id,
+          JSON.stringify({
+            broadcastCode: randCode,
+            audience,
+            deliveredCount: targetUserIds.length,
+            title: title.trim(),
+          }),
+        ]
+      ).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: `Broadcast message dispatched successfully to ${targetUserIds.length} recipients.`,
+      data: {
+        id: broadcast.id,
+        code: randCode,
+        title: broadcast.title,
+        message: broadcast.message,
+        audience: broadcast.audience,
+        audienceLabel: broadcast.audience_label,
+        notificationType: broadcast.notification_type,
+        recipientCount: String(targetUserIds.length),
+        targetCount: targetUserIds.length,
+        deliveredCount: targetUserIds.length,
+        channels: broadcast.channels,
+        deliverySchedule: broadcast.delivery_schedule,
+        sentTimestamp: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }),
+        createdAt: broadcast.created_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to send broadcast notification:', err);
+    res.status(500).json({ success: false, error: 'Failed to send broadcast notification.' });
+  }
+};
+
 

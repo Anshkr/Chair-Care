@@ -251,6 +251,36 @@ export const adminApi = {
     if (res.success) adminSyncEmitter.notifySync();
     return res;
   },
+
+  getNotificationPreferences: async (): Promise<ApiResponse<AdminNotificationPreferencesData>> => {
+    return apiRequest<AdminNotificationPreferencesData>('/admin/notification-preferences');
+  },
+
+  updateNotificationPreferences: async (
+    data: Partial<AdminNotificationPreferencesData>
+  ): Promise<ApiResponse<AdminNotificationPreferencesData>> => {
+    const res = await apiRequest<AdminNotificationPreferencesData>('/admin/notification-preferences', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
+  getNotificationAudiences: async (): Promise<ApiResponse<NotificationAudiencesData>> => {
+    return apiRequest<NotificationAudiencesData>('/admin/notifications/audiences');
+  },
+
+  sendBroadcastNotification: async (
+    payload: BroadcastNotificationPayload
+  ): Promise<ApiResponse<BroadcastNotificationResult>> => {
+    const res = await apiRequest<BroadcastNotificationResult>('/admin/notifications/broadcast', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
 };
 
 export interface PlatformConfigData {
@@ -300,6 +330,75 @@ export interface DispatchConfigData {
     pendingDispatchRequests: number;
     activeDispatchedRequests: number;
   };
+}
+
+export interface NotificationChannelStatus {
+  id: 'console' | 'push' | 'email';
+  title: string;
+  statusLabel: string;
+  icon: string;
+  isActive: boolean;
+}
+
+export interface AdminNotificationPreferencesData {
+  channels: NotificationChannelStatus[];
+  preferences: Record<string, boolean>;
+  updatedAt?: string | null;
+}
+
+export interface AudienceMember {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  isOnline?: boolean;
+  status?: string;
+}
+
+export interface NotificationAudiencesData {
+  counts: {
+    allTechs: number;
+    activeTechsOnline: number;
+    allCustomers: number;
+    adminTeam: number;
+  };
+  members: {
+    technicians: AudienceMember[];
+    customers: AudienceMember[];
+    admins: AudienceMember[];
+  };
+}
+
+export interface BroadcastNotificationPayload {
+  title: string;
+  message: string;
+  audience: 'all_techs' | 'all_customers' | 'admin_team' | 'selected_users' | 'selected_techs';
+  audienceLabel?: string;
+  notificationType?: string;
+  deliverySchedule?: 'now' | 'later';
+  scheduledTime?: string;
+  channels?: {
+    push?: boolean;
+    inbox?: boolean;
+  };
+  selectedUserIds?: string[];
+}
+
+export interface BroadcastNotificationResult {
+  id: string;
+  code: string;
+  title: string;
+  message: string;
+  audience: string;
+  audienceLabel: string;
+  notificationType: string;
+  recipientCount: string;
+  targetCount: number;
+  deliveredCount: number;
+  channels: any;
+  deliverySchedule: string;
+  sentTimestamp: string;
+  createdAt: string;
 }
 
 

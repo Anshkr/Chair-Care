@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   Platform,
+  ActivityIndicator,
   useWindowDimensions,
   Alert,
 } from 'react-native';
@@ -16,6 +17,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/common/AppIcon';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import {
+  adminApi,
+  AudienceMember,
+  NotificationAudiencesData,
+} from '../../services/api/adminApi';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 export type AudienceType =
   | 'all_techs'
@@ -105,6 +112,106 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
   const [inboxChannelEnabled, setInboxChannelEnabled] = useState<boolean>(true);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
+  // Real backend audiences state
+  const [audienceData, setAudienceData] =
+    useState<NotificationAudiencesData | null>(null);
+  const [isLoadingAudiences, setIsLoadingAudiences] = useState<boolean>(true);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [selectedTechIds, setSelectedTechIds] = useState<string[]>([]);
+  const [isMemberModalOpen, setIsMemberModalOpen] = useState<boolean>(false);
+  const [memberSearchQuery, setMemberSearchQuery] = useState<string>('');
+
+  const loadAudiences = useCallback(async () => {
+    try {
+      setIsLoadingAudiences(true);
+      const res = await adminApi.getNotificationAudiences();
+      if (res.success && res.data) {
+        setAudienceData(res.data);
+      }
+    } catch {
+      // fallback
+    } finally {
+      setIsLoadingAudiences(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAudiences();
+  }, [loadAudiences]);
+
+  const dynamicAudienceOptions: AudienceOption[] = useMemo(() => [
+    {
+      id: 'all_techs',
+      title: 'All Technicians',
+      subtitle: `${audienceData?.counts.allTechs ?? 86} Verified field specialists (${audienceData?.counts.activeTechsOnline ?? 0} active online)`,
+      badge: 'Fleet',
+      icon: 'engineering',
+      isPrimary: true,
+    },
+    {
+      id: 'all_customers',
+      title: 'All Customers',
+      subtitle: `${audienceData?.counts.allCustomers ?? 12450} Registered enterprise & corporate clients`,
+      icon: 'corporate_fare',
+    },
+    {
+      id: 'selected_users',
+      title: 'Selected Users',
+      subtitle:
+        selectedUserIds.length > 0
+          ? `${selectedUserIds.length} customer account(s) chosen`
+          : 'Filter and choose specific customer accounts',
+      icon: 'group_add',
+      badge: selectedUserIds.length > 0 ? `${selectedUserIds.length} Chosen` : undefined,
+    },
+    {
+      id: 'selected_techs',
+      title: 'Selected Technicians',
+      subtitle:
+        selectedTechIds.length > 0
+          ? `${selectedTechIds.length} technician specialist(s) chosen`
+          : 'Choose specific technicians by name/specialty',
+      icon: 'pin_drop',
+      badge: selectedTechIds.length > 0 ? `${selectedTechIds.length} Chosen` : undefined,
+    },
+    {
+      id: 'admin_team',
+      title: 'Admin Team',
+      subtitle: `${audienceData?.counts.adminTeam ?? 8} Operations & dispatch supervisors`,
+      icon: 'admin_panel_settings',
+    },
+  ], [audienceData, selectedUserIds, selectedTechIds]);
+
+  const toggleSelectMember = (id: string) => {
+    if (selectedAudience === 'selected_users') {
+      setSelectedUserIds((prev) =>
+        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      );
+    } else {
+      setSelectedTechIds((prev) =>
+        prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+      );
+    }
+  };
+
+  const handleSelectAllMembers = () => {
+    if (selectedAudience === 'selected_users') {
+      const allIds = (audienceData?.members.customers || []).map((c) => c.id);
+      setSelectedUserIds(allIds);
+    } else {
+      const allIds = (audienceData?.members.technicians || []).map((t) => t.id);
+      setSelectedTechIds(allIds);
+    }
+  };
+
+  const handleClearSelectedMembers = () => {
+    if (selectedAudience === 'selected_users') {
+      setSelectedUserIds([]);
+    } else {
+      setSelectedTechIds([]);
+    }
+  };
+
   const handleContinue = () => {
     if (!title.trim() || !message.trim()) {
       if (Platform.OS === 'web') {
@@ -115,8 +222,37 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
       return;
     }
 
+    if (selectedAudience === 'selected_users' && selectedUserIds.length === 0) {
+      if (Platform.OS === 'web') {
+        window.alert('Please select at least one customer account to receive this broadcast.');
+      } else {
+        Alert.alert('No Customers Selected', 'Please tap "Select Specific Customers" and choose at least one account.');
+      }
+      return;
+    }
+
+    if (selectedAudience === 'selected_techs' && selectedTechIds.length === 0) {
+      if (Platform.OS === 'web') {
+        window.alert('Please select at least one technician to receive this broadcast.');
+      } else {
+        Alert.alert('No Technicians Selected', 'Please tap "Select Specific Technicians" and choose at least one specialist.');
+      }
+      return;
+    }
+
     if (isSubmitting) return;
     setIsSubmitting(true);
+
+    const targetRecipientCount =
+      selectedAudience === 'all_techs'
+        ? audienceData?.counts.allTechs ?? 86
+        : selectedAudience === 'all_customers'
+        ? audienceData?.counts.allCustomers ?? 12450
+        : selectedAudience === 'admin_team'
+        ? audienceData?.counts.adminTeam ?? 8
+        : selectedAudience === 'selected_users'
+        ? selectedUserIds.length
+        : selectedTechIds.length;
 
     const notificationPayload = {
       id: `notif-${Date.now()}`,
@@ -124,7 +260,7 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
       message: message.trim(),
       audience: selectedAudience,
       audienceLabel:
-        AUDIENCE_OPTIONS.find((a) => a.id === selectedAudience)?.title ||
+        dynamicAudienceOptions.find((a) => a.id === selectedAudience)?.title ||
         'All Technicians',
       notificationType: selectedType,
       notificationTag: selectedType.split('(')[0].trim(),
@@ -134,8 +270,18 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
         inbox: inboxChannelEnabled,
       },
       scheduledTime: deliverySchedule === 'later' ? 'Tomorrow, 09:00 AM' : 'Immediate',
+      recipientCount: String(targetRecipientCount),
+      targetCount: targetRecipientCount,
+      selectedUserIds:
+        selectedAudience === 'selected_users'
+          ? selectedUserIds
+          : selectedAudience === 'selected_techs'
+          ? selectedTechIds
+          : undefined,
       createdAt: new Date().toISOString(),
     };
+
+    setIsSubmitting(false);
 
     // Navigate to A41 — Notification Confirmation Sent
     if (navigation) {
@@ -150,6 +296,8 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
     setTitle('');
     setMessage('');
     setSelectedAudience('all_techs');
+    setSelectedUserIds([]);
+    setSelectedTechIds([]);
     setDeliverySchedule('now');
     if (navigation?.canGoBack()) {
       navigation.goBack();
@@ -193,9 +341,7 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
           >
             <AppIcon name="more_vert" size={20} />
           </TouchableOpacity>
-          <View style={styles.headerAvatarContainer}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
@@ -239,7 +385,7 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
           </Text>
 
           <View style={styles.audienceList}>
-            {AUDIENCE_OPTIONS.map((option) => {
+            {dynamicAudienceOptions.map((option) => {
               const isSelected = selectedAudience === option.id;
               return (
                 <TouchableOpacity
@@ -299,6 +445,36 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
                 </TouchableOpacity>
               );
             })}
+
+            {/* Manage Members CTA for Targeted Cohorts */}
+            {(selectedAudience === 'selected_users' ||
+              selectedAudience === 'selected_techs') && (
+              <TouchableOpacity
+                style={styles.manageMembersBtn}
+                onPress={() => {
+                  setMemberSearchQuery('');
+                  setIsMemberModalOpen(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.manageMembersLeft}>
+                  <View style={styles.manageMembersIconBox}>
+                    <AppIcon name="person_search" size={20} color="#0051d5" />
+                  </View>
+                  <View>
+                    <Text style={styles.manageMembersTitle}>
+                      {selectedAudience === 'selected_users'
+                        ? `Select Specific Customers (${selectedUserIds.length} selected)`
+                        : `Select Specific Technicians (${selectedTechIds.length} selected)`}
+                    </Text>
+                    <Text style={styles.manageMembersSubtitle}>
+                      Tap to search, filter, and pick exact target accounts
+                    </Text>
+                  </View>
+                </View>
+                <AppIcon name="chevron_right" size={20} color="#0051d5" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
@@ -698,6 +874,152 @@ export const CreateNotificationChaircareMobileScreen: React.FC<
             </View>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Member Selection Modal for Targeted Cohorts */}
+      <Modal
+        visible={isMemberModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsMemberModalOpen(false)}
+      >
+        <View style={styles.dropdownModalBackdrop}>
+          <View style={[styles.dropdownModalCard, { maxHeight: '80%', minHeight: 400 }]}>
+            <View style={styles.dropdownModalHeader}>
+              <View>
+                <Text style={styles.dropdownModalTitle}>
+                  {selectedAudience === 'selected_users'
+                    ? 'Target Customer Accounts'
+                    : 'Target Technicians'}
+                </Text>
+                <Text style={styles.dropdownModalSubtitle}>
+                  {selectedAudience === 'selected_users'
+                    ? `${selectedUserIds.length} of ${audienceData?.members.customers.length ?? 0} selected`
+                    : `${selectedTechIds.length} of ${audienceData?.members.technicians.length ?? 0} selected`}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsMemberModalOpen(false)}>
+                <AppIcon name="close" size={20} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search Input */}
+            <View style={styles.modalSearchBox}>
+              <AppIcon name="search" size={18} color="#565e74" />
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder={
+                  selectedAudience === 'selected_users'
+                    ? 'Search customer name, phone, email...'
+                    : 'Search technician name, phone, email...'
+                }
+                placeholderTextColor="#727782"
+                value={memberSearchQuery}
+                onChangeText={setMemberSearchQuery}
+              />
+              {memberSearchQuery ? (
+                <TouchableOpacity onPress={() => setMemberSearchQuery('')}>
+                  <AppIcon name="cancel" size={16} color="#727782" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Quick Actions (Select All / Clear) */}
+            <View style={styles.modalQuickActionsRow}>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={handleSelectAllMembers}
+              >
+                <Text style={styles.quickActionBtnText}>Select All</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={handleClearSelectedMembers}
+              >
+                <Text style={styles.quickActionBtnText}>Clear Selection</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Member List */}
+            <ScrollView style={{ flex: 1, marginVertical: 8 }} showsVerticalScrollIndicator={false}>
+              {(() => {
+                const rawList =
+                  selectedAudience === 'selected_users'
+                    ? audienceData?.members.customers || []
+                    : audienceData?.members.technicians || [];
+                const q = memberSearchQuery.toLowerCase().trim();
+                const filtered = rawList.filter(
+                  (m) =>
+                    !q ||
+                    m.name.toLowerCase().includes(q) ||
+                    m.phone.toLowerCase().includes(q) ||
+                    m.email.toLowerCase().includes(q)
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <View style={{ padding: 24, alignItems: 'center' }}>
+                      <Text style={{ fontFamily: 'Inter-Medium', color: '#565e74' }}>
+                        No members found matching "{memberSearchQuery}".
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return filtered.map((member) => {
+                  const isChecked =
+                    selectedAudience === 'selected_users'
+                      ? selectedUserIds.includes(member.id)
+                      : selectedTechIds.includes(member.id);
+
+                  return (
+                    <TouchableOpacity
+                      key={member.id}
+                      style={[
+                        styles.memberListItem,
+                        isChecked && styles.memberListItemChecked,
+                      ]}
+                      onPress={() => toggleSelectMember(member.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.memberListItemLeft}>
+                        <View
+                          style={[
+                            styles.memberCheckbox,
+                            isChecked && styles.memberCheckboxActive,
+                          ]}
+                        >
+                          {isChecked && <AppIcon name="check" size={16} color="#ffffff" />}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.memberListName}>{member.name}</Text>
+                            {member.isOnline ? (
+                              <View style={styles.onlineBadgePill}>
+                                <Text style={styles.onlineBadgePillText}>ONLINE</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={styles.memberListMeta}>
+                            {member.phone || member.email || member.id.substring(0, 8)}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                });
+              })()}
+            </ScrollView>
+
+            {/* Done button */}
+            <TouchableOpacity
+              style={styles.modalDoneBtn}
+              onPress={() => setIsMemberModalOpen(false)}
+            >
+              <Text style={styles.modalDoneBtnText}>Done (Save Selection)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1623,5 +1945,156 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#0051d5',
     includeFontPadding: false,
+  },
+
+  /* Manage Members Button */
+  manageMembersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#edf0ff',
+    borderWidth: 1,
+    borderColor: '#c6d3f7',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 6,
+  },
+  manageMembersLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  manageMembersIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageMembersTitle: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 13,
+    color: '#0051d5',
+  },
+  manageMembersSubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#565e74',
+    marginTop: 1,
+  },
+
+  /* Member Selection Modal */
+  dropdownModalSubtitle: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: '#565e74',
+    marginTop: 2,
+  },
+  modalSearchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f1f3f5',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginVertical: 10,
+    gap: 8,
+  },
+  modalSearchInput: {
+    flex: 1,
+    fontFamily: 'Inter-Regular',
+    fontSize: 13,
+    color: '#131b2e',
+    padding: 0,
+  },
+  modalQuickActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginBottom: 6,
+  },
+  quickActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#e6eaf5',
+  },
+  quickActionBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: '#0051d5',
+  },
+  memberListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e8ecf2',
+  },
+  memberListItemChecked: {
+    borderColor: '#0051d5',
+    backgroundColor: '#f3f6ff',
+  },
+  memberListItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  memberCheckbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#b4bac7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+  memberCheckboxActive: {
+    backgroundColor: '#0051d5',
+    borderColor: '#0051d5',
+  },
+  memberListName: {
+    fontFamily: 'PlusJakartaSans-SemiBold',
+    fontSize: 13,
+    color: '#131b2e',
+  },
+  onlineBadgePill: {
+    backgroundColor: '#defbe6',
+    borderRadius: 4,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  onlineBadgePillText: {
+    fontFamily: 'JetBrainsMono-Bold',
+    fontSize: 9,
+    color: '#008736',
+  },
+  memberListMeta: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#6e7587',
+    marginTop: 2,
+  },
+  modalDoneBtn: {
+    backgroundColor: '#0051d5',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  modalDoneBtnText: {
+    fontFamily: 'PlusJakartaSans-Bold',
+    fontSize: 14,
+    color: '#ffffff',
   },
 });

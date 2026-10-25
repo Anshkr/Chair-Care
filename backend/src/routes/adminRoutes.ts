@@ -30,6 +30,10 @@ import {
   updatePlatformConfig,
   getDispatchConfig,
   updateDispatchConfig,
+  getAdminNotificationPreferences,
+  updateAdminNotificationPreferences,
+  getNotificationAudiences,
+  sendBroadcastNotification,
 } from '../controllers/adminController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -77,5 +81,11 @@ router.put('/platform-config', updatePlatformConfig);
 // Technician Dispatch & Matching Rules
 router.get('/dispatch-config', getDispatchConfig);
 router.put('/dispatch-config', updateDispatchConfig);
+
+// Notification Preferences & Broadcast Messaging
+router.get('/notification-preferences', getAdminNotificationPreferences);
+router.put('/notification-preferences', updateAdminNotificationPreferences);
+router.get('/notifications/audiences', getNotificationAudiences);
+router.post('/notifications/broadcast', sendBroadcastNotification);
 
 export default router;
