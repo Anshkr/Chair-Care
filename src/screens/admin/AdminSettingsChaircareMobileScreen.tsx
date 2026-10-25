@@ -223,16 +223,6 @@ const CONFIG_GROUPS: ConfigGroup[] = [
         iconBgType: 'surface',
         targetScreen: 'NotificationPreferences',
       },
-      {
-        id: 'offline_screen_demo',
-        title: 'Network Offline Screen (Demo)',
-        description: 'Preview buffered radar animation and network diagnostics screen',
-        badge: 'Offline UI',
-        badgeType: 'info',
-        icon: 'wifi-off',
-        iconBgType: 'secondary',
-        targetScreen: 'NoNetworkOffline',
-      },
     ],
   },
 ];
