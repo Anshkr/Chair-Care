@@ -21,6 +21,7 @@ import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi } from '../../services/api';
 import { useAdminSync } from '../../services/adminSync';
+import { phoneCallService } from '../../services/phone/phoneCallService';
 import { AnimatedNumber } from '../../animations/AnimatedNumber';
 import { FadeIn } from '../../animations/FadeIn';
 
@@ -42,6 +43,8 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
     unresolvedSupport: 0,
     pendingDisputes: 0,
     latestRequests: [] as any[],
+    completedJobs: [] as any[],
+    supportTickets: [] as any[],
   });
   const [loading, setLoading] = useState(true);
 
@@ -59,6 +62,8 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
   }, []);
 
   const [activeOpIndex, setActiveOpIndex] = useState(0);
+  const [activeCompletedIndex, setActiveCompletedIndex] = useState(0);
+  const [activeTicketIndex, setActiveTicketIndex] = useState(0);
 
   useEffect(() => {
     fetchMetrics();
@@ -83,6 +88,24 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
     liveActiveOps.length > 0
       ? liveActiveOps[Math.min(activeOpIndex, liveActiveOps.length - 1)]
       : metrics.latestRequests?.[0] || null;
+
+  const completedJobsList = React.useMemo(() => {
+    return (metrics as any).completedJobs || [];
+  }, [metrics]);
+
+  const currentCompletedJob =
+    completedJobsList.length > 0
+      ? completedJobsList[Math.min(activeCompletedIndex, completedJobsList.length - 1)]
+      : null;
+
+  const supportTicketsList = React.useMemo(() => {
+    return (metrics as any).supportTickets || [];
+  }, [metrics]);
+
+  const currentTicket =
+    supportTicketsList.length > 0
+      ? supportTicketsList[Math.min(activeTicketIndex, supportTicketsList.length - 1)]
+      : null;
 
   return (
     <ScreenContainer hasPadding={false}>
@@ -348,6 +371,410 @@ export const AdminDashboardChaircareMobileScreen: React.FC<{ navigation: any }> 
               </Text>
               <Text style={[styles.liveOpsDetails, { textAlign: 'center' }]}>
                 Incoming customer requests and dispatched technicians will be streamed here in real time.
+              </Text>
+            </PrecisionCard>
+          )}
+        </View>
+
+        {/* Completed Jobs & Turnaround Audit Card */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.sectionHeading}>Completed Services & Payouts</Text>
+              {completedJobsList.length > 0 && (
+                <View style={styles.completedCountBadge}>
+                  <AppIcon name="CheckCircle" size={12} color={Colors.tertiaryEmerald} />
+                  <Text style={styles.completedCountText}>
+                    {completedJobsList.length} COMPLETED
+                  </Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('ServiceRequestsTab')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeAllText}>View All →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {currentCompletedJob ? (
+            <PrecisionCard
+              style={styles.completedCard}
+              onPress={() =>
+                navigation.navigate('ServiceRequestDetails', {
+                  requestId: currentCompletedJob.trackingCode || currentCompletedJob.id,
+                })
+              }
+            >
+              {/* Pagination controls */}
+              {completedJobsList.length > 1 && (
+                <View style={styles.liveOpsPaginationRow}>
+                  <Text style={styles.liveOpsPageText}>
+                    COMPLETED JOB {Math.min(activeCompletedIndex, completedJobsList.length - 1) + 1} OF {completedJobsList.length}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => setActiveCompletedIndex((prev) => (prev > 0 ? prev - 1 : completedJobsList.length - 1))}
+                      style={styles.pageArrowBtn}
+                      activeOpacity={0.7}
+                    >
+                      <AppIcon name="ChevronLeft" size={14} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setActiveCompletedIndex((prev) => (prev < completedJobsList.length - 1 ? prev + 1 : 0))}
+                      style={styles.pageArrowBtn}
+                      activeOpacity={0.7}
+                    >
+                      <AppIcon name="ChevronRight" size={14} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Top Row: Request ID & Turnaround Speed */}
+              <View style={styles.reqIdRow}>
+                <MonoMetric
+                  label="JOB MANIFEST"
+                  value={currentCompletedJob.trackingCode || `#CC-${currentCompletedJob.id?.slice(0, 5)}`}
+                />
+                <View style={styles.turnaroundBadge}>
+                  <AppIcon name="Zap" size={11} color={Colors.tertiaryEmerald} />
+                  <Text style={styles.turnaroundText}>
+                    {currentCompletedJob.serviceDurationFormatted || `${currentCompletedJob.serviceDurationMins || 42} mins turnaround`}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Title & Service info */}
+              <View style={{ gap: 2 }}>
+                <Text style={styles.liveOpsChair}>
+                  {currentCompletedJob.chairModel || 'Executive Office Chair'}
+                </Text>
+                <Text style={styles.serviceSubtitle}>
+                  {currentCompletedJob.serviceTitle}
+                </Text>
+              </View>
+
+              {/* Customer & Technician 2-Column Section */}
+              <View style={styles.entityRow}>
+                {/* Technician Column */}
+                <View style={styles.entityCol}>
+                  <View style={styles.entityHeader}>
+                    <AppIcon name="UserCheck" size={14} color={Colors.tertiaryEmerald} />
+                    <Text style={styles.entityRole}>TECHNICIAN</Text>
+                  </View>
+                  <Text style={styles.entityName} numberOfLines={1}>
+                    {currentCompletedJob.technicianName}
+                  </Text>
+                  <Text style={styles.entityMeta} numberOfLines={1}>
+                    ★ {currentCompletedJob.technicianRating} • {currentCompletedJob.technicianVehicle || 'Unit #12'}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.callTechBtn}
+                    activeOpacity={0.7}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      if (currentCompletedJob.technicianPhone) {
+                        phoneCallService.callNumber(currentCompletedJob.technicianPhone, currentCompletedJob.technicianName);
+                      }
+                    }}
+                  >
+                    <AppIcon name="Phone" size={12} color={Colors.primary} />
+                    <Text style={styles.callTechBtnText}>Call Tech</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Divider */}
+                <View style={styles.entityDivider} />
+
+                {/* Customer Column */}
+                <View style={styles.entityCol}>
+                  <View style={styles.entityHeader}>
+                    <AppIcon name="User" size={14} color={Colors.secondaryCobalt} />
+                    <Text style={styles.entityRole}>CUSTOMER</Text>
+                  </View>
+                  <Text style={styles.entityName} numberOfLines={1}>
+                    {currentCompletedJob.customerName}
+                  </Text>
+                  <Text style={styles.entityMeta} numberOfLines={1}>
+                    📍 {currentCompletedJob.customerAddress}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.callCustBtn}
+                    activeOpacity={0.7}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      if (currentCompletedJob.customerPhone) {
+                        phoneCallService.callNumber(currentCompletedJob.customerPhone, currentCompletedJob.customerName);
+                      }
+                    }}
+                  >
+                    <AppIcon name="Phone" size={12} color={Colors.secondaryCobalt} />
+                    <Text style={styles.callCustBtnText}>Call Customer</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Parts Added / Replaced Section */}
+              <View style={styles.partsSection}>
+                <View style={styles.partsHeaderRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <AppIcon name="Wrench" size={13} color={Colors.onSurfaceVariant} />
+                    <Text style={styles.partsLabel}>PARTS INSTALLED & REPLACED</Text>
+                  </View>
+                  <Text style={styles.partsCount}>
+                    {currentCompletedJob.partsAdded?.length || 0} ITEMS
+                  </Text>
+                </View>
+                <View style={styles.partsWrap}>
+                  {(currentCompletedJob.partsAdded || []).map((part: string, idx: number) => (
+                    <View key={idx} style={styles.partChip}>
+                      <AppIcon name="Check" size={11} color={Colors.tertiaryEmerald} />
+                      <Text style={styles.partChipText}>{part}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Financials & Payout Strip */}
+              <View style={styles.financialStrip}>
+                <View style={styles.financialCol}>
+                  <Text style={styles.financialLabel}>PAID TO TECH (70%)</Text>
+                  <Text style={styles.financialTechPayout}>
+                    ₹{currentCompletedJob.technicianPayout}
+                  </Text>
+                  <Text style={styles.payoutStatus}>Disbursed • Escrow Cleared</Text>
+                </View>
+                <View style={styles.financialDivider} />
+                <View style={styles.financialCol}>
+                  <Text style={styles.financialLabel}>TOTAL CHARGE</Text>
+                  <Text style={styles.financialTotal}>
+                    ₹{currentCompletedJob.totalAmount}
+                  </Text>
+                  <Text style={styles.paymentMethodText}>
+                    {currentCompletedJob.paymentMethod} • Fee: ₹{currentCompletedJob.platformFee}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Warranty & Review Banner if present */}
+              <View style={styles.warrantyRow}>
+                <View style={styles.warrantyBadge}>
+                  <AppIcon name="ShieldCheck" size={13} color={Colors.tertiaryEmerald} />
+                  <Text style={styles.warrantyText}>
+                    {currentCompletedJob.warrantyStatus || '90-Day Digital Warranty Active'}
+                  </Text>
+                </View>
+                {currentCompletedJob.reviewRating ? (
+                  <View style={styles.reviewSnippet}>
+                    <Text style={styles.reviewStar}>★ {currentCompletedJob.reviewRating}</Text>
+                    {currentCompletedJob.reviewComment ? (
+                      <Text style={styles.reviewSnippetText} numberOfLines={1}>
+                        "{currentCompletedJob.reviewComment}"
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+
+              {/* Bottom Action Row */}
+              <View style={styles.cardFooterRow}>
+                <Text style={styles.completedTimestamp}>
+                  Completed: {new Date(currentCompletedJob.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {new Date(currentCompletedJob.completedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                </Text>
+                <PrecisionButton
+                  title="Service Dossier →"
+                  size="sm"
+                  variant="outline"
+                  onPress={() =>
+                    navigation.navigate('ServiceRequestDetails', {
+                      requestId: currentCompletedJob.trackingCode || currentCompletedJob.id,
+                    })
+                  }
+                />
+              </View>
+            </PrecisionCard>
+          ) : (
+            <PrecisionCard style={[styles.liveOpsCard, { paddingVertical: 20, alignItems: 'center' }]}>
+              <AppIcon name="CheckCircle" size={24} color={Colors.outline} />
+              <Text style={[styles.liveOpsChair, { fontSize: 14, textAlign: 'center', marginTop: 6 }]}>
+                No completed jobs recorded yet
+              </Text>
+              <Text style={[styles.liveOpsDetails, { textAlign: 'center' }]}>
+                Finished service orders, parts replaced, and technician payouts will populate here.
+              </Text>
+            </PrecisionCard>
+          )}
+        </View>
+
+        {/* Customer Support Dispatch Card */}
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.sectionHeading}>Customer Support Dispatch</Text>
+              {supportTicketsList.length > 0 && (
+                <View style={styles.ticketCountBadge}>
+                  <AppIcon name="LifeBuoy" size={12} color={Colors.error} />
+                  <Text style={styles.ticketCountText}>
+                    {supportTicketsList.length} ACTIVE
+                  </Text>
+                </View>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Support')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.seeAllText}>Helpdesk Desk →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {currentTicket ? (
+            <PrecisionCard
+              style={styles.ticketCard}
+              onPress={() =>
+                navigation.navigate('SupportTicketDetailsSup10482', {
+                  ticketId: currentTicket.id,
+                  ticket: currentTicket,
+                })
+              }
+            >
+              {/* Pagination controls */}
+              {supportTicketsList.length > 1 && (
+                <View style={styles.liveOpsPaginationRow}>
+                  <Text style={styles.liveOpsPageText}>
+                    TICKET {Math.min(activeTicketIndex, supportTicketsList.length - 1) + 1} OF {supportTicketsList.length}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => setActiveTicketIndex((prev) => (prev > 0 ? prev - 1 : supportTicketsList.length - 1))}
+                      style={styles.pageArrowBtn}
+                      activeOpacity={0.7}
+                    >
+                      <AppIcon name="ChevronLeft" size={14} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setActiveTicketIndex((prev) => (prev < supportTicketsList.length - 1 ? prev + 1 : 0))}
+                      style={styles.pageArrowBtn}
+                      activeOpacity={0.7}
+                    >
+                      <AppIcon name="ChevronRight" size={14} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Ticket ID & Badges */}
+              <View style={styles.reqIdRow}>
+                <MonoMetric
+                  label="TICKET CODE"
+                  value={currentTicket.ticketCode || `#SUP-${currentTicket.id?.slice(0, 5)}`}
+                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <StatusBadge
+                    label={currentTicket.priority}
+                    variant={
+                      currentTicket.priority === 'URGENT' || currentTicket.priority === 'HIGH'
+                        ? 'error'
+                        : 'warning'
+                    }
+                    dot
+                  />
+                  <StatusBadge
+                    label={currentTicket.status.toUpperCase()}
+                    variant={
+                      currentTicket.status === 'resolved' || currentTicket.status === 'closed'
+                        ? 'success'
+                        : 'info'
+                    }
+                  />
+                </View>
+              </View>
+
+              {/* Subject & Statement */}
+              <View style={{ gap: 4 }}>
+                <Text style={styles.ticketSubject}>
+                  {currentTicket.subject}
+                </Text>
+                <Text style={styles.ticketMessage} numberOfLines={2}>
+                  "{currentTicket.message}"
+                </Text>
+              </View>
+
+              {/* Customer & Technician Mini Details */}
+              <View style={styles.ticketPartyRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.partyRoleLabel}>CUSTOMER</Text>
+                  <Text style={styles.partyName} numberOfLines={1}>{currentTicket.userName}</Text>
+                  <Text style={styles.partySub} numberOfLines={1}>📍 {currentTicket.serviceAddress}</Text>
+                </View>
+                <View style={styles.ticketPartyDivider} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.partyRoleLabel}>ASSIGNED TECH</Text>
+                  <Text style={styles.partyName} numberOfLines={1}>{currentTicket.technicianName}</Text>
+                  <Text style={styles.partySub} numberOfLines={1}>
+                    {currentTicket.trackingCode ? `Job ${currentTicket.trackingCode}` : 'Field Specialist'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Workable Action Buttons Row: Open Chat, Call Customer, View Dossier */}
+              <View style={styles.ticketActionRow}>
+                <TouchableOpacity
+                  style={styles.ticketChatBtn}
+                  activeOpacity={0.75}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    navigation.navigate('SupportConversation', {
+                      ticketId: currentTicket.id,
+                      ticket: currentTicket,
+                      customerName: currentTicket.userName,
+                      customerPhone: currentTicket.userPhone,
+                    });
+                  }}
+                >
+                  <AppIcon name="MessageSquare" size={14} color="#FFFFFF" />
+                  <Text style={styles.ticketChatBtnText}>Open Chat</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.ticketCallBtn}
+                  activeOpacity={0.75}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (currentTicket.userPhone) {
+                      phoneCallService.callNumber(currentTicket.userPhone, currentTicket.userName);
+                    }
+                  }}
+                >
+                  <AppIcon name="Phone" size={14} color={Colors.primary} />
+                  <Text style={styles.ticketCallBtnText}>Call Customer</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.ticketDossierBtn}
+                  activeOpacity={0.75}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    navigation.navigate('SupportTicketDetailsSup10482', {
+                      ticketId: currentTicket.id,
+                      ticket: currentTicket,
+                    });
+                  }}
+                >
+                  <Text style={styles.ticketDossierBtnText}>Dossier →</Text>
+                </TouchableOpacity>
+              </View>
+            </PrecisionCard>
+          ) : (
+            <PrecisionCard style={[styles.liveOpsCard, { paddingVertical: 20, alignItems: 'center' }]}>
+              <AppIcon name="LifeBuoy" size={24} color={Colors.outline} />
+              <Text style={[styles.liveOpsChair, { fontSize: 14, textAlign: 'center', marginTop: 6 }]}>
+                No customer support tickets active
+              </Text>
+              <Text style={[styles.liveOpsDetails, { textAlign: 'center' }]}>
+                Incoming support requests, warranty claims, and customer chats will appear here.
               </Text>
             </PrecisionCard>
           )}
@@ -751,6 +1178,385 @@ const styles = StyleSheet.create({
     ...Typography.bodySm,
     fontSize: 11,
     color: Colors.onSurfaceVariant,
+  },
+  completedCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  completedCountText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.tertiaryEmerald,
+  },
+  completedCard: {
+    padding: 16,
+    gap: 12,
+    width: '100%',
+  },
+  turnaroundBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(5, 150, 105, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  turnaroundText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.tertiaryEmerald,
+  },
+  serviceSubtitle: {
+    ...Typography.bodySm,
+    color: Colors.secondaryCobalt,
+    fontWeight: '600',
+  },
+  entityRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: BorderRadius.lg,
+    padding: 12,
+    gap: 10,
+  },
+  entityCol: {
+    flex: 1,
+    gap: 4,
+  },
+  entityHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  entityRole: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.outline,
+    letterSpacing: 0.5,
+  },
+  entityName: {
+    ...Typography.bodyMd,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  entityMeta: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+  },
+  callTechBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 6,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  callTechBtnText: {
+    ...Typography.labelMono,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  callCustBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 6,
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  callCustBtnText: {
+    ...Typography.labelMono,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: Colors.secondaryCobalt,
+  },
+  entityDivider: {
+    width: 1,
+    backgroundColor: Colors.outlineHairline,
+  },
+  partsSection: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+    padding: 12,
+    gap: 8,
+  },
+  partsHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  partsLabel: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 0.5,
+  },
+  partsCount: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.tertiaryEmerald,
+    fontWeight: '700',
+  },
+  partsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  partChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(5, 150, 105, 0.2)',
+  },
+  partChipText: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurface,
+    fontWeight: '500',
+  },
+  financialStrip: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: BorderRadius.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  financialCol: {
+    flex: 1,
+    gap: 2,
+  },
+  financialDivider: {
+    width: 1,
+    backgroundColor: Colors.outlineHairline,
+    marginHorizontal: 8,
+  },
+  financialLabel: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.outline,
+    letterSpacing: 0.5,
+  },
+  financialTechPayout: {
+    ...Typography.headlineSm,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.tertiaryEmerald,
+  },
+  payoutStatus: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.tertiaryEmerald,
+  },
+  financialTotal: {
+    ...Typography.headlineSm,
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.onSurface,
+  },
+  paymentMethodText: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.onSurfaceVariant,
+  },
+  warrantyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  warrantyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(5, 150, 105, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  warrantyText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: Colors.tertiaryEmerald,
+    fontWeight: '600',
+  },
+  reviewSnippet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  reviewStar: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    color: '#D97706',
+    fontWeight: '800',
+  },
+  reviewSnippetText: {
+    ...Typography.bodySm,
+    fontSize: 11,
+    color: Colors.onSurfaceVariant,
+    fontStyle: 'italic',
+    flexShrink: 1,
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineHairline,
+    paddingTop: 10,
+  },
+  completedTimestamp: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: Colors.outline,
+  },
+  ticketCountBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  ticketCountText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.error,
+  },
+  ticketCard: {
+    padding: 16,
+    gap: 12,
+    width: '100%',
+  },
+  ticketSubject: {
+    ...Typography.titleLg,
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  ticketMessage: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    fontStyle: 'italic',
+    lineHeight: 17,
+  },
+  ticketPartyRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceContainerLow,
+    borderRadius: BorderRadius.lg,
+    padding: 10,
+    gap: 10,
+  },
+  ticketPartyDivider: {
+    width: 1,
+    backgroundColor: Colors.outlineHairline,
+  },
+  partyRoleLabel: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    color: Colors.outline,
+    letterSpacing: 0.5,
+  },
+  partyName: {
+    ...Typography.bodySm,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    marginTop: 2,
+  },
+  partySub: {
+    ...Typography.bodySm,
+    fontSize: 10.5,
+    color: Colors.onSurfaceVariant,
+  },
+  ticketActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.outlineHairline,
+    paddingTop: 12,
+  },
+  ticketChatBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.primary,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.md,
+  },
+  ticketChatBtnText: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  ticketCallBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceContainerHigh,
+    paddingVertical: 9,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+  },
+  ticketCallBtnText: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  ticketDossierBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: Colors.surfaceContainer,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.outlineHairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ticketDossierBtnText: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.onSurface,
   },
 });
 
