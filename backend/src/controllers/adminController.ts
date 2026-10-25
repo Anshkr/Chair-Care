@@ -65,9 +65,16 @@ export const getDashboardMetrics = async (
              cu.name as customer_name, cu.phone as customer_phone, cu.email as customer_email,
              tu.name as technician_name, tu.phone as technician_phone,
              tp.rating as technician_rating, tp.vehicle_info as technician_vehicle, tp.current_zone as technician_zone,
-             s.title as service_title, s.code as service_code,
+             s.title as service_title, s.code as service_code, s.duration_minutes as service_duration_minutes,
              r.rating as review_rating, r.comment as review_comment,
-             p.amount as payment_amount, p.status as payment_status
+             p.amount as payment_amount, p.status as payment_status,
+             (
+               SELECT EXTRACT(EPOCH FROM (h_comp.created_at - h_prog.created_at))/60
+               FROM service_status_history h_comp
+               JOIN service_status_history h_prog ON h_comp.request_id = h_prog.request_id AND h_prog.status = 'in_progress'
+               WHERE h_comp.request_id = sr.id AND h_comp.status = 'completed'
+               ORDER BY h_comp.created_at DESC LIMIT 1
+             ) as actual_duration_mins
       FROM service_requests sr
       JOIN users cu ON sr.customer_id = cu.id
       LEFT JOIN users tu ON sr.technician_id = tu.id
@@ -167,30 +174,67 @@ export const getDashboardMetrics = async (
     const totalAmt = Number(r.total_amount || 0);
     const techPayout = Math.round(totalAmt * 0.70); // 70% Partner Payout
 
-    let durationMins = 42;
-    const sCode = (r.service_code || '').toUpperCase();
-    if (sCode.includes('INSPECTION')) durationMins = 28;
-    else if (sCode.includes('HYDRAULIC')) durationMins = 35;
-    else if (sCode.includes('INSTALLATION')) durationMins = 45;
-    else if (sCode.includes('REPAIR')) durationMins = 40;
+    // Real duration calculation from status history or duration_minutes
+    let durationMins = 35;
+    if (r.actual_duration_mins != null && Number(r.actual_duration_mins) > 0) {
+      const m = Math.round(Number(r.actual_duration_mins));
+      durationMins = m > 0 ? m : 25;
+    } else if (r.service_duration_minutes) {
+      durationMins = Number(r.service_duration_minutes);
+    } else if (r.created_at && r.updated_at) {
+      const diff = Math.round((new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / (1000 * 60));
+      if (diff > 0 && diff < 1440) {
+        durationMins = diff;
+      }
+    }
 
-    let parts: string[] = ['BIFMA Heavy-Duty Fasteners & Hardware Kit'];
-    if (sCode.includes('TILT') || sCode.includes('REPAIR')) {
-      parts = ['OEM Multiblock Tilt Limiter', 'Heavy-Duty Tension Spring', 'High-Tensile Pivot Bushings'];
-    } else if (sCode.includes('HYDRAULIC') || sCode.includes('GAS')) {
-      parts = ['Class-4 Heavy-Duty KGS Pneumatic Cylinder', 'Steel Cylinder Retaining Ring', 'Protective Dust Bellows'];
-    } else if (sCode.includes('INSTALLATION')) {
-      parts = ['Reinforced 5-Star Nylon Base', '60mm Smooth-Roll PU Castors (Set of 5)', 'Factory Hardware Fasteners'];
-    } else if (sCode.includes('INSPECTION')) {
-      parts = ['High-Performance Synthetic Lubrication Kit', 'Anti-Squeak Polymer Shims'];
+    // Dynamic parts detection from real issue description and service title
+    const desc = ((r.issue_description || '') + ' ' + (r.service_title || '') + ' ' + (r.service_code || '')).toLowerCase();
+    let parts: string[] = [];
+    if (desc.includes('hydraulic') || desc.includes('cylinder') || desc.includes('gas') || desc.includes('sinking')) {
+      parts.push('Class-4 KGS Heavy-Duty Pneumatic Cylinder');
+      parts.push('Steel Cylinder Retaining Ring');
+    }
+    if (desc.includes('tilt') || desc.includes('lock') || desc.includes('recline') || desc.includes('mechanism')) {
+      parts.push('Multi-Angle Synchro-Tilt Limiter Mechanism');
+      parts.push('Heavy-Duty Tension Recoil Spring');
+    }
+    if (desc.includes('armrest') || desc.includes('wobble') || desc.includes('bracket') || desc.includes('height')) {
+      parts.push('Reinforced 3D Adjustable Armrest Bracket');
+      parts.push('BIFMA High-Tensile Structural Fasteners');
+    }
+    if (desc.includes('wheel') || desc.includes('castor') || desc.includes('caster') || desc.includes('roll')) {
+      parts.push('60mm Smooth-Glide PU Floor Castors (Set of 5)');
+    }
+    if (desc.includes('noise') || desc.includes('lubricat') || desc.includes('squeak') || desc.includes('maintenance')) {
+      parts.push('Synthetic Teflon Noise-Suppression Lubricant');
+      parts.push('Anti-Friction Polymer Isolation Washers');
+    }
+    if (desc.includes('installation') || desc.includes('base') || desc.includes('new chair')) {
+      parts.push('Reinforced 5-Star Commercial Nylon Base');
+      parts.push('Factory Hardware Fastener Kit');
+    }
+    if (parts.length === 0) {
+      parts = ['BIFMA Heavy-Duty Fasteners & Hardware Kit', 'Precision Hydraulic & Mechanism Calibration'];
+    }
+
+    let warrantyStatus = '90-Day Digital Warranty Active';
+    if (r.warranty_valid_until) {
+      const wDate = new Date(r.warranty_valid_until);
+      if (wDate > new Date()) {
+        warrantyStatus = `Warranty Active until ${wDate.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })}`;
+      } else {
+        warrantyStatus = 'Warranty Fulfilled';
+      }
     }
 
     return {
       id: r.id,
       trackingCode: r.tracking_code,
       chairModel: r.chair_model || 'Office Chair',
-      serviceTitle: r.service_title || 'Chair Service',
+      serviceTitle: r.service_title || 'Chair Service & Overhaul',
       serviceCode: r.service_code || '#CC',
+      issueDescription: r.issue_description || '',
       status: r.status,
       totalAmount: totalAmt,
       technicianPayout: techPayout,
@@ -208,9 +252,9 @@ export const getDashboardMetrics = async (
       technicianVehicle: r.technician_vehicle || 'Field Unit #12',
       technicianZone: r.technician_zone || 'Delhi NCR',
       warrantyValidUntil: r.warranty_valid_until,
-      warrantyStatus: '90-Day Digital Warranty Active',
+      warrantyStatus,
       completedAt: r.updated_at || r.created_at,
-      paymentMethod: r.payment_method || 'UPI',
+      paymentMethod: (r.payment_method || 'UPI').toUpperCase(),
       reviewRating: r.review_rating ? Number(r.review_rating) : null,
       reviewComment: r.review_comment || null,
     };
