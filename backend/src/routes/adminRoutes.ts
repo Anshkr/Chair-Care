@@ -9,6 +9,7 @@ import {
   getPayments,
   getAllCustomers,
   getAllReviews,
+  moderateReview,
   getAdminUsers,
   getActivityLogs,
   getSupportTickets,
@@ -46,6 +47,7 @@ router.post('/requests/:id/assign', validateBody(adminAssignTechSchema), assignT
 router.get('/payments', getPayments);
 router.get('/customers', getAllCustomers);
 router.get('/reviews', getAllReviews);
+router.patch('/reviews/:id/moderate', moderateReview);
 router.get('/admins', getAdminUsers);
 router.post('/admins', createAdminUser);
 router.get('/logs', getActivityLogs);

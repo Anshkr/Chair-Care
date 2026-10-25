@@ -851,27 +851,51 @@ export const getAllReviews = async (
   req: AuthenticatedRequest,
   res: Response
 ): Promise<void> => {
-  const result = await query(
-    `SELECT 
-      r.id,
-      r.rating,
-      r.comment,
-      r.is_moderated,
-      r.created_at,
-      sr.tracking_code,
-      sr.chair_model,
-      cu.name as customer_name,
-      tu.name as technician_name,
-      s.title as service_title,
-      s.code as service_code
-     FROM reviews r
-     JOIN service_requests sr ON r.request_id = sr.id
-     JOIN users cu ON r.customer_id = cu.id
-     JOIN users tu ON r.technician_id = tu.id
-     LEFT JOIN services s ON sr.service_id = s.id
-     ORDER BY r.created_at DESC
-     LIMIT 100;`
-  );
+  const [result, statsResult] = await Promise.all([
+    query(
+      `SELECT 
+        r.id,
+        r.rating,
+        r.comment,
+        r.is_moderated,
+        r.created_at,
+        sr.tracking_code,
+        sr.chair_model,
+        sr.address as customer_address,
+        cu.name as customer_name,
+        cu.phone as customer_phone,
+        cu.email as customer_email,
+        tu.name as technician_name,
+        tu.phone as technician_phone,
+        s.title as service_title,
+        s.code as service_code
+       FROM reviews r
+       LEFT JOIN service_requests sr ON r.request_id = sr.id
+       LEFT JOIN users cu ON r.customer_id = cu.id
+       LEFT JOIN users tu ON r.technician_id = tu.id
+       LEFT JOIN services s ON sr.service_id = s.id
+       ORDER BY r.created_at DESC
+       LIMIT 100;`
+    ),
+    query(
+      `SELECT 
+        COUNT(*) as total,
+        ROUND(COALESCE(AVG(rating), 5.0)::numeric, 1) as avg_rating,
+        COUNT(CASE WHEN rating = 5 THEN 1 END) as star_5,
+        COUNT(CASE WHEN rating = 4 THEN 1 END) as star_4,
+        COUNT(CASE WHEN rating = 3 THEN 1 END) as star_3,
+        COUNT(CASE WHEN rating = 2 THEN 1 END) as star_2,
+        COUNT(CASE WHEN rating = 1 THEN 1 END) as star_1,
+        COUNT(CASE WHEN is_moderated = true THEN 1 END) as moderated_count,
+        COUNT(CASE WHEN rating <= 3 THEN 1 END) as low_rating_count,
+        COUNT(CASE WHEN created_at >= NOW() - INTERVAL '7 days' THEN 1 END) as recent_count
+      FROM reviews;`
+    ),
+  ]);
+
+  const stats = statsResult.rows[0] || {};
+  const totalCount = Number(stats.total || 0);
+  const avgScore = Number(stats.avg_rating || 5.0);
 
   res.json({
     success: true,
@@ -879,15 +903,77 @@ export const getAllReviews = async (
       id: r.id,
       rating: Number(r.rating),
       comment: r.comment || '',
-      isModerated: r.is_moderated,
-      trackingCode: r.tracking_code,
-      chairModel: r.chair_model,
-      customerName: r.customer_name,
-      technicianName: r.technician_name,
-      serviceTitle: r.service_title || 'Service',
+      isModerated: Boolean(r.is_moderated),
+      trackingCode: r.tracking_code || '',
+      chairModel: r.chair_model || 'Ergonomic Chair',
+      customerName: r.customer_name || 'Customer',
+      customerPhone: r.customer_phone || '',
+      customerEmail: r.customer_email || '',
+      customerAddress: r.customer_address || 'Delhi NCR',
+      technicianName: r.technician_name || 'Service Specialist',
+      technicianPhone: r.technician_phone || '',
+      serviceTitle: r.service_title || 'Chair Service',
       serviceCode: r.service_code || '#CC',
       createdAt: r.created_at,
     })),
+    metrics: {
+      totalReviews: totalCount,
+      avgRating: avgScore,
+      starDistribution: {
+        5: {
+          count: Number(stats.star_5 || 0),
+          percent: totalCount > 0 ? Math.round((Number(stats.star_5 || 0) / totalCount) * 100) : 0,
+        },
+        4: {
+          count: Number(stats.star_4 || 0),
+          percent: totalCount > 0 ? Math.round((Number(stats.star_4 || 0) / totalCount) * 100) : 0,
+        },
+        3: {
+          count: Number(stats.star_3 || 0),
+          percent: totalCount > 0 ? Math.round((Number(stats.star_3 || 0) / totalCount) * 100) : 0,
+        },
+        2: {
+          count: Number(stats.star_2 || 0),
+          percent: totalCount > 0 ? Math.round((Number(stats.star_2 || 0) / totalCount) * 100) : 0,
+        },
+        1: {
+          count: Number(stats.star_1 || 0),
+          percent: totalCount > 0 ? Math.round((Number(stats.star_1 || 0) / totalCount) * 100) : 0,
+        },
+      },
+      newToday: Number(stats.recent_count || totalCount),
+      flaggedCount: Number(stats.moderated_count || 0),
+      reportedCount: Number(stats.low_rating_count || 0),
+    },
+  });
+};
+
+export const moderateReview = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  const { id } = req.params;
+  const { action } = req.body; // 'hide', 'dismiss', 'flag'
+
+  const isModerated = action === 'hide' || action === 'flag';
+
+  const result = await query(
+    `UPDATE reviews 
+     SET is_moderated = $1 
+     WHERE id = $2 
+     RETURNING id, is_moderated;`,
+    [isModerated, id]
+  );
+
+  if (result.rowCount === 0) {
+    res.status(404).json({ success: false, message: 'Review not found' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    message: `Review ${id} successfully updated to ${action}`,
+    data: result.rows[0],
   });
 };
 

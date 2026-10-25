@@ -242,7 +242,7 @@ export const ReviewActionCompletedChaircareMobileScreen: React.FC<
                   {reviewData.customerName}
                 </Text>
                 <View style={styles.maskedRatingBadge}>
-                  <AppIcon name="star" size={20} />
+                  <AppIcon name="Star" size={14} color="#F59E0B" fill="#F59E0B" />
                   <Text style={styles.maskedRatingText}>
                     {reviewData.rating.toFixed(1)} (Masked)
                   </Text>

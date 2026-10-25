@@ -65,6 +65,48 @@ interface HideReviewConfirmationProps {
   };
 }
 
+const renderStars = (rating: number, size = 14, emptyColor = '#CBD5E1') => {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((idx) => {
+        const isFilled = idx <= Math.floor(rating);
+        const isHalf = !isFilled && idx - 0.5 <= rating;
+        if (isFilled) {
+          return (
+            <AppIcon
+              key={idx}
+              name="Star"
+              size={size}
+              color="#F59E0B"
+              fill="#F59E0B"
+            />
+          );
+        }
+        if (isHalf) {
+          return (
+            <AppIcon
+              key={idx}
+              name="StarHalf"
+              size={size}
+              color="#F59E0B"
+              fill="#F59E0B"
+            />
+          );
+        }
+        return (
+          <AppIcon
+            key={idx}
+            name="Star"
+            size={size}
+            color={emptyColor}
+            fill="none"
+          />
+        );
+      })}
+    </View>
+  );
+};
+
 export const HideReviewConfirmationChaircareMobileScreen: React.FC<
   HideReviewConfirmationProps
 > = ({ navigation, route }) => {
@@ -244,13 +286,7 @@ export const HideReviewConfirmationChaircareMobileScreen: React.FC<
               </View>
 
               <View style={styles.ratingGroup}>
-                <View style={styles.starRatingRow}>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starEmpty}>star</Text>
-                  <Text style={styles.starEmpty}>star</Text>
-                  <Text style={styles.starEmpty}>star</Text>
-                </View>
+                {renderStars(reviewData.rating, 14, '#CBD5E1')}
                 <Text style={styles.ratingMonoText}>
                   {reviewData.rating.toFixed(1)} / 5.0
                 </Text>

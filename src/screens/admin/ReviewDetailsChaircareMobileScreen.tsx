@@ -219,7 +219,13 @@ export const ReviewDetailsChaircareMobileScreen: React.FC<
                   const isFilled = idx <= Math.floor(reviewData.rating);
                   const isHalf = !isFilled && idx - 0.5 <= reviewData.rating;
                   return (
-                    <AppIcon name={isFilled ? 'star' : isHalf ? 'star_half' : 'star'} size={20} />
+                    <AppIcon
+                      key={idx}
+                      name={isFilled ? 'Star' : isHalf ? 'StarHalf' : 'Star'}
+                      size={20}
+                      color={isFilled || isHalf ? '#F59E0B' : '#CBD5E1'}
+                      fill={isFilled || isHalf ? '#F59E0B' : 'none'}
+                    />
                   );
                 })}
               </View>

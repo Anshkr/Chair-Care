@@ -80,8 +80,21 @@ export const adminApi = {
     return apiRequest<any[]>('/admin/customers');
   },
 
-  getReviews: async (): Promise<ApiResponse<any[]>> => {
-    return apiRequest<any[]>('/admin/reviews');
+  getReviews: async (): Promise<ApiResponse<any>> => {
+    return apiRequest('/admin/reviews');
+  },
+
+  moderateReview: async (
+    reviewId: string,
+    action: 'hide' | 'dismiss' | 'flag',
+    notes?: string
+  ): Promise<ApiResponse<any>> => {
+    const res = await apiRequest(`/admin/reviews/${reviewId}/moderate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ action, notes }),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
   },
 
   getAdminUsers: async (): Promise<ApiResponse<any[]>> => {

@@ -47,23 +47,112 @@ export interface ReviewItem {
   category: 'recent' | 'flagged' | 'reported' | 'standard';
 }
 
+const renderStars = (rating: number, size = 14, emptyColor = '#CBD5E1') => {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+      {[1, 2, 3, 4, 5].map((idx) => {
+        const isFilled = idx <= Math.floor(rating);
+        const isHalf = !isFilled && idx - 0.5 <= rating;
+        if (isFilled) {
+          return (
+            <AppIcon
+              key={idx}
+              name="Star"
+              size={size}
+              color="#F59E0B"
+              fill="#F59E0B"
+            />
+          );
+        }
+        if (isHalf) {
+          return (
+            <AppIcon
+              key={idx}
+              name="StarHalf"
+              size={size}
+              color="#F59E0B"
+              fill="#F59E0B"
+            />
+          );
+        }
+        return (
+          <AppIcon
+            key={idx}
+            name="Star"
+            size={size}
+            color={emptyColor}
+            fill="none"
+          />
+        );
+      })}
+    </View>
+  );
+};
+
 export const ReviewsRatingsChaircareMobileScreen: React.FC<
   ReviewsRatingsScreenProps
 > = ({ navigation }) => {
   const insets = useSafeAreaInsets();
 
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [metrics, setMetrics] = useState<{
+    totalReviews: number;
+    avgRating: number;
+    starDistribution: {
+      5: { count: number; percent: number };
+      4: { count: number; percent: number };
+      3: { count: number; percent: number };
+      2: { count: number; percent: number };
+      1: { count: number; percent: number };
+    };
+    newToday: number;
+    flaggedCount: number;
+    reportedCount: number;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const [activeTab, setActiveTab] = useState<ReviewTab>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isSearchVisible, setIsSearchVisible] = useState<boolean>(false);
 
+  const computedMetrics = useMemo(() => {
+    if (metrics) return metrics;
+    const total = reviews.length;
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    const avg = total > 0 ? Number((sum / total).toFixed(1)) : 5.0;
+    const countStars = (target: number) =>
+      reviews.filter((r) => Math.round(r.rating) === target).length;
+
+    const s5 = countStars(5);
+    const s4 = countStars(4);
+    const s3 = countStars(3);
+    const s2 = countStars(2);
+    const s1 = countStars(1);
+
+    return {
+      totalReviews: total,
+      avgRating: avg,
+      starDistribution: {
+        5: { count: s5, percent: total > 0 ? Math.round((s5 / total) * 100) : 0 },
+        4: { count: s4, percent: total > 0 ? Math.round((s4 / total) * 100) : 0 },
+        3: { count: s3, percent: total > 0 ? Math.round((s3 / total) * 100) : 0 },
+        2: { count: s2, percent: total > 0 ? Math.round((s2 / total) * 100) : 0 },
+        1: { count: s1, percent: total > 0 ? Math.round((s1 / total) * 100) : 0 },
+      },
+      newToday: reviews.filter((r) => r.category === 'recent').length,
+      flaggedCount: reviews.filter((r) => r.isFlagged).length,
+      reportedCount: reviews.filter((r) => r.isReported).length,
+    };
+  }, [reviews, metrics]);
+
   const loadReviews = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await adminApi.getReviews();
       if (res.success && Array.isArray(res.data)) {
+        if ((res as any).metrics) {
+          setMetrics((res as any).metrics);
+        }
         const mapped: ReviewItem[] = res.data.map((r: any) => {
           const initials = (r.customerName || 'CU')
             .split(' ')
@@ -72,11 +161,25 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             .substring(0, 2)
             .toUpperCase();
 
+          const isFlagged = Boolean(r.isModerated);
+          const isReported = Number(r.rating) <= 2;
+          const category: 'recent' | 'flagged' | 'reported' | 'standard' = isReported
+            ? 'reported'
+            : isFlagged
+            ? 'flagged'
+            : 'recent';
+
+          let loc = 'Delhi NCR';
+          if (r.customerAddress) {
+            const parts = r.customerAddress.split(',').map((p: string) => p.trim());
+            loc = parts.slice(-2).join(', ') || r.customerAddress;
+          }
+
           return {
             id: r.id,
             reviewerName: r.customerName || 'Customer',
             reviewerInitials: initials,
-            reviewerLocation: 'Delhi NCR',
+            reviewerLocation: loc,
             initialsBg: '#dbeafe',
             initialsColor: '#1d4ed8',
             rating: Number(r.rating || 5.0),
@@ -86,9 +189,14 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             chairModel: r.chairModel || 'Ergonomic Chair',
             reviewText: r.comment || 'Service completed successfully.',
             technicianName: r.technicianName || 'Specialist',
-            timeAgo: new Date(r.createdAt).toLocaleDateString(),
-            category: 'recent',
-            isPublic: true,
+            timeAgo: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+            publishedDate: r.createdAt ? new Date(r.createdAt).toLocaleDateString() : 'Recent',
+            isFlagged,
+            isReported,
+            flagId: `#MOD-${r.id.substring(0, 4).toUpperCase()}`,
+            flagReason: isFlagged ? 'Refuted Warranty Claim' : undefined,
+            category,
+            isPublic: !isFlagged,
           };
         });
         setReviews(mapped);
@@ -265,8 +373,8 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             </Text>
           </View>
           <View style={styles.verifiedBadge}>
-            <AppIcon name="verified" size={20} />
-            <Text style={styles.verifiedBadgeText}>8,426 VERIFIED</Text>
+            <AppIcon name="verified" size={16} color="#0284c7" />
+            <Text style={styles.verifiedBadgeText}>{computedMetrics.totalReviews} VERIFIED</Text>
           </View>
         </View>
 
@@ -279,23 +387,19 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             <View>
               <Text style={styles.heroScoreLabel}>TOTAL AGGREGATE SCORE</Text>
               <View style={styles.scoreRow}>
-                <Text style={styles.scoreValueText}>4.8</Text>
-                <View style={styles.starsRow}>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starFilled}>star</Text>
-                  <Text style={styles.starFilled}>star_half</Text>
-                </View>
+                <Text style={styles.scoreValueText}>{computedMetrics.avgRating.toFixed(1)}</Text>
+                {renderStars(computedMetrics.avgRating, 18, '#475569')}
               </View>
               <Text style={styles.heroSubtitle}>
                 Platform Score based on{' '}
-                <Text style={styles.heroHighlight}>8,426 reviews</Text>
+                <Text style={styles.heroHighlight}>
+                  {computedMetrics.totalReviews} {computedMetrics.totalReviews === 1 ? 'review' : 'reviews'}
+                </Text>
               </Text>
             </View>
 
             <View style={styles.trendingBadge}>
-              <AppIcon name="trending_up" size={20} />
+              <AppIcon name="trending_up" size={16} color="#10B981" />
               <Text style={styles.trendingText}>+0.2 MoM</Text>
             </View>
           </View>
@@ -306,45 +410,45 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             <View style={styles.distRow}>
               <Text style={styles.distStarLabel}>5 Stars</Text>
               <View style={styles.distTrack}>
-                <View style={[styles.distFillAmber, { width: '82%' }]} />
+                <View style={[styles.distFillAmber, { width: `${computedMetrics.starDistribution[5].percent}%` }]} />
               </View>
-              <Text style={styles.distPercentLabel}>82%</Text>
+              <Text style={styles.distPercentLabel}>{computedMetrics.starDistribution[5].percent}%</Text>
             </View>
 
             {/* 4 Star */}
             <View style={styles.distRow}>
               <Text style={styles.distStarLabel}>4 Stars</Text>
               <View style={styles.distTrack}>
-                <View style={[styles.distFillAmber80, { width: '12%' }]} />
+                <View style={[styles.distFillAmber80, { width: `${computedMetrics.starDistribution[4].percent}%` }]} />
               </View>
-              <Text style={styles.distPercentLabel}>12%</Text>
+              <Text style={styles.distPercentLabel}>{computedMetrics.starDistribution[4].percent}%</Text>
             </View>
 
             {/* 3 Star */}
             <View style={styles.distRow}>
               <Text style={styles.distStarLabel}>3 Stars</Text>
               <View style={styles.distTrack}>
-                <View style={[styles.distFillSlate, { width: '4%' }]} />
+                <View style={[styles.distFillSlate, { width: `${computedMetrics.starDistribution[3].percent}%` }]} />
               </View>
-              <Text style={styles.distPercentLabel}>4%</Text>
+              <Text style={styles.distPercentLabel}>{computedMetrics.starDistribution[3].percent}%</Text>
             </View>
 
             {/* 2 Star */}
             <View style={styles.distRow}>
               <Text style={styles.distStarLabel}>2 Stars</Text>
               <View style={styles.distTrack}>
-                <View style={[styles.distFillAmber600, { width: '1.5%' }]} />
+                <View style={[styles.distFillAmber600, { width: `${computedMetrics.starDistribution[2].percent}%` }]} />
               </View>
-              <Text style={styles.distPercentLabel}>1.5%</Text>
+              <Text style={styles.distPercentLabel}>{computedMetrics.starDistribution[2].percent}%</Text>
             </View>
 
             {/* 1 Star */}
             <View style={styles.distRow}>
               <Text style={styles.distStarLabel}>1 Star</Text>
               <View style={styles.distTrack}>
-                <View style={[styles.distFillRose, { width: '0.5%' }]} />
+                <View style={[styles.distFillRose, { width: `${computedMetrics.starDistribution[1].percent}%` }]} />
               </View>
-              <Text style={styles.distPercentLabel}>0.5%</Text>
+              <Text style={styles.distPercentLabel}>{computedMetrics.starDistribution[1].percent}%</Text>
             </View>
           </View>
         </View>
@@ -357,7 +461,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             activeOpacity={0.7}
           >
             <Text style={styles.metricLabelGray}>NEW REVIEWS</Text>
-            <Text style={styles.metricValueBlue}>42</Text>
+            <Text style={styles.metricValueBlue}>{computedMetrics.newToday}</Text>
             <Text style={styles.metricSubtext}>Today</Text>
           </TouchableOpacity>
 
@@ -367,7 +471,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             activeOpacity={0.7}
           >
             <Text style={styles.metricLabelAmber}>FLAGGED</Text>
-            <Text style={styles.metricValueAmber}>7</Text>
+            <Text style={styles.metricValueAmber}>{computedMetrics.flaggedCount}</Text>
             <Text style={styles.metricSubtextAmber}>Needs Triage</Text>
           </TouchableOpacity>
 
@@ -377,7 +481,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             activeOpacity={0.7}
           >
             <Text style={styles.metricLabelRose}>REPORTED</Text>
-            <Text style={styles.metricValueRose}>3</Text>
+            <Text style={styles.metricValueRose}>{computedMetrics.reportedCount}</Text>
             <Text style={styles.metricSubtextRose}>Escalated</Text>
           </TouchableOpacity>
         </View>
@@ -417,7 +521,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
                   activeTab === 'all' && styles.tabCountTextActive,
                 ]}
               >
-                8,426
+                {computedMetrics.totalReviews}
               </Text>
             </View>
           </TouchableOpacity>
@@ -451,7 +555,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
                   activeTab === 'recent' && styles.tabCountTextActive,
                 ]}
               >
-                42
+                {computedMetrics.newToday}
               </Text>
             </View>
           </TouchableOpacity>
@@ -469,7 +573,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             <View style={styles.amberDot} />
             <Text style={styles.filterTabTextAmber}>Flagged</Text>
             <View style={styles.tabCountPillAmber}>
-              <Text style={styles.tabCountTextAmber}>7</Text>
+              <Text style={styles.tabCountTextAmber}>{computedMetrics.flaggedCount}</Text>
             </View>
           </TouchableOpacity>
 
@@ -486,7 +590,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
             <View style={styles.roseDot} />
             <Text style={styles.filterTabTextRose}>Reported</Text>
             <View style={styles.tabCountPillRose}>
-              <Text style={styles.tabCountTextRose}>3</Text>
+              <Text style={styles.tabCountTextRose}>{computedMetrics.reportedCount}</Text>
             </View>
           </TouchableOpacity>
         </ScrollView>
@@ -554,13 +658,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
                     {/* Rating with Warning Indicator */}
                     <View style={styles.ratingWarningBox}>
                       <View style={styles.ratingStarsLeft}>
-                        <View style={styles.starsSmallRow}>
-                          <Text style={styles.starSmallFilled}>star</Text>
-                          <Text style={styles.starSmallFilled}>star</Text>
-                          <Text style={styles.starSmallEmpty}>star</Text>
-                          <Text style={styles.starSmallEmpty}>star</Text>
-                          <Text style={styles.starSmallEmpty}>star</Text>
-                        </View>
+                        {renderStars(review.rating, 13, '#CBD5E1')}
                         <Text style={styles.ratingScoreNumber}>
                           {review.rating.toFixed(1)} / 5.0
                         </Text>
@@ -674,13 +772,7 @@ export const ReviewsRatingsChaircareMobileScreen: React.FC<
                     </View>
 
                     <View style={styles.starsRightGroup}>
-                      <View style={styles.starsSmallRow}>
-                        <Text style={styles.starSmallFilled}>star</Text>
-                        <Text style={styles.starSmallFilled}>star</Text>
-                        <Text style={styles.starSmallFilled}>star</Text>
-                        <Text style={styles.starSmallFilled}>star</Text>
-                        <Text style={styles.starSmallFilled}>star</Text>
-                      </View>
+                      {renderStars(review.rating, 13, '#CBD5E1')}
                       <Text style={styles.ratingScoreNumber}>
                         {review.rating.toFixed(1)} / 5.0
                       </Text>
