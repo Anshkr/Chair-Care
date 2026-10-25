@@ -8,10 +8,12 @@ import {
   TextInput,
   Modal,
   Platform,
+  KeyboardAvoidingView,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '../../components/common/AppIcon';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { apiRequest } from '../../services/api/apiClient';
@@ -365,9 +367,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
           >
             <AppIcon name="more_vert" size={20} />
           </TouchableOpacity>
-          <View style={styles.headerAvatar}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
@@ -638,12 +638,23 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
         animationType="fade"
         onRequestClose={() => setEditingService(null)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditingService(null)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
         >
-          <View style={styles.modalSheetContainer}>
+          {/* Backdrop touchable to close modal on outside tap */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setEditingService(null)}
+          />
+
+          <View
+            style={[
+              styles.modalSheetContainer,
+              isDesktop && styles.modalSheetContainerDesktop,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {isCreatingNew ? 'Create New Service' : 'Edit Service Pricing'}
@@ -656,7 +667,11 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalFormContent}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modalFormContent}
+            >
               <View style={styles.modalFieldGroup}>
                 <Text style={styles.modalFieldLabel}>Service Title</Text>
                 <TextInput
@@ -724,9 +739,9 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                   </Text>
                 </TouchableOpacity>
               )}
-            </View>
+            </ScrollView>
           </View>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Edit Platform Rules Modal */}
@@ -736,12 +751,23 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
         animationType="fade"
         onRequestClose={() => setIsEditingRules(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsEditingRules(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}
         >
-          <View style={styles.modalSheetContainer}>
+          {/* Backdrop touchable to close modal on outside tap */}
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setIsEditingRules(false)}
+          />
+
+          <View
+            style={[
+              styles.modalSheetContainer,
+              isDesktop && styles.modalSheetContainerDesktop,
+            ]}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Configure Platform Fees</Text>
               <TouchableOpacity
@@ -752,7 +778,11 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalFormContent}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.modalFormContent}
+            >
               <View style={styles.modalFieldGroup}>
                 <Text style={styles.modalFieldLabel}>
                   Platform Service Fee Commission (%)
@@ -804,9 +834,9 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                   Update Platform Rules
                 </Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -1426,6 +1456,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
+  modalOverlayDesktop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
   modalSheetContainer: {
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
@@ -1433,8 +1468,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 36,
-    maxHeight: '80%',
+    maxHeight: '85%',
     gap: 16,
+  },
+  modalSheetContainerDesktop: {
+    maxWidth: 520,
+    width: '100%',
+    borderRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
