@@ -101,11 +101,28 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
 
   const newRequest = reqInsert.rows[0];
 
+  // Fetch active dispatch configuration to apply real matching policy
+  let dispatchNote = 'Service request registered. Autonomous dispatch engine analyzing optimal technician.';
+  try {
+    const dispRes = await query('SELECT * FROM dispatch_configurations WHERE id = 1 LIMIT 1;');
+    if (dispRes && dispRes.rows.length > 0) {
+      const disp = dispRes.rows[0];
+      if (disp.is_engine_paused) {
+        dispatchNote = 'Automated dispatch engine paused by admin. Request placed in Super Admin manual triage.';
+      } else if (!disp.auto_matching) {
+        dispatchNote = 'Manual dispatch policy active. Queued for supervisor triage.';
+      } else {
+        const radius = disp.matching_radius_km || 10;
+        dispatchNote = `Autonomous dispatch active (${radius} km radius). Evaluating proximity, workload and expertise.`;
+      }
+    }
+  } catch {}
+
   // Log status history
   await query(
     `INSERT INTO service_status_history (request_id, status, updated_by, notes)
-     VALUES ($1, 'finding_technician', $2, 'Service request registered. System assigning closest technician.');`,
-    [newRequest.id, customerId]
+     VALUES ($1, 'finding_technician', $2, $3);`,
+    [newRequest.id, customerId, dispatchNote]
   );
 
   // Record payment record

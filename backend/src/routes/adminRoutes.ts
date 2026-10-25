@@ -28,6 +28,8 @@ import {
   deleteService,
   getPlatformConfig,
   updatePlatformConfig,
+  getDispatchConfig,
+  updateDispatchConfig,
 } from '../controllers/adminController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -71,5 +73,9 @@ router.delete('/services/:id', deleteService);
 // Platform Configuration Management
 router.get('/platform-config', getPlatformConfig);
 router.put('/platform-config', updatePlatformConfig);
+
+// Technician Dispatch & Matching Rules
+router.get('/dispatch-config', getDispatchConfig);
+router.put('/dispatch-config', updateDispatchConfig);
 
 export default router;

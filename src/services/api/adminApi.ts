@@ -236,6 +236,21 @@ export const adminApi = {
     if (res.success) adminSyncEmitter.notifySync();
     return res;
   },
+
+  getDispatchConfig: async (): Promise<ApiResponse<DispatchConfigData>> => {
+    return apiRequest<DispatchConfigData>('/admin/dispatch-config');
+  },
+
+  updateDispatchConfig: async (
+    data: Partial<DispatchConfigData>
+  ): Promise<ApiResponse<DispatchConfigData>> => {
+    const res = await apiRequest<DispatchConfigData>('/admin/dispatch-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
 };
 
 export interface PlatformConfigData {
@@ -259,6 +274,32 @@ export interface PlatformConfigData {
   activeFieldRequestsCount?: number;
   updatedAt?: string;
   updatedBy?: string | null;
+}
+
+export interface DispatchPriorityItem {
+  id: string;
+  title: string;
+  subtitle: string;
+}
+
+export interface DispatchConfigData {
+  autoMatching: boolean;
+  matchByDistance: boolean;
+  matchByExpertise: boolean;
+  matchByWorkload: boolean;
+  priorities: DispatchPriorityItem[];
+  matchingRadiusKm: number;
+  maxAssignmentAttempts: number;
+  responseTimeoutMinutes: number;
+  isEnginePaused: boolean;
+  updatedAt?: string;
+  updatedBy?: string | null;
+  telemetry?: {
+    onlineTechniciansCount: number;
+    totalVerifiedTechnicians: number;
+    pendingDispatchRequests: number;
+    activeDispatchedRequests: number;
+  };
 }
 
 

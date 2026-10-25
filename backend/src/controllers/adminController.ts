@@ -2366,4 +2366,170 @@ export const getPublicPlatformConfig = async (
   }
 };
 
+export const getDispatchConfig = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    let configRes = await query('SELECT * FROM dispatch_configurations WHERE id = 1 LIMIT 1;');
+    if (!configRes || configRes.rows.length === 0) {
+      await query(
+        `INSERT INTO dispatch_configurations (id, auto_matching, match_by_distance, match_by_expertise, match_by_workload, matching_radius_km, max_assignment_attempts, response_timeout_minutes, is_engine_paused)
+         VALUES (1, TRUE, TRUE, TRUE, TRUE, 10, 5, 5, FALSE)
+         ON CONFLICT (id) DO NOTHING;`
+      );
+      configRes = await query('SELECT * FROM dispatch_configurations WHERE id = 1 LIMIT 1;');
+    }
+
+    const row = configRes.rows[0];
+
+    // Real-time telemetry queries
+    const [onlineRes, verifiedRes, pendingRes, activeRes] = await Promise.all([
+      query("SELECT COUNT(*) FROM technician_profiles WHERE is_online = TRUE AND verification_status = 'verified';"),
+      query("SELECT COUNT(*) FROM technician_profiles WHERE verification_status = 'verified';"),
+      query("SELECT COUNT(*) FROM service_requests WHERE status = 'finding_technician';"),
+      query("SELECT COUNT(*) FROM service_requests WHERE status IN ('technician_assigned', 'in_route', 'in_progress');"),
+    ]);
+
+    const onlineCount = parseInt(onlineRes?.rows[0]?.count || '0', 10);
+    const verifiedCount = parseInt(verifiedRes?.rows[0]?.count || '0', 10);
+    const pendingCount = parseInt(pendingRes?.rows[0]?.count || '0', 10);
+    const activeCount = parseInt(activeRes?.rows[0]?.count || '0', 10);
+
+    res.json({
+      success: true,
+      data: {
+        autoMatching: Boolean(row.auto_matching),
+        matchByDistance: Boolean(row.match_by_distance),
+        matchByExpertise: Boolean(row.match_by_expertise),
+        matchByWorkload: Boolean(row.match_by_workload),
+        priorities: row.priorities || [],
+        matchingRadiusKm: Number(row.matching_radius_km) || 10,
+        maxAssignmentAttempts: Number(row.max_assignment_attempts) || 5,
+        responseTimeoutMinutes: Number(row.response_timeout_minutes) || 5,
+        isEnginePaused: Boolean(row.is_engine_paused),
+        updatedAt: row.updated_at,
+        updatedBy: row.updated_by,
+        telemetry: {
+          onlineTechniciansCount: onlineCount,
+          totalVerifiedTechnicians: verifiedCount,
+          pendingDispatchRequests: pendingCount,
+          activeDispatchedRequests: activeCount,
+        },
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get dispatch configuration:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve dispatch configuration.',
+    });
+  }
+};
+
+export const updateDispatchConfig = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.userId;
+    const {
+      autoMatching,
+      matchByDistance,
+      matchByExpertise,
+      matchByWorkload,
+      priorities,
+      matchingRadiusKm,
+      maxAssignmentAttempts,
+      responseTimeoutMinutes,
+      isEnginePaused,
+    } = req.body;
+
+    const existingRes = await query('SELECT * FROM dispatch_configurations WHERE id = 1 LIMIT 1;');
+    const current = existingRes.rows[0] || {};
+
+    const nextAuto = autoMatching !== undefined ? Boolean(autoMatching) : Boolean(current.auto_matching);
+    const nextDistance = matchByDistance !== undefined ? Boolean(matchByDistance) : Boolean(current.match_by_distance);
+    const nextExpertise = matchByExpertise !== undefined ? Boolean(matchByExpertise) : Boolean(current.match_by_expertise);
+    const nextWorkload = matchByWorkload !== undefined ? Boolean(matchByWorkload) : Boolean(current.match_by_workload);
+    const nextPriorities = priorities !== undefined ? JSON.stringify(priorities) : JSON.stringify(current.priorities || []);
+    const nextRadius = matchingRadiusKm !== undefined ? Number(matchingRadiusKm) : (current.matching_radius_km || 10);
+    const nextAttempts = maxAssignmentAttempts !== undefined ? Number(maxAssignmentAttempts) : (current.max_assignment_attempts || 5);
+    const nextTimeout = responseTimeoutMinutes !== undefined ? Number(responseTimeoutMinutes) : (current.response_timeout_minutes || 5);
+    const nextPaused = isEnginePaused !== undefined ? Boolean(isEnginePaused) : Boolean(current.is_engine_paused);
+
+    const updateRes = await query(
+      `UPDATE dispatch_configurations
+       SET auto_matching = $1,
+           match_by_distance = $2,
+           match_by_expertise = $3,
+           match_by_workload = $4,
+           priorities = $5::jsonb,
+           matching_radius_km = $6,
+           max_assignment_attempts = $7,
+           response_timeout_minutes = $8,
+           is_engine_paused = $9,
+           updated_at = CURRENT_TIMESTAMP,
+           updated_by = $10
+       WHERE id = 1
+       RETURNING *;`,
+      [
+        nextAuto,
+        nextDistance,
+        nextExpertise,
+        nextWorkload,
+        nextPriorities,
+        nextRadius,
+        nextAttempts,
+        nextTimeout,
+        nextPaused,
+        adminId || null,
+      ]
+    );
+
+    const saved = updateRes.rows[0];
+
+    // Audit log
+    if (adminId) {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'DISPATCH_CONFIG_UPDATE', 'dispatch_configurations', '1', $2::jsonb);`,
+        [
+          adminId,
+          JSON.stringify({
+            autoMatching: saved.auto_matching,
+            matchingRadiusKm: saved.matching_radius_km,
+            isEnginePaused: saved.is_engine_paused,
+            timestamp: new Date().toISOString(),
+          }),
+        ]
+      ).catch(() => {});
+    }
+
+    res.json({
+      success: true,
+      message: 'Dispatch configuration saved and active globally.',
+      data: {
+        autoMatching: Boolean(saved.auto_matching),
+        matchByDistance: Boolean(saved.match_by_distance),
+        matchByExpertise: Boolean(saved.match_by_expertise),
+        matchByWorkload: Boolean(saved.match_by_workload),
+        priorities: saved.priorities,
+        matchingRadiusKm: Number(saved.matching_radius_km),
+        maxAssignmentAttempts: Number(saved.max_assignment_attempts),
+        responseTimeoutMinutes: Number(saved.response_timeout_minutes),
+        isEnginePaused: Boolean(saved.is_engine_paused),
+        updatedAt: saved.updated_at,
+        updatedBy: saved.updated_by,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to update dispatch configuration:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update dispatch configuration. Please try again.',
+    });
+  }
+};
+
 

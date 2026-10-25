@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,15 @@ import {
   Animated,
   Modal,
   Platform,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { adminApi, DispatchConfigData, DispatchPriorityItem } from '../../services/api/adminApi';
+import { useAdminSync } from '../../services/adminSync';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 interface PriorityItem {
   id: string;
@@ -146,6 +150,11 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
   const [isEnginePaused, setIsEnginePaused] = useState<boolean>(false);
   const [showPauseModal, setShowPauseModal] = useState<boolean>(false);
 
+  // Telemetry & Loading States
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [telemetry, setTelemetry] = useState<any>(null);
+
   // Health Detail Modal
   const [selectedHealthItem, setSelectedHealthItem] = useState<ServiceHealthItem | null>(null);
 
@@ -164,6 +173,41 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
       setToastVisible(false);
     }, 2400);
   };
+
+  const loadDispatchConfig = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const res = await adminApi.getDispatchConfig();
+      if (res.success && res.data) {
+        const d = res.data;
+        setAutoMatching(d.autoMatching);
+        setMatchByDistance(d.matchByDistance);
+        setMatchByExpertise(d.matchByExpertise);
+        setMatchByAvailability(d.matchByWorkload);
+        if (Array.isArray(d.priorities) && d.priorities.length > 0) {
+          setPriorities(d.priorities);
+        }
+        setMatchingRadius(d.matchingRadiusKm);
+        setAssignmentAttempts(d.maxAssignmentAttempts);
+        setResponseTimeout(d.responseTimeoutMinutes);
+        setIsEnginePaused(d.isEnginePaused);
+        if (d.telemetry) {
+          setTelemetry(d.telemetry);
+        }
+      }
+    } catch {
+      // Retain fallback
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDispatchConfig();
+  }, [loadDispatchConfig]);
+
+  // Live real-time sync across admin sessions
+  useAdminSync(navigation, loadDispatchConfig);
 
   const movePriority = (index: number, direction: 'up' | 'down') => {
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -191,19 +235,52 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
     setResponseTimeout(nextVal);
   };
 
-  const handleConfirmPauseToggle = () => {
+  const handleConfirmPauseToggle = async () => {
     setShowPauseModal(false);
     const nextPaused = !isEnginePaused;
     setIsEnginePaused(nextPaused);
-    if (nextPaused) {
-      displayToast('Technician dispatch engine paused. Emergency queue active.');
-    } else {
-      displayToast('Technician dispatch engine resumed successfully.');
+    try {
+      const res = await adminApi.updateDispatchConfig({
+        isEnginePaused: nextPaused,
+      });
+      if (res.success) {
+        displayToast(
+          nextPaused
+            ? 'Technician dispatch engine paused. Emergency triage active.'
+            : 'Technician dispatch engine resumed successfully.'
+        );
+      } else {
+        displayToast(res.error || 'Failed to update engine status.');
+      }
+    } catch {
+      displayToast('Failed to update engine status.');
     }
   };
 
-  const handleSaveParams = () => {
-    displayToast('System configuration and algorithm parameters saved.');
+  const handleSaveParams = async () => {
+    setIsSaving(true);
+    try {
+      const res = await adminApi.updateDispatchConfig({
+        autoMatching,
+        matchByDistance,
+        matchByExpertise,
+        matchByWorkload: matchByAvailability,
+        priorities,
+        matchingRadiusKm: matchingRadius,
+        maxAssignmentAttempts: assignmentAttempts,
+        responseTimeoutMinutes: responseTimeout,
+        isEnginePaused,
+      });
+      if (res.success) {
+        displayToast('Technician dispatch & SLA parameters saved to live database.');
+      } else {
+        displayToast(res.error || 'Failed to save dispatch parameters.');
+      }
+    } catch (err: any) {
+      displayToast(err?.message || 'Error updating dispatch rules.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -242,9 +319,7 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
           >
             <AppIcon name="more_vert" size={20} />
           </TouchableOpacity>
-          <View style={styles.headerAvatar}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
@@ -283,7 +358,7 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
             <Text style={styles.statusPillText}>
               {isEnginePaused
                 ? 'FLEET DISPATCH • PAUSED / MANUAL'
-                : 'FLEET DISPATCH V4.8 • ONLINE'}
+                : `FLEET DISPATCH • ${telemetry?.onlineTechniciansCount ?? 0} TECHS ONLINE`}
             </Text>
           </View>
           <View
@@ -298,7 +373,7 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
                 isEnginePaused && styles.syncStatusBadgeTextPaused,
               ]}
             >
-              {isEnginePaused ? 'Manual Triage' : 'Engine Syncing'}
+              {isEnginePaused ? 'Manual Triage' : 'Live Synced'}
             </Text>
           </View>
         </View>
@@ -801,9 +876,16 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
             style={styles.saveParamsButton}
             onPress={handleSaveParams}
             activeOpacity={0.85}
+            disabled={isSaving}
           >
-            <AppIcon name="check" size={20} />
-            <Text style={styles.saveParamsText}>Save System Parameters</Text>
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+            ) : (
+              <AppIcon name="check" size={20} color="#ffffff" />
+            )}
+            <Text style={styles.saveParamsText}>
+              {isSaving ? 'Saving to Database...' : 'Save System Parameters'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -815,12 +897,13 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
         animationType="fade"
         onRequestClose={() => setSelectedHealthItem(null)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setSelectedHealthItem(null)}
-        >
-          <View style={styles.modalSheetContainer}>
+        <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setSelectedHealthItem(null)}
+          />
+          <View style={[styles.modalSheetContainer, isDesktop && styles.modalSheetContainerDesktop]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {selectedHealthItem?.title} Telemetry
@@ -862,7 +945,7 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Pause Confirmation Modal */}
@@ -872,12 +955,13 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
         animationType="fade"
         onRequestClose={() => setShowPauseModal(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowPauseModal(false)}
-        >
-          <View style={styles.modalSheetContainer}>
+        <View style={[styles.modalOverlay, isDesktop && styles.modalOverlayDesktop]}>
+          <TouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setShowPauseModal(false)}
+          />
+          <View style={[styles.modalSheetContainer, isDesktop && styles.modalSheetContainerDesktop]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {isEnginePaused
@@ -922,7 +1006,7 @@ export const TechnicianMatchingSystemConfigurationChaircareMobileScreen: React.F
               </TouchableOpacity>
             </View>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
@@ -1616,6 +1700,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
     justifyContent: 'flex-end',
   },
+  modalOverlayDesktop: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
   modalSheetContainer: {
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
@@ -1625,6 +1714,14 @@ const styles = StyleSheet.create({
     paddingBottom: 36,
     maxHeight: '80%',
     gap: 16,
+  },
+  modalSheetContainerDesktop: {
+    maxWidth: 520,
+    width: '100%',
+    borderRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    alignSelf: 'center',
   },
   modalHeader: {
     flexDirection: 'row',
