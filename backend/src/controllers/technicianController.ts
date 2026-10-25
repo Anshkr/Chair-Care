@@ -234,19 +234,20 @@ export const acceptJob = async (
     if (reqData && reqData.customer_id) {
       const techUserRes = await query('SELECT name FROM users WHERE id = $1;', [technicianId]);
       const techName = techUserRes.rows[0]?.name || 'Certified Specialist';
+      const assignData = JSON.stringify({
+        requestId: id,
+        trackingCode: reqData.tracking_code,
+        technicianName: techName,
+        status: 'assigned',
+      });
       await query(
-        `INSERT INTO notifications (user_id, title, message, type, data)
-         VALUES ($1, $2, $3, 'technician_assigned', $4);`,
+        `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+         VALUES ($1, $2, $3, 'technician_assigned', $4, $4);`,
         [
           reqData.customer_id,
           `Technician Assigned #${reqData.tracking_code}`,
           `${techName} has accepted your service request and is assigned to your booking.`,
-          JSON.stringify({
-            requestId: id,
-            trackingCode: reqData.tracking_code,
-            technicianName: techName,
-            status: 'assigned',
-          }),
+          assignData,
         ]
       );
     }
@@ -449,27 +450,49 @@ export const updateJobStatus = async (
           }
 
           if (notifTitle) {
+            const statusPayload = JSON.stringify({
+              requestId: actualJobId,
+              trackingCode: job.tracking_code,
+              technicianName: techName,
+              technicianPhone: techPhone,
+              status,
+            });
             await query(
-              `INSERT INTO notifications (user_id, title, message, type, data)
-               VALUES ($1, $2, $3, $4, $5);`,
+              `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+               VALUES ($1, $2, $3, $4, $5, $5);`,
               [
                 custId,
                 notifTitle,
                 notifMsg,
                 notifType,
-                JSON.stringify({
-                  requestId: actualJobId,
-                  trackingCode: job.tracking_code,
-                  technicianName: techName,
-                  technicianPhone: techPhone,
-                  status,
-                }),
+                statusPayload,
               ]
             );
           }
         }
+
+        // 💰 If job completed, notify the technician about their payout credited
+        if (isCompleted) {
+          const payoutAmount = Math.round(Number(job.total_amount || 599) * 0.70 * 100) / 100;
+          const payoutPayload = JSON.stringify({
+            requestId: actualJobId,
+            trackingCode: job.tracking_code,
+            payout: payoutAmount,
+            status: 'completed',
+          });
+          await query(
+            `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+             VALUES ($1, $2, $3, 'payout', $4, $4);`,
+            [
+              technicianId,
+              `💰 Earnings Credited: ₹${payoutAmount}`,
+              `₹${payoutAmount} has been credited to your earnings for completing Job #${job.tracking_code}.`,
+              payoutPayload,
+            ]
+          );
+        }
       } catch (err: any) {
-        console.warn('⚠️ [Customer status notification background warning]:', err.message);
+        console.warn('⚠️ [Customer/Technician status notification background warning]:', err.message);
       }
     })();
   } catch (error: any) {

@@ -238,18 +238,63 @@ export const NotificationsChaircareMobileScreen: React.FC<{
             if (dbNotif.type === 'payment' || dbNotif.type === 'invoice') cat = 'billing';
             else if (dbNotif.type === 'system' || dbNotif.type === 'promo') cat = 'system';
 
-            const isChat = dbNotif.type === 'chat_message';
-            const isSupportChat = dbNotif.type === 'support_chat';
+            const nType = (dbNotif.type || '').toLowerCase();
+            const isChat = nType === 'chat_message';
+            const isSupportChat = nType === 'support_chat';
+            const isArrival = nType === 'technician_arrived';
+            const isEnRoute = nType === 'technician_in_route';
+            const isInProgress = nType === 'technician_in_progress';
+            const isCompleted = nType === 'technician_completed';
+            const isAssigned = nType === 'technician_assigned';
 
             let actionType: NotificationItem['actionType'] = 'details';
             let actionLabel = 'View Details';
+            let icon = 'Bell';
+            let iconBgColor: string = Colors.secondaryCobalt;
+            let iconTextColor: string = Colors.onSecondary;
 
             if (isSupportChat) {
               actionType = 'support_chat';
               actionLabel = 'Open Support Chat';
+              icon = 'Headphones';
+              iconBgColor = '#E0F2FE';
+              iconTextColor = '#0284C7';
             } else if (isChat) {
               actionType = 'chat';
               actionLabel = 'Open Chat';
+              icon = 'MessageSquare';
+              iconBgColor = '#EEF2FF';
+              iconTextColor = '#4F46E5';
+            } else if (isArrival) {
+              actionType = 'track';
+              actionLabel = 'View Technician';
+              icon = 'MapPin';
+              iconBgColor = '#ECFDF5';
+              iconTextColor = '#059669';
+            } else if (isEnRoute) {
+              actionType = 'track';
+              actionLabel = 'Track Live Location';
+              icon = 'Truck';
+              iconBgColor = '#EEF2FF';
+              iconTextColor = '#4F46E5';
+            } else if (isInProgress) {
+              actionType = 'details';
+              actionLabel = 'View Progress';
+              icon = 'Wrench';
+              iconBgColor = '#FEF3C7';
+              iconTextColor = '#D97706';
+            } else if (isCompleted) {
+              actionType = 'rate';
+              actionLabel = 'Rate & Review';
+              icon = 'CheckCircle';
+              iconBgColor = '#ECFDF5';
+              iconTextColor = '#10B981';
+            } else if (isAssigned) {
+              actionType = 'details';
+              actionLabel = 'View Technician';
+              icon = 'UserCheck';
+              iconBgColor = '#F0FDF4';
+              iconTextColor = '#16A34A';
             }
 
             generated.push({
@@ -270,9 +315,9 @@ export const NotificationsChaircareMobileScreen: React.FC<{
                 ? `#${dbNotif.data.trackingCode}`
                 : undefined,
               isUnread: !dbNotif.isRead,
-              icon: isSupportChat ? 'Headphones' : isChat ? 'MessageSquare' : 'Bell',
-              iconBgColor: isSupportChat ? '#E0F2FE' : isChat ? '#EEF2FF' : Colors.secondaryCobalt,
-              iconTextColor: isSupportChat ? '#0284C7' : isChat ? '#4F46E5' : Colors.onSecondary,
+              icon,
+              iconBgColor,
+              iconTextColor,
               actionType,
               actionLabel,
             });

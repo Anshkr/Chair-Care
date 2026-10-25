@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { query } from '../config/database';
 import { AuthenticatedRequest } from '../types';
+import { notifyAllTechniciansAboutNewJob } from '../services/notificationService';
 
 export const createRequest = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   const customerId = req.user?.userId;
@@ -141,19 +142,33 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
 
   // Customer confirmation notification (strictly isolated to the booking customer)
   try {
+    const custPayload = JSON.stringify({
+      requestId: newRequest.id,
+      trackingCode: newRequest.tracking_code,
+      chairModel: chairModel || 'Office Chair Repair',
+    });
     await query(
-      `INSERT INTO notifications (user_id, title, message, type, data)
-       VALUES ($1, $2, $3, 'booking_confirmed', $4);`,
+      `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+       VALUES ($1, $2, $3, 'booking_confirmed', $4, $4);`,
       [
         customerId,
         `Booking Confirmed #${newRequest.tracking_code}`,
         `Your request for ${chairModel || 'Office Chair Repair'} is active. Notifying nearby technicians now.`,
-        JSON.stringify({
-          requestId: newRequest.id,
-          trackingCode: newRequest.tracking_code,
-        }),
+        custPayload,
       ]
     );
+
+    // 🔔 Notify all available technicians about the new job in the queue
+    notifyAllTechniciansAboutNewJob({
+      id: newRequest.id,
+      tracking_code: newRequest.tracking_code,
+      chair_model: chairModel,
+      address,
+      total_amount: finalPrice,
+      service_title: chairModel || 'Chair Service',
+    }).catch((techNotifErr) => {
+      console.warn('⚠️ [Technicians broadcast notification error]:', techNotifErr.message);
+    });
   } catch (notifErr: any) {
     console.warn('⚠️ [Notification confirmation warning]:', notifErr.message);
   }
@@ -536,14 +551,15 @@ export const cancelRequest = async (req: AuthenticatedRequest, res: Response): P
   // If a technician was assigned, inform them that the customer cancelled the booking
   if (reqItem.technician_id) {
     try {
+      const cancelData = JSON.stringify({ requestId: reqItem.id, trackingCode: reqItem.tracking_code });
       await query(
-        `INSERT INTO notifications (user_id, title, message, type, metadata)
-         VALUES ($1, $2, $3, 'system', $4);`,
+        `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+         VALUES ($1, $2, $3, 'system', $4, $4);`,
         [
           reqItem.technician_id,
-          'Job Cancelled',
+          '⚠️ Job Cancelled',
           `Service booking #${reqItem.tracking_code || 'JOB'} has been cancelled by the customer and removed from your queue.`,
-          JSON.stringify({ requestId: reqItem.id, trackingCode: reqItem.tracking_code }),
+          cancelData,
         ]
       );
     } catch {

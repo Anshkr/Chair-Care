@@ -872,22 +872,23 @@ export const assignTechnician = async (
       ? `Admin has assigned you a new job #${targetReq.tracking_code} (${targetReq.chair_model || 'Service'}). It is queued next — you can start it once your current job #${currentActiveJob?.tracking_code} is completed.`
       : `Admin has assigned you a job #${targetReq.tracking_code} (${targetReq.chair_model || 'Service'}). Tap to view details and start route.`;
 
+    const techNotifData = JSON.stringify({
+      requestId: actualReqId,
+      trackingCode: targetReq.tracking_code,
+      chairModel: targetReq.chair_model,
+      address: targetReq.address,
+      assignedByAdmin: true,
+      isQueued: isAlreadyInJob,
+      currentActiveTrackingCode: currentActiveJob?.tracking_code || null,
+    });
     await query(
-      `INSERT INTO notifications (user_id, title, message, type, data)
-       VALUES ($1, $2, $3, 'admin_job_assigned', $4);`,
+      `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+       VALUES ($1, $2, $3, 'admin_job_assigned', $4, $4);`,
       [
         technicianId,
         notifTitle,
         notifMessage,
-        JSON.stringify({
-          requestId: actualReqId,
-          trackingCode: targetReq.tracking_code,
-          chairModel: targetReq.chair_model,
-          address: targetReq.address,
-          assignedByAdmin: true,
-          isQueued: isAlreadyInJob,
-          currentActiveTrackingCode: currentActiveJob?.tracking_code || null,
-        }),
+        techNotifData,
       ]
     );
   } catch (notifErr: any) {
@@ -897,19 +898,20 @@ export const assignTechnician = async (
   // 🔔 NOTIFY CUSTOMER: Technician assigned
   try {
     if (targetReq.customer_id) {
+      const custNotifData = JSON.stringify({
+        requestId: actualReqId,
+        trackingCode: targetReq.tracking_code,
+        technicianId,
+        technicianName: techName,
+      });
       await query(
-        `INSERT INTO notifications (user_id, title, message, type, data)
-         VALUES ($1, $2, $3, 'technician_assigned', $4);`,
+        `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+         VALUES ($1, $2, $3, 'technician_assigned', $4, $4);`,
         [
           targetReq.customer_id,
           `Technician Assigned #${targetReq.tracking_code}`,
           `${techName} has been assigned to your service request by Operations Admin.`,
-          JSON.stringify({
-            requestId: actualReqId,
-            trackingCode: targetReq.tracking_code,
-            technicianId,
-            technicianName: techName,
-          }),
+          custNotifData,
         ]
       );
     }

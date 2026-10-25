@@ -135,19 +135,20 @@ export const sendChatMessage = async (
     const recipientId = resolvedRole === 'technician' ? request.customer_id : request.technician_id;
     if (recipientId) {
       try {
+        const chatPayload = JSON.stringify({
+          requestId: request.id,
+          trackingCode: request.tracking_code,
+          senderName,
+          senderRole: resolvedRole,
+        });
         await query(
-          `INSERT INTO notifications (user_id, title, message, type, data)
-           VALUES ($1, $2, $3, 'chat_message', $4);`,
+          `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+           VALUES ($1, $2, $3, 'chat_message', $4, $4);`,
           [
             recipientId,
             `💬 New message from ${senderName}`,
             (message || 'Sent a photo attachment').trim().slice(0, 120),
-            JSON.stringify({
-              requestId: request.id,
-              trackingCode: request.tracking_code,
-              senderName,
-              senderRole: resolvedRole,
-            }),
+            chatPayload,
           ]
         );
       } catch (notifErr: any) {

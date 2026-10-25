@@ -194,18 +194,19 @@ export const sendSupportMessage = async (
     // If Admin sent message, notify Customer
     if (senderRole === 'admin') {
       try {
+        const supportPayload = JSON.stringify({
+          ticketId: ticket.id,
+          ticketCode: ticket.ticket_code,
+          senderName: 'Super Admin',
+        });
         await query(
-          `INSERT INTO notifications (user_id, title, message, type, data)
-           VALUES ($1, $2, $3, 'support_chat', $4);`,
+          `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+           VALUES ($1, $2, $3, 'support_chat', $4, $4);`,
           [
             ticket.user_id,
             '💬 Support Reply from Admin',
             (message || 'Sent an image attachment').trim().slice(0, 120),
-            JSON.stringify({
-              ticketId: ticket.id,
-              ticketCode: ticket.ticket_code,
-              senderName: 'Super Admin',
-            }),
+            supportPayload,
           ]
         );
       } catch (notifErr: any) {
@@ -215,19 +216,20 @@ export const sendSupportMessage = async (
       // If Customer sent message, notify Admin
       try {
         const adminsRes = await query("SELECT id FROM users WHERE role IN ('admin', 'superadmin');");
+        const adminPayload = JSON.stringify({
+          ticketId: ticket.id,
+          ticketCode: ticket.ticket_code,
+          senderName: senderName,
+        });
         for (const adminRow of adminsRes.rows) {
           await query(
-            `INSERT INTO notifications (user_id, title, message, type, data)
-             VALUES ($1, $2, $3, 'support_chat', $4);`,
+            `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+             VALUES ($1, $2, $3, 'support_chat', $4, $4);`,
             [
               adminRow.id,
               `💬 Customer Reply: #${ticket.ticket_code}`,
               (message || 'Sent an image attachment').trim().slice(0, 120),
-              JSON.stringify({
-                ticketId: ticket.id,
-                ticketCode: ticket.ticket_code,
-                senderName: senderName,
-              }),
+              adminPayload,
             ]
           );
         }
