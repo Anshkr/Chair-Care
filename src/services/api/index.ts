@@ -6,3 +6,4 @@ export * from './technicianApi';
 export * from './adminApi';
 export * from './notificationApi';
 export * from './chatApi';
+export * from './paymentApi';

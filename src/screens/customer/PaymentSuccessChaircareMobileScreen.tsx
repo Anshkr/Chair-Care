@@ -25,9 +25,26 @@ import { downloadInvoice } from '../../services/invoiceService';
  */
 export const PaymentSuccessChaircareMobileScreen: React.FC<{
   navigation: any;
-}> = ({ navigation }) => {
+  route?: any;
+}> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { draft } = useBooking();
+
+  const routeParams = route?.params || {};
+  const actualPaymentId =
+    routeParams.paymentId ||
+    `pay_rzp_${Date.now().toString(36).slice(-6)}_${Math.random().toString(36).substring(2, 6)}`;
+  const actualPaymentMethod = routeParams.paymentMethod || 'Razorpay UPI';
+  const actualAmount = routeParams.amount
+    ? `₹${routeParams.amount}.00`
+    : draft?.estimatedTotal
+    ? `₹${draft.estimatedTotal}.00`
+    : '₹749.00';
+  const actualTrackingCode =
+    routeParams.trackingCode ||
+    (routeParams.requestId ? `CC-${routeParams.requestId.substring(0, 4)}` : '#CC-7842');
+  const actualOrderId =
+    routeParams.orderId || `order_${Math.random().toString(36).substring(2, 10)}`;
 
   const [copiedTxn, setCopiedTxn] = useState<boolean>(false);
   const [downloadStatus, setDownloadStatus] = useState<string>('Download Invoice PDF');
@@ -41,7 +58,7 @@ export const PaymentSuccessChaircareMobileScreen: React.FC<{
   };
 
   const serviceTitle = draft?.serviceTitle || 'Office Chair Repair';
-  const totalAmount = draft?.estimatedTotal ? `₹${draft.estimatedTotal}.00` : '₹749.00';
+  const totalAmount = actualAmount;
 
   const handleCopyTxn = () => {
     setCopiedTxn(true);
@@ -56,11 +73,14 @@ export const PaymentSuccessChaircareMobileScreen: React.FC<{
     try {
       const draftAny = (draft || {}) as any;
       await downloadInvoice({
-        ticketNumber: draftAny.serviceRequestId ? `#${draftAny.serviceRequestId.substring(0, 8)}` : '#CC-7842',
+        ticketNumber: actualTrackingCode,
         serviceTitle: draft?.serviceTitle || 'Office Chair Repair',
         chairModel: draft?.chairType || 'Office Ergonomic Chair',
-        issueDescription: draft?.problemDescription || draftAny.issueDescription || 'Hydraulic inspection & general repair',
-        amount: draft?.estimatedTotal || 749,
+        issueDescription:
+          draft?.problemDescription ||
+          draftAny.issueDescription ||
+          'Hydraulic inspection & precision ergonomic repair',
+        amount: routeParams.amount || draft?.estimatedTotal || 749,
         isPaid: true,
         customerName: draftAny.customerName || 'Verified Customer',
         customerPhone: draftAny.contactPhone || '+91 800 555 0199',
@@ -129,22 +149,22 @@ export const PaymentSuccessChaircareMobileScreen: React.FC<{
                     <AppIcon name="Wallet" size={20} color="#059669" />
                   </View>
                   <View style={styles.matrixTextGroup}>
-                    <Text style={styles.matrixLabel}>Payment Method</Text>
+                    <Text style={styles.matrixLabel}>Payment Gateway</Text>
                     <Text style={styles.matrixMainText}>
-                      UPI (GPay • tech@okhdfcbank)
+                      {actualPaymentMethod}
                     </Text>
                   </View>
                 </View>
                 <View style={styles.instantTag}>
-                  <Text style={styles.instantTagText}>INSTANT</Text>
+                  <Text style={styles.instantTagText}>VERIFIED</Text>
                 </View>
               </View>
 
               {/* Transaction ID with Copy Button */}
               <View style={styles.matrixRow}>
                 <View style={styles.matrixTextGroup}>
-                  <Text style={styles.matrixLabel}>Transaction ID</Text>
-                  <Text style={styles.txnIdText}>TXN-89420185920</Text>
+                  <Text style={styles.matrixLabel}>Transaction ID (Razorpay)</Text>
+                  <Text style={styles.txnIdText}>{actualPaymentId}</Text>
                 </View>
                 <TouchableOpacity
                   style={[
@@ -169,8 +189,8 @@ export const PaymentSuccessChaircareMobileScreen: React.FC<{
                   </Text>
                 </View>
                 <View style={styles.gridCell}>
-                  <Text style={styles.matrixLabel}>Bank Ref (UTR)</Text>
-                  <Text style={styles.gridCellMono}>UTR-9920148201</Text>
+                  <Text style={styles.matrixLabel}>Gateway Order Ref</Text>
+                  <Text style={styles.gridCellMono}>{actualOrderId}</Text>
                 </View>
               </View>
             </View>

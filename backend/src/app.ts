@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import supportRoutes from './routes/supportRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 import { getPublicPlatformConfig } from './controllers/adminController';
 
 export const createApp = (): Express => {
@@ -93,8 +94,10 @@ export const createApp = (): Express => {
   apiV1.use('/notifications', notificationRoutes);
   apiV1.use('/chat', chatRoutes);
   apiV1.use('/support', supportRoutes);
+  apiV1.use('/payments', paymentRoutes);
 
   app.use('/api/v1', apiV1);
+  app.use('/api/payments', paymentRoutes);
 
   // 404 Handler
   app.use((req: Request, res: Response) => {

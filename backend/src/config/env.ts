@@ -14,6 +14,9 @@ const envSchema = z.object({
   RATE_LIMIT_MAX_REQUESTS: z.string().default('100').transform((val) => parseInt(val, 10)),
   AUTH_RATE_LIMIT_MAX: z.string().default('15').transform((val) => parseInt(val, 10)),
   PAYMENT_GATEWAY_ENV: z.enum(['sandbox', 'production']).default('sandbox'),
+  RAZORPAY_KEY_ID: z.string().default(process.env.RAZORPAY_KEY_ID || 'rzp_test_chaircare_mock_id'),
+  RAZORPAY_KEY_SECRET: z.string().default(process.env.RAZORPAY_KEY_SECRET || ''),
+  RAZORPAY_WEBHOOK_SECRET: z.string().default(process.env.RAZORPAY_WEBHOOK_SECRET || ''),
 });
 
 const parseEnv = () => {
@@ -36,6 +39,9 @@ const parseEnv = () => {
       RATE_LIMIT_MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10),
       AUTH_RATE_LIMIT_MAX: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '15', 10),
       PAYMENT_GATEWAY_ENV: (process.env.PAYMENT_GATEWAY_ENV as 'sandbox' | 'production') || 'sandbox',
+      RAZORPAY_KEY_ID: process.env.RAZORPAY_KEY_ID || 'rzp_test_chaircare_mock_id',
+      RAZORPAY_KEY_SECRET: process.env.RAZORPAY_KEY_SECRET || '',
+      RAZORPAY_WEBHOOK_SECRET: process.env.RAZORPAY_WEBHOOK_SECRET || '',
     };
   }
   return result.data;
