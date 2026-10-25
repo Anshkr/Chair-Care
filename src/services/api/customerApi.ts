@@ -14,6 +14,9 @@ export interface CreateBookingPayload {
   paymentMethod?: string;
   latitude?: number;
   longitude?: number;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
 }
 
 export const customerApi = {

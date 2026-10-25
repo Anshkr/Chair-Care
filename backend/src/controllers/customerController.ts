@@ -54,6 +54,9 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
     paymentMethod,
     latitude,
     longitude,
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature,
   } = req.body;
 
   let finalServiceId = serviceId;
@@ -74,6 +77,10 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
   const trackingCode = `CC-${randNum}`;
   const randPin = String(Math.floor(1000 + Math.random() * 9000));
 
+  const isPod = paymentMethod === 'pay_on_delivery' || paymentMethod === 'cash' || paymentMethod === 'cash_on_delivery';
+  const finalPaymentMethod = isPod ? 'pay_on_delivery' : 'razorpay';
+  const isPaid = isPod ? false : true;
+
   const reqInsert = await query(
     `INSERT INTO service_requests (
       tracking_code, customer_id, service_id, chair_model, issue_description,
@@ -92,8 +99,8 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
       timeSlot,
       visitDate,
       finalPrice,
-      paymentMethod === 'cash' ? false : true,
-      paymentMethod || 'card',
+      isPaid,
+      finalPaymentMethod,
       randPin,
       latitude != null ? latitude : null,
       longitude != null ? longitude : null,
@@ -128,14 +135,19 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
 
   // Record payment record
   if (finalPrice > 0) {
+    const paymentStatus = isPaid ? 'completed' : 'pending';
+    const provider = isPod ? 'pay_on_delivery' : 'razorpay';
+    const txnId = razorpayPaymentId || (isPod ? `pod_${newRequest.tracking_code.toLowerCase()}_${Date.now()}` : `pay_rzp_${Date.now()}`);
+
     await query(
       `INSERT INTO payments (request_id, amount, currency, status, provider, transaction_id)
-       VALUES ($1, $2, 'INR', $3, 'mock_gateway', $4);`,
+       VALUES ($1, $2, 'INR', $3, $4, $5);`,
       [
         newRequest.id,
         finalPrice,
-        paymentMethod === 'cash' ? 'pending' : 'completed',
-        `txn_${newRequest.tracking_code.toLowerCase()}_${Date.now()}`,
+        paymentStatus,
+        provider,
+        txnId,
       ]
     );
   }

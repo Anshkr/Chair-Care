@@ -36,6 +36,9 @@ export const createRequestSchema = z.object({
   paymentMethod: z.string().optional().default('card'),
   latitude: z.number().optional().nullable(),
   longitude: z.number().optional().nullable(),
+  razorpayOrderId: z.string().optional(),
+  razorpayPaymentId: z.string().optional(),
+  razorpaySignature: z.string().optional(),
 });
 
 export const updateJobStatusSchema = z.object({

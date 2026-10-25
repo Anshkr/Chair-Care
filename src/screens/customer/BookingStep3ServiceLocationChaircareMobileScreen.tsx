@@ -164,6 +164,9 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const [isMapPickerVisible, setIsMapPickerVisible] = useState<boolean>(false);
   const [isConvertingAddress, setIsConvertingAddress] = useState<boolean>(false);
   const [locationSource, setLocationSource] = useState<'saved' | 'map' | 'manual' | 'gps'>('saved');
+  const [paymentMethod, setPaymentMethod] = useState<'pay_on_delivery' | 'razorpay'>(
+    draft?.paymentMethod === 'razorpay' ? 'razorpay' : 'pay_on_delivery'
+  );
 
   // Sync saved addresses on mount or profile load
   useEffect(() => {
@@ -425,12 +428,13 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
       }
     }
 
-    // 3. Update booking draft with exact coordinates
+    // 3. Update booking draft with exact coordinates and payment choice
     updateDraft({
       serviceAddress: finalFullAddress,
       unitOrFloor: flatNo.trim(),
       latitude: finalLat,
       longitude: finalLng,
+      paymentMethod: paymentMethod,
     });
 
     // 4. Continue to schedule
@@ -909,6 +913,102 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                 </View>
               </View>
             )}
+          </View>
+
+          {/* Section 4: CHOOSE PAYMENT OPTION */}
+          <View style={styles.paymentCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionTitleGroup}>
+                <AppIcon name="CreditCard" size={16} color={Colors.secondaryCobalt} />
+                <Text style={styles.sectionTitleCaps}>PAYMENT OPTION</Text>
+              </View>
+              <View style={styles.escrowPill}>
+                <AppIcon name="ShieldCheck" size={12} color="#059669" />
+                <Text style={styles.escrowPillText}>Secure Checkout</Text>
+              </View>
+            </View>
+
+            <Text style={styles.paymentCardSub}>
+              Choose how you would like to pay for your service:
+            </Text>
+
+            <View style={styles.paymentMethodsRow}>
+              {/* Option 1: Pay on Delivery */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod === 'pay_on_delivery' && styles.paymentMethodCardActive,
+                ]}
+                onPress={() => setPaymentMethod('pay_on_delivery')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.paymentMethodHeader}>
+                  <View
+                    style={[
+                      styles.paymentRadio,
+                      paymentMethod === 'pay_on_delivery' && styles.paymentRadioActive,
+                    ]}
+                  >
+                    {paymentMethod === 'pay_on_delivery' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                  <View style={styles.popularTag}>
+                    <Text style={styles.popularTagText}>NO ADVANCE</Text>
+                  </View>
+                </View>
+
+                <View style={styles.paymentMethodBody}>
+                  <View style={styles.paymentIconBubble}>
+                    <AppIcon
+                      name="Truck"
+                      size={20}
+                      color={paymentMethod === 'pay_on_delivery' ? Colors.secondaryCobalt : Colors.onSurfaceVariant}
+                    />
+                  </View>
+                  <Text style={styles.paymentMethodTitle}>Pay on Delivery</Text>
+                  <Text style={styles.paymentMethodDesc}>
+                    Pay cash or UPI after repair inspection
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 2: Razorpay Online */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod === 'razorpay' && styles.paymentMethodCardActive,
+                ]}
+                onPress={() => setPaymentMethod('razorpay')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.paymentMethodHeader}>
+                  <View
+                    style={[
+                      styles.paymentRadio,
+                      paymentMethod === 'razorpay' && styles.paymentRadioActive,
+                    ]}
+                  >
+                    {paymentMethod === 'razorpay' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                  <View style={styles.razorpayTag}>
+                    <Text style={styles.razorpayTagText}>INSTANT</Text>
+                  </View>
+                </View>
+
+                <View style={styles.paymentMethodBody}>
+                  <View style={styles.paymentIconBubble}>
+                    <AppIcon
+                      name="Zap"
+                      size={20}
+                      color={paymentMethod === 'razorpay' ? '#0284c7' : Colors.onSurfaceVariant}
+                    />
+                  </View>
+                  <Text style={styles.paymentMethodTitle}>Razorpay Online</Text>
+                  <Text style={styles.paymentMethodDesc}>
+                    UPI, GPay, PhonePe, Cards & NetBanking
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Workspace Space Requirement Note */}
@@ -1656,5 +1756,127 @@ const styles = StyleSheet.create({
   },
   continueBtn: {
     marginTop: 2,
+  },
+  paymentCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    padding: 16,
+    marginBottom: 16,
+    ...Shadows.medium,
+  },
+  escrowPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  escrowPillText: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    color: '#10B981',
+    fontWeight: '700',
+  },
+  paymentCardSub: {
+    ...Typography.bodyRegular,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  paymentMethodsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  paymentMethodCard: {
+    flex: 1,
+    backgroundColor: '#1E293B',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+    padding: 12,
+  },
+  paymentMethodCardActive: {
+    borderColor: Colors.secondaryCobalt,
+    backgroundColor: 'rgba(2, 132, 199, 0.08)',
+  },
+  paymentMethodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  paymentRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentRadioActive: {
+    borderColor: Colors.secondaryCobalt,
+  },
+  paymentRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.secondaryCobalt,
+  },
+  popularTag: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  popularTagText: {
+    ...Typography.labelMono,
+    fontSize: 8,
+    color: '#F59E0B',
+    fontWeight: '800',
+  },
+  razorpayTag: {
+    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  razorpayTagText: {
+    ...Typography.labelMono,
+    fontSize: 8,
+    color: '#38BDF8',
+    fontWeight: '800',
+  },
+  paymentMethodBody: {
+    alignItems: 'flex-start',
+  },
+  paymentIconBubble: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  paymentMethodTitle: {
+    ...Typography.subheadBold,
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  paymentMethodDesc: {
+    ...Typography.bodyRegular,
+    fontSize: 10,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 14,
   },
 });

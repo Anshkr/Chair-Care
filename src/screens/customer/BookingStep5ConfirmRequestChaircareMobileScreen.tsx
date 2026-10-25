@@ -46,6 +46,7 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
   const visitDate = draft?.visitDate || 'Standard visit';
   const timeSlot = draft?.timeSlot || 'Scheduled slot';
   const photos = draft?.photoUris || [];
+  const chosenPaymentMethod = (draft as any)?.paymentMethod || 'pay_on_delivery';
 
   const handleConfirmRequest = async () => {
     if (!isCustomerAuthorized) {
@@ -65,7 +66,7 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
         timeSlot: timeSlot,
         visitDate: visitDate,
         totalAmount: draft?.estimatedTotal || 599,
-        paymentMethod: (draft as any)?.paymentMethod || 'online',
+        paymentMethod: chosenPaymentMethod,
         latitude: draft?.latitude,
         longitude: draft?.longitude,
       });
@@ -293,6 +294,40 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* 5. Payment Method Card */}
+          <View style={styles.reviewCard}>
+            <View style={styles.cardHeaderRow}>
+              <View style={styles.cardHeaderLeft}>
+                <View style={styles.cardIconBox}>
+                  <AppIcon
+                    name={chosenPaymentMethod === 'razorpay' ? 'Zap' : 'Truck'}
+                    size={18}
+                    color={chosenPaymentMethod === 'razorpay' ? '#0284C7' : Colors.secondaryCobalt}
+                  />
+                </View>
+                <View style={styles.cardTitleGroup}>
+                  <Text style={styles.cardCategoryTag}>PAYMENT OPTION</Text>
+                  <Text style={styles.cardMainTitle}>
+                    {chosenPaymentMethod === 'razorpay' ? 'Razorpay Online' : 'Pay on Delivery'}
+                  </Text>
+                  <Text style={styles.cardSubText}>
+                    {chosenPaymentMethod === 'razorpay'
+                      ? 'Instant digital checkout (UPI, GPay, Cards, NetBanking)'
+                      : 'Zero upfront deposit. Pay via Cash or UPI post-inspection'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => navigation.navigate('BookingStep3')}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="Edit" size={18} />
+                <Text style={styles.editText}>Edit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
 
         {/* Cost Breakdown Component */}
@@ -391,15 +426,18 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
             ) : (
               <>
                 <Text style={styles.confirmBtnText}>
-                  Confirm Service Request
+                  {chosenPaymentMethod === 'razorpay'
+                    ? 'Confirm & Pay Online'
+                    : 'Confirm Request (Pay on Delivery)'}
                 </Text>
                 <Text style={styles.confirmBtnArrow}>→</Text>
               </>
             )}
           </TouchableOpacity>
           <Text style={styles.termsNote}>
-            By continuing, you agree to ChairCare terms. No upfront deposit
-            needed.
+            {chosenPaymentMethod === 'razorpay'
+              ? 'Secured with 256-bit encryption. 100% money-back guarantee.'
+              : 'By continuing, you agree to ChairCare terms. No advance deposit needed.'}
           </Text>
         </View>
       </ScrollView>

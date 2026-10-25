@@ -38,6 +38,7 @@ export interface BookingDraft {
   estimatedTotal?: number;
   latitude?: number;
   longitude?: number;
+  paymentMethod?: 'pay_on_delivery' | 'razorpay' | 'cash_on_delivery' | 'online';
 }
 
 export interface ServiceRequest {
