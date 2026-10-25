@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../config/database';
 import { AuthenticatedRequest } from '../types';
@@ -2150,6 +2150,212 @@ export const deleteService = async (
     res.status(500).json({
       success: false,
       error: 'Failed to delete service. Please try again shortly.',
+    });
+  }
+};
+
+export const getPlatformConfig = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const [configRes, activeCountRes] = await Promise.all([
+      query('SELECT * FROM platform_configurations WHERE id = 1 LIMIT 1;'),
+      query("SELECT COUNT(*) as active_count FROM service_requests WHERE status IN ('finding_technician', 'technician_assigned', 'in_route', 'in_progress', 'scheduled');"),
+    ]);
+
+    let config = configRes.rows[0];
+    if (!config) {
+      const insertRes = await query(
+        `INSERT INTO platform_configurations (id) VALUES (1) RETURNING *;`
+      );
+      config = insertRes.rows[0];
+    }
+
+    const activeCount = Number(activeCountRes.rows[0]?.active_count || 0);
+
+    res.json({
+      success: true,
+      data: {
+        id: config.id,
+        masterSwitch: Boolean(config.master_switch),
+        platformName: config.platform_name,
+        supportEmail: config.support_email,
+        supportPhone: config.support_phone,
+        settlementCurrency: config.settlement_currency,
+        timeZone: config.time_zone,
+        enableCustomerBookings: Boolean(config.enable_customer_bookings),
+        allowSameDayBooking: Boolean(config.allow_same_day_booking),
+        minDispatchNotice: Number(config.min_dispatch_notice_minutes),
+        advanceDays: Number(config.advance_booking_days),
+        operatingSchedule: config.operating_schedule || {},
+        activeFieldRequestsCount: activeCount,
+        updatedAt: config.updated_at,
+        updatedBy: config.updated_by,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get platform configuration:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve platform configuration.',
+    });
+  }
+};
+
+export const updatePlatformConfig = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const adminId = req.user?.userId;
+    const {
+      masterSwitch,
+      platformName,
+      supportEmail,
+      supportPhone,
+      settlementCurrency,
+      timeZone,
+      enableCustomerBookings,
+      allowSameDayBooking,
+      minDispatchNotice,
+      advanceDays,
+      operatingSchedule,
+    } = req.body;
+
+    const currentRes = await query('SELECT * FROM platform_configurations WHERE id = 1 LIMIT 1;');
+    const current = currentRes.rows[0] || {};
+
+    const updatedMasterSwitch = masterSwitch !== undefined ? Boolean(masterSwitch) : current.master_switch ?? true;
+    const updatedPlatformName = platformName !== undefined ? String(platformName).trim() : current.platform_name ?? 'ChairCare';
+    const updatedSupportEmail = supportEmail !== undefined ? String(supportEmail).trim() : current.support_email ?? 'admin.support@chaircare.in';
+    const updatedSupportPhone = supportPhone !== undefined ? String(supportPhone).trim() : current.support_phone ?? '+91 80 4920 1800';
+    const updatedSettlementCurrency = settlementCurrency !== undefined ? String(settlementCurrency).trim() : current.settlement_currency ?? 'INR';
+    const updatedTimeZone = timeZone !== undefined ? String(timeZone).trim() : current.time_zone ?? 'Asia/Kolkata (IST • UTC+05:30)';
+    const updatedEnableCustomerBookings = enableCustomerBookings !== undefined ? Boolean(enableCustomerBookings) : current.enable_customer_bookings ?? true;
+    const updatedAllowSameDayBooking = allowSameDayBooking !== undefined ? Boolean(allowSameDayBooking) : current.allow_same_day_booking ?? true;
+    const updatedMinDispatchNotice = minDispatchNotice !== undefined ? Number(minDispatchNotice) : current.min_dispatch_notice_minutes ?? 30;
+    const updatedAdvanceDays = advanceDays !== undefined ? Number(advanceDays) : current.advance_booking_days ?? 30;
+    const updatedOperatingSchedule = operatingSchedule !== undefined ? operatingSchedule : current.operating_schedule ?? {};
+
+    const updateRes = await query(
+      `INSERT INTO platform_configurations (
+        id, master_switch, platform_name, support_email, support_phone,
+        settlement_currency, time_zone, enable_customer_bookings,
+        allow_same_day_booking, min_dispatch_notice_minutes, advance_booking_days,
+        operating_schedule, updated_at, updated_by
+      ) VALUES (
+        1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        master_switch = EXCLUDED.master_switch,
+        platform_name = EXCLUDED.platform_name,
+        support_email = EXCLUDED.support_email,
+        support_phone = EXCLUDED.support_phone,
+        settlement_currency = EXCLUDED.settlement_currency,
+        time_zone = EXCLUDED.time_zone,
+        enable_customer_bookings = EXCLUDED.enable_customer_bookings,
+        allow_same_day_booking = EXCLUDED.allow_same_day_booking,
+        min_dispatch_notice_minutes = EXCLUDED.min_dispatch_notice_minutes,
+        advance_booking_days = EXCLUDED.advance_booking_days,
+        operating_schedule = EXCLUDED.operating_schedule,
+        updated_at = CURRENT_TIMESTAMP,
+        updated_by = EXCLUDED.updated_by
+      RETURNING *;`,
+      [
+        updatedMasterSwitch,
+        updatedPlatformName,
+        updatedSupportEmail,
+        updatedSupportPhone,
+        updatedSettlementCurrency,
+        updatedTimeZone,
+        updatedEnableCustomerBookings,
+        updatedAllowSameDayBooking,
+        updatedMinDispatchNotice,
+        updatedAdvanceDays,
+        JSON.stringify(updatedOperatingSchedule),
+        adminId || null,
+      ]
+    );
+
+    const activeCountRes = await query(
+      "SELECT COUNT(*) as active_count FROM service_requests WHERE status IN ('finding_technician', 'technician_assigned', 'in_route', 'in_progress', 'scheduled');"
+    );
+    const activeCount = Number(activeCountRes.rows[0]?.active_count || 0);
+
+    const saved = updateRes.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Platform configuration updated and applied globally.',
+      data: {
+        id: saved.id,
+        masterSwitch: Boolean(saved.master_switch),
+        platformName: saved.platform_name,
+        supportEmail: saved.support_email,
+        supportPhone: saved.support_phone,
+        settlementCurrency: saved.settlement_currency,
+        timeZone: saved.time_zone,
+        enableCustomerBookings: Boolean(saved.enable_customer_bookings),
+        allowSameDayBooking: Boolean(saved.allow_same_day_booking),
+        minDispatchNotice: Number(saved.min_dispatch_notice_minutes),
+        advanceDays: Number(saved.advance_booking_days),
+        operatingSchedule: saved.operating_schedule || {},
+        activeFieldRequestsCount: activeCount,
+        updatedAt: saved.updated_at,
+        updatedBy: saved.updated_by,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to update platform configuration:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to update platform configuration. Please try again.',
+    });
+  }
+};
+
+export const getPublicPlatformConfig = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const configRes = await query('SELECT * FROM platform_configurations WHERE id = 1 LIMIT 1;');
+    const config = configRes.rows[0] || {
+      master_switch: true,
+      platform_name: 'ChairCare',
+      support_email: 'admin.support@chaircare.in',
+      support_phone: '+91 80 4920 1800',
+      settlement_currency: 'INR',
+      time_zone: 'Asia/Kolkata (IST • UTC+05:30)',
+      enable_customer_bookings: true,
+      allow_same_day_booking: true,
+      min_dispatch_notice_minutes: 30,
+      advance_booking_days: 30,
+      operating_schedule: {},
+    };
+
+    res.json({
+      success: true,
+      data: {
+        masterSwitch: Boolean(config.master_switch),
+        platformName: config.platform_name,
+        supportEmail: config.support_email,
+        supportPhone: config.support_phone,
+        settlementCurrency: config.settlement_currency,
+        timeZone: config.time_zone,
+        enableCustomerBookings: Boolean(config.enable_customer_bookings),
+        allowSameDayBooking: Boolean(config.allow_same_day_booking),
+        minDispatchNotice: Number(config.min_dispatch_notice_minutes),
+        advanceDays: Number(config.advance_booking_days),
+        operatingSchedule: config.operating_schedule || {},
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get public platform configuration:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve platform configuration.',
     });
   }
 };

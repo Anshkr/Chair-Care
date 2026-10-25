@@ -219,7 +219,45 @@ export const adminApi = {
     if (res.success) adminSyncEmitter.notifySync();
     return res;
   },
+
+  getPlatformConfig: async (): Promise<ApiResponse<PlatformConfigData>> => {
+    return apiRequest<PlatformConfigData>('/admin/platform-config');
+  },
+
+  updatePlatformConfig: async (
+    data: Partial<PlatformConfigData>
+  ): Promise<ApiResponse<PlatformConfigData>> => {
+    const res = await apiRequest<PlatformConfigData>('/admin/platform-config', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
 };
+
+export interface PlatformConfigData {
+  id?: number;
+  masterSwitch: boolean;
+  platformName: string;
+  supportEmail: string;
+  supportPhone: string;
+  settlementCurrency: 'INR' | 'USD' | 'AED';
+  timeZone: string;
+  enableCustomerBookings: boolean;
+  allowSameDayBooking: boolean;
+  minDispatchNotice: number;
+  advanceDays: number;
+  operatingSchedule?: {
+    mon_fri?: string;
+    saturday?: string;
+    sunday?: string;
+    active_days?: string;
+  };
+  activeFieldRequestsCount?: number;
+  updatedAt?: string;
+  updatedBy?: string | null;
+}
 
 
 

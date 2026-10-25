@@ -14,6 +14,32 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
     return;
   }
 
+  // Enforce global platform configuration rules
+  try {
+    const configRes = await query(
+      'SELECT master_switch, enable_customer_bookings FROM platform_configurations WHERE id = 1 LIMIT 1;'
+    );
+    if (configRes && configRes.rows.length > 0) {
+      const cfg = configRes.rows[0];
+      if (!cfg.master_switch) {
+        res.status(503).json({
+          success: false,
+          error: 'Platform service request acceptance is temporarily paused for maintenance. Active field tasks continue normally.',
+        });
+        return;
+      }
+      if (!cfg.enable_customer_bookings) {
+        res.status(503).json({
+          success: false,
+          error: 'Customer booking checkouts are currently disabled by platform administrators.',
+        });
+        return;
+      }
+    }
+  } catch (cfgErr) {
+    console.warn('Could not verify platform_configurations, proceeding with request:', cfgErr);
+  }
+
   const {
     serviceId,
     serviceCode,

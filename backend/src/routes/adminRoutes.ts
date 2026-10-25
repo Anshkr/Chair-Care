@@ -26,6 +26,8 @@ import {
   createService,
   updateService,
   deleteService,
+  getPlatformConfig,
+  updatePlatformConfig,
 } from '../controllers/adminController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -65,5 +67,9 @@ router.get('/services', getAllServicesAdmin);
 router.post('/services', createService);
 router.patch('/services/:id', updateService);
 router.delete('/services/:id', deleteService);
+
+// Platform Configuration Management
+router.get('/platform-config', getPlatformConfig);
+router.put('/platform-config', updatePlatformConfig);
 
 export default router;

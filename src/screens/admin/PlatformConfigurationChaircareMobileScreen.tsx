@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,15 @@ import {
   Animated,
   Platform,
   Modal,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
+import { adminApi, PlatformConfigData } from '../../services/api/adminApi';
+import { useAdminSync } from '../../services/adminSync';
 
 interface PlatformConfigurationProps {
   navigation?: any;
@@ -69,9 +73,14 @@ export const PlatformConfigurationChaircareMobileScreen: React.FC<
   const [allowSameDayBooking, setAllowSameDayBooking] = useState<boolean>(true);
   const [minDispatchNotice, setMinDispatchNotice] = useState<number>(30); // in minutes
   const [advanceDays, setAdvanceDays] = useState<number>(30);
+  const [activeRequestsCount, setActiveRequestsCount] = useState<number>(4);
 
   // Operating Schedule Modal
   const [scheduleModalVisible, setScheduleModalVisible] = useState<boolean>(false);
+
+  // Loading & Saving States
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Toast Notification State
   const [toastMessage, setToastMessage] = useState<string>('');
@@ -89,16 +98,97 @@ export const PlatformConfigurationChaircareMobileScreen: React.FC<
     }, 2500);
   };
 
+  // Load real configuration from Neon Database
+  const loadPlatformConfig = useCallback(async () => {
+    try {
+      const res = await adminApi.getPlatformConfig();
+      if (res.success && res.data) {
+        setMasterSwitch(res.data.masterSwitch);
+        setPlatformName(res.data.platformName || 'ChairCare');
+        setSupportEmail(res.data.supportEmail || 'admin.support@chaircare.in');
+        setSupportPhone(res.data.supportPhone || '+91 80 4920 1800');
+        if (res.data.settlementCurrency) {
+          setSettlementCurrency(res.data.settlementCurrency);
+        }
+        if (res.data.timeZone) {
+          setSelectedTimeZone(res.data.timeZone);
+        }
+        setEnableCustomerBookings(res.data.enableCustomerBookings ?? true);
+        setAllowSameDayBooking(res.data.allowSameDayBooking ?? true);
+        if (res.data.minDispatchNotice) {
+          setMinDispatchNotice(res.data.minDispatchNotice);
+        }
+        if (res.data.advanceDays) {
+          setAdvanceDays(res.data.advanceDays);
+        }
+        if (typeof res.data.activeFieldRequestsCount === 'number') {
+          setActiveRequestsCount(res.data.activeFieldRequestsCount);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load platform configuration:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadPlatformConfig();
+  }, [loadPlatformConfig]);
+
+  // Global cross-admin real-time synchronisation
+  useAdminSync(navigation, loadPlatformConfig);
+
   const handleAdjustDays = (delta: number) => {
     const nextVal = Math.max(7, Math.min(90, advanceDays + delta));
     setAdvanceDays(nextVal);
   };
 
-  const handleCommitChanges = () => {
-    if (masterSwitch) {
-      displayToast('Platform changes successfully deployed live.');
-    } else {
-      displayToast('Platform paused. Emergency protocols active.');
+  // Persist platform changes globally to database
+  const handleCommitChanges = async () => {
+    try {
+      setIsSaving(true);
+      const res = await adminApi.updatePlatformConfig({
+        masterSwitch,
+        platformName,
+        supportEmail,
+        supportPhone,
+        settlementCurrency,
+        timeZone: selectedTimeZone,
+        enableCustomerBookings,
+        allowSameDayBooking,
+        minDispatchNotice,
+        advanceDays,
+      });
+
+      if (res.success && res.data) {
+        setMasterSwitch(res.data.masterSwitch);
+        setPlatformName(res.data.platformName);
+        setSupportEmail(res.data.supportEmail);
+        setSupportPhone(res.data.supportPhone);
+        setSettlementCurrency(res.data.settlementCurrency);
+        setSelectedTimeZone(res.data.timeZone);
+        setEnableCustomerBookings(res.data.enableCustomerBookings);
+        setAllowSameDayBooking(res.data.allowSameDayBooking);
+        setMinDispatchNotice(res.data.minDispatchNotice);
+        setAdvanceDays(res.data.advanceDays);
+        if (typeof res.data.activeFieldRequestsCount === 'number') {
+          setActiveRequestsCount(res.data.activeFieldRequestsCount);
+        }
+
+        if (masterSwitch) {
+          displayToast('Platform configuration saved and active globally.');
+        } else {
+          displayToast('Platform paused. Booking intake suspended globally.');
+        }
+      } else {
+        displayToast(res.error || 'Failed to deploy platform changes.');
+      }
+    } catch (err: any) {
+      displayToast('Network error deploying platform configuration.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -145,9 +235,7 @@ export const PlatformConfigurationChaircareMobileScreen: React.FC<
           >
             <AppIcon name="more_vert" size={20} />
           </TouchableOpacity>
-          <View style={styles.headerAvatar}>
-            <AppIcon name="person" size={20} />
-          </View>
+          <AdminHeaderAvatar size={34} />
         </View>
       </View>
 
@@ -227,7 +315,7 @@ export const PlatformConfigurationChaircareMobileScreen: React.FC<
             />
             <Text style={styles.masterStatusText}>
               {masterSwitch
-                ? '84 active field requests progressing normally'
+                ? `${activeRequestsCount} active field requests progressing normally`
                 : 'Booking reception paused • Active field tasks unaffected'}
             </Text>
           </View>
@@ -626,13 +714,18 @@ export const PlatformConfigurationChaircareMobileScreen: React.FC<
       >
         <View style={styles.bottomCommitBarContent}>
           <TouchableOpacity
-            style={styles.commitButton}
+            style={[styles.commitButton, isSaving && { opacity: 0.8 }]}
             onPress={handleCommitChanges}
+            disabled={isSaving}
             activeOpacity={0.85}
           >
-            <AppIcon name="save" size={20} />
+            {isSaving ? (
+              <ActivityIndicator size="small" color="#ffffff" style={{ marginRight: 8 }} />
+            ) : (
+              <AppIcon name="save" size={20} />
+            )}
             <Text style={styles.commitButtonText}>
-              Save Changes (Confirm Update)
+              {isSaving ? 'Deploying Changes Globally...' : 'Save Changes (Confirm Update)'}
             </Text>
           </TouchableOpacity>
           <Text style={styles.commitSubtext}>

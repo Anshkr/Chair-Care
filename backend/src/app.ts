@@ -14,6 +14,7 @@ import adminRoutes from './routes/adminRoutes';
 import notificationRoutes from './routes/notificationRoutes';
 import chatRoutes from './routes/chatRoutes';
 import supportRoutes from './routes/supportRoutes';
+import { getPublicPlatformConfig } from './controllers/adminController';
 
 export const createApp = (): Express => {
   const app = express();
@@ -78,10 +79,12 @@ export const createApp = (): Express => {
   // Health check endpoints
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
+  app.get('/api/platform-config', getPublicPlatformConfig);
 
   // Versioned API v1 Router
   const apiV1 = express.Router();
   apiV1.get('/health', healthHandler);
+  apiV1.get('/platform-config', getPublicPlatformConfig);
   apiV1.use('/auth', authRoutes);
   apiV1.use('/services', serviceRoutes);
   apiV1.use('/customer', customerRoutes);
