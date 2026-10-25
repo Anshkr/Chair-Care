@@ -4,7 +4,7 @@ import { query } from '../config/database';
 export const getServices = async (req: Request, res: Response): Promise<void> => {
   try {
     const result = await query(
-      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url
+      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url, icon
        FROM services
        WHERE is_active = TRUE
        ORDER BY estimated_price ASC;`
@@ -21,6 +21,7 @@ export const getServices = async (req: Request, res: Response): Promise<void> =>
         durationMinutes: row.duration_minutes,
         badge: row.badge,
         imageUrl: row.image_url,
+        icon: row.icon || 'Wrench',
       })),
     });
   } catch (err: any) {
@@ -36,7 +37,7 @@ export const getServiceById = async (req: Request, res: Response): Promise<void>
     const { id } = req.params;
 
     const result = await query(
-      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url
+      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url, icon
        FROM services
        WHERE (id::text = $1 OR code = $1) AND is_active = TRUE;`,
       [id]
@@ -62,6 +63,7 @@ export const getServiceById = async (req: Request, res: Response): Promise<void>
         durationMinutes: row.duration_minutes,
         badge: row.badge,
         imageUrl: row.image_url,
+        icon: row.icon || 'Wrench',
       },
     });
   } catch (err: any) {

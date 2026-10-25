@@ -171,14 +171,16 @@ export const BookingStep1SelectServiceChaircareMobileScreen: React.FC<{
   const availableOptions: ServiceOption[] = React.useMemo(() => {
     if (liveServices.length > 0) {
       return liveServices.map((svc) => {
-        let icon = 'Wrench';
-        const t = (svc.title || '').toLowerCase();
-        if (t.includes('hydraulic') || t.includes('gas lift')) icon = 'ArrowUp';
-        else if (t.includes('wheel') || t.includes('castor')) icon = 'Disc';
-        else if (t.includes('tilt') || t.includes('recline')) icon = 'Settings';
-        else if (t.includes('armrest')) icon = 'MoveHorizontal';
-        else if (t.includes('clean') || t.includes('spa')) icon = 'Sparkles';
-        else if (t.includes('inspect')) icon = 'ClipboardList';
+        let icon = svc.icon || 'Wrench';
+        if (!svc.icon) {
+          const t = (svc.title || '').toLowerCase();
+          if (t.includes('hydraulic') || t.includes('gas lift')) icon = 'ArrowUp';
+          else if (t.includes('wheel') || t.includes('castor')) icon = 'Disc';
+          else if (t.includes('tilt') || t.includes('recline')) icon = 'Settings';
+          else if (t.includes('armrest')) icon = 'Armchair';
+          else if (t.includes('clean') || t.includes('spa')) icon = 'Sparkles';
+          else if (t.includes('inspect')) icon = 'Search';
+        }
 
         return {
           id: svc.id,

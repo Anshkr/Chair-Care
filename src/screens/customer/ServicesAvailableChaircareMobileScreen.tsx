@@ -424,6 +424,9 @@ export const ServicesAvailableChaircareMobileScreen: React.FC<{
   }, []);
 
   const getServiceVisuals = (svc: any) => {
+    if (svc.icon) {
+      return { icon: svc.icon, iconBg: '#EEF4FF' };
+    }
     const title = (svc.title || '').toLowerCase();
     const code = (svc.code || '').toLowerCase();
     if (title.includes('hydraulic') || title.includes('gas lift') || code.includes('HYDRAULIC')) {

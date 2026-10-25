@@ -183,6 +183,7 @@ export const adminApi = {
     durationMinutes?: number;
     badge?: string;
     code?: string;
+    icon?: string;
     isActive?: boolean;
   }): Promise<ApiResponse<any>> => {
     const res = await apiRequest('/admin/services', {
@@ -201,6 +202,7 @@ export const adminApi = {
       price?: number;
       durationMinutes?: number;
       badge?: string;
+      icon?: string;
       isActive?: boolean;
     }
   ): Promise<ApiResponse<any>> => {

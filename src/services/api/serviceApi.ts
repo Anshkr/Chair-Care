@@ -9,6 +9,7 @@ export interface ServiceItem {
   durationMinutes: number;
   badge?: string;
   imageUrl?: string;
+  icon?: string;
 }
 
 export const serviceApi = {

@@ -21,13 +21,27 @@ import { adminApi } from '../../services/api/adminApi';
 import { serviceApi } from '../../services/api/serviceApi';
 import { useAdminSync } from '../../services/adminSync';
 
+const SERVICE_ICON_CHOICES = [
+  { name: 'ArrowUp', label: 'Gas Lift' },
+  { name: 'Settings', label: 'Mechanism' },
+  { name: 'Wrench', label: 'Repair' },
+  { name: 'Disc', label: 'Casters' },
+  { name: 'Armchair', label: 'Armrest' },
+  { name: 'Sparkles', label: 'Cleaning' },
+  { name: 'Search', label: 'Inspection' },
+  { name: 'SlidersHorizontal', label: 'Tune-up' },
+  { name: 'Package', label: 'Assembly' },
+  { name: 'ShieldCheck', label: 'Warranty' },
+  { name: 'Zap', label: 'Express' },
+  { name: 'RotateCcw', label: 'Swivel' },
+];
+
 interface ServiceItem {
   id: string;
   name: string;
   category: string;
   icon: string;
   price: number;
-  unit: string;
   isActive: boolean;
 }
 
@@ -60,9 +74,8 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
           id: String(s.id),
           name: s.title,
           category: s.description || 'Ergonomic Service',
-          icon: 'home_repair_service',
+          icon: s.icon || 'Wrench',
           price: Number(s.estimatedPrice) || 499,
-          unit: '/unit',
           isActive: Boolean(s.isActive),
         }));
         setServices(mapped);
@@ -77,9 +90,8 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
               id: String(s.id),
               name: s.title,
               category: s.description || 'Ergonomic Service',
-              icon: 'home_repair_service',
+              icon: s.icon || 'Wrench',
               price: Number(s.estimatedPrice) || 499,
-              unit: '/unit',
               isActive: true,
             }))
           );
@@ -107,9 +119,9 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
   // Edit Service Modal State
   const [editingService, setEditingService] = useState<ServiceItem | null>(null);
   const [editPriceInput, setEditPriceInput] = useState<string>('');
-  const [editUnitInput, setEditUnitInput] = useState<string>('');
   const [editNameInput, setEditNameInput] = useState<string>('');
   const [editCategoryInput, setEditCategoryInput] = useState<string>('');
+  const [editIconInput, setEditIconInput] = useState<string>('Wrench');
   const [isCreatingNew, setIsCreatingNew] = useState<boolean>(false);
 
   // Platform Rules Modal State
@@ -172,7 +184,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
     setEditNameInput(service.name);
     setEditCategoryInput(service.category);
     setEditPriceInput(service.price.toString());
-    setEditUnitInput(service.unit);
+    setEditIconInput(service.icon || 'Wrench');
   };
 
   const openCreateModal = () => {
@@ -181,16 +193,15 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
       id: `srv-${Date.now()}`,
       name: '',
       category: 'General Ergonomic Care',
-      icon: 'build',
+      icon: 'Wrench',
       price: 299,
-      unit: '/unit',
       isActive: true,
     };
     setEditingService(newTemplate);
     setEditNameInput('');
     setEditCategoryInput('General Ergonomic Care');
     setEditPriceInput('299');
-    setEditUnitInput('/unit');
+    setEditIconInput('Wrench');
   };
 
   const handleSaveServiceEdit = async () => {
@@ -211,6 +222,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
           title: editNameInput.trim(),
           description: editCategoryInput.trim() || 'General Ergonomic Care',
           price: parsedPrice,
+          icon: editIconInput,
           isActive: true,
         });
         if (createRes.success && createRes.data) {
@@ -218,9 +230,8 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
             id: String(createRes.data.id),
             name: createRes.data.title,
             category: createRes.data.description || 'General Ergonomic Care',
-            icon: 'build',
+            icon: createRes.data.icon || editIconInput,
             price: Number(createRes.data.estimatedPrice) || parsedPrice,
-            unit: editUnitInput.trim() || '/unit',
             isActive: true,
           };
           setServices((prev) => [...prev, newService]);
@@ -237,6 +248,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
           title: editNameInput.trim() || editingService.name,
           description: editCategoryInput.trim() || editingService.category,
           price: parsedPrice,
+          icon: editIconInput,
         });
         if (updateRes.success) {
           setServices((prev) =>
@@ -247,12 +259,12 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                     name: editNameInput.trim() || s.name,
                     category: editCategoryInput.trim() || s.category,
                     price: parsedPrice,
-                    unit: editUnitInput.trim() || s.unit,
+                    icon: editIconInput,
                   }
                 : s
             )
           );
-          displayToast(`Pricing updated for ${editingService.name} to ₹${parsedPrice}.`);
+          displayToast(`Service "${editNameInput.trim() || editingService.name}" updated with icon.`);
         } else {
           displayToast(updateRes.error || 'Failed to update service.');
         }
@@ -316,6 +328,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
             isActive: s.isActive,
             title: s.name,
             description: s.category,
+            icon: s.icon,
           }).catch(() => {})
         )
       );
@@ -439,7 +452,6 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                     <View style={styles.priceRow}>
                       <Text style={styles.startingLabel}>STARTING</Text>
                       <Text style={styles.priceValue}>₹{srv.price}</Text>
-                      <Text style={styles.unitLabel}>{srv.unit}</Text>
                     </View>
                   </View>
                 </View>
@@ -694,27 +706,63 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                 />
               </View>
 
-              <View style={styles.modalRowFields}>
-                <View style={[styles.modalFieldGroup, { flex: 1 }]}>
-                  <Text style={styles.modalFieldLabel}>Starting Price (₹)</Text>
-                  <TextInput
-                    style={[styles.modalTextInput, styles.monoInputText]}
-                    value={editPriceInput}
-                    onChangeText={setEditPriceInput}
-                    keyboardType="number-pad"
-                    placeholder="499"
-                    placeholderTextColor={Colors.onSurfaceVariant}
-                  />
-                </View>
-                <View style={[styles.modalFieldGroup, { flex: 1 }]}>
-                  <Text style={styles.modalFieldLabel}>Pricing Unit</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={editUnitInput}
-                    onChangeText={setEditUnitInput}
-                    placeholder="/unit"
-                    placeholderTextColor={Colors.onSurfaceVariant}
-                  />
+              <View style={styles.modalFieldGroup}>
+                <Text style={styles.modalFieldLabel}>Starting Price (₹)</Text>
+                <TextInput
+                  style={[styles.modalTextInput, styles.monoInputText]}
+                  value={editPriceInput}
+                  onChangeText={setEditPriceInput}
+                  keyboardType="number-pad"
+                  placeholder="499"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                />
+              </View>
+
+              {/* Customer Dashboard Icon Selector */}
+              <View style={styles.modalFieldGroup}>
+                <Text style={styles.modalFieldLabel}>Customer Dashboard Icon</Text>
+                <Text style={styles.modalFieldSublabel}>
+                  Choose the icon displayed in the customer service selection menu
+                </Text>
+                <View style={styles.iconPickerGrid}>
+                  {SERVICE_ICON_CHOICES.map((choice) => {
+                    const isSelected = editIconInput === choice.name;
+                    return (
+                      <TouchableOpacity
+                        key={choice.name}
+                        style={[
+                          styles.iconChoiceItem,
+                          isSelected && styles.iconChoiceItemSelected,
+                        ]}
+                        onPress={() => setEditIconInput(choice.name)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.iconChoiceBox,
+                            isSelected
+                              ? styles.iconChoiceBoxSelected
+                              : styles.iconChoiceBoxUnselected,
+                          ]}
+                        >
+                          <AppIcon
+                            name={choice.name}
+                            size={20}
+                            color={isSelected ? '#ffffff' : '#1e293b'}
+                          />
+                        </View>
+                        <Text
+                          style={[
+                            styles.iconChoiceLabel,
+                            isSelected && styles.iconChoiceLabelSelected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {choice.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 
@@ -1542,5 +1590,56 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-SemiBold',
     fontSize: 14,
     color: '#ffffff',
+  },
+  modalFieldSublabel: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: -2,
+    marginBottom: 4,
+  },
+  iconPickerGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  iconChoiceItem: {
+    width: '23%',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 2,
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  iconChoiceItemSelected: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#0051D5',
+  },
+  iconChoiceBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  iconChoiceBoxUnselected: {
+    backgroundColor: '#E2E8F0',
+  },
+  iconChoiceBoxSelected: {
+    backgroundColor: '#0051D5',
+  },
+  iconChoiceLabel: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 10,
+    color: '#475569',
+    textAlign: 'center',
+  },
+  iconChoiceLabelSelected: {
+    fontFamily: 'Inter-SemiBold',
+    color: '#0051D5',
   },
 });

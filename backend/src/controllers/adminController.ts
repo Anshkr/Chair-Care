@@ -1969,7 +1969,7 @@ export const getAllServicesAdmin = async (
 ): Promise<void> => {
   try {
     const result = await query(
-      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, created_at, updated_at
+      `SELECT id, code, title, description, estimated_price, duration_minutes, badge, image_url, icon, is_active, created_at, updated_at
        FROM services
        ORDER BY created_at ASC;`
     );
@@ -1985,6 +1985,7 @@ export const getAllServicesAdmin = async (
         durationMinutes: row.duration_minutes,
         badge: row.badge,
         imageUrl: row.image_url,
+        icon: row.icon || 'Wrench',
         isActive: Boolean(row.is_active),
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -2003,7 +2004,7 @@ export const createService = async (
   res: Response
 ): Promise<void> => {
   try {
-    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, code, isActive } = req.body;
+    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, icon, code, isActive } = req.body;
 
     if (!title || !title.trim()) {
       res.status(400).json({ success: false, error: 'Service title is required.' });
@@ -2027,12 +2028,13 @@ export const createService = async (
     const duration = durationMinutes ? Number(durationMinutes) : 45;
     const desc = description?.trim() || 'Professional ergonomic chair repair service';
     const isAct = isActive !== undefined ? Boolean(isActive) : true;
+    const serviceIcon = (icon && String(icon).trim()) || 'Wrench';
 
     const result = await query(
-      `INSERT INTO services (code, title, description, estimated_price, duration_minutes, badge, image_url, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, created_at;`,
-      [serviceCode, title.trim(), desc, priceNum, duration, badge || null, imageUrl || null, isAct]
+      `INSERT INTO services (code, title, description, estimated_price, duration_minutes, badge, image_url, icon, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, icon, is_active, created_at;`,
+      [serviceCode, title.trim(), desc, priceNum, duration, badge || null, imageUrl || null, serviceIcon, isAct]
     );
 
     const row = result.rows[0];
@@ -2048,6 +2050,7 @@ export const createService = async (
         durationMinutes: row.duration_minutes,
         badge: row.badge,
         imageUrl: row.image_url,
+        icon: row.icon || 'Wrench',
         isActive: Boolean(row.is_active),
         createdAt: row.created_at,
       },
@@ -2067,7 +2070,7 @@ export const updateService = async (
 ): Promise<void> => {
   try {
     const { id } = req.params;
-    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, isActive } = req.body;
+    const { title, description, price, estimatedPrice, durationMinutes, badge, imageUrl, icon, isActive } = req.body;
 
     const existingRes = await query('SELECT * FROM services WHERE id = $1;', [id]);
     if (!existingRes || existingRes.rows.length === 0) {
@@ -2085,6 +2088,7 @@ export const updateService = async (
     const newDuration = durationMinutes !== undefined ? Number(durationMinutes) : existing.duration_minutes;
     const newBadge = badge !== undefined ? badge : existing.badge;
     const newImageUrl = imageUrl !== undefined ? imageUrl : existing.image_url;
+    const newIcon = icon !== undefined ? (String(icon).trim() || 'Wrench') : (existing.icon || 'Wrench');
     const newIsActive = isActive !== undefined ? Boolean(isActive) : existing.is_active;
 
     const result = await query(
@@ -2095,11 +2099,12 @@ export const updateService = async (
            duration_minutes = $4,
            badge = $5,
            image_url = $6,
-           is_active = $7,
+           icon = $7,
+           is_active = $8,
            updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8
-       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, is_active, updated_at;`,
-      [newTitle, newDesc, newPrice, newDuration, newBadge, newImageUrl, newIsActive, id]
+       WHERE id = $9
+       RETURNING id, code, title, description, estimated_price, duration_minutes, badge, image_url, icon, is_active, updated_at;`,
+      [newTitle, newDesc, newPrice, newDuration, newBadge, newImageUrl, newIcon, newIsActive, id]
     );
 
     const row = result.rows[0];
@@ -2115,6 +2120,7 @@ export const updateService = async (
         durationMinutes: row.duration_minutes,
         badge: row.badge,
         imageUrl: row.image_url,
+        icon: row.icon || 'Wrench',
         isActive: Boolean(row.is_active),
         updatedAt: row.updated_at,
       },
