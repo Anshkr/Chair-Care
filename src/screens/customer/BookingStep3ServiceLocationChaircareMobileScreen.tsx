@@ -164,9 +164,6 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const [isMapPickerVisible, setIsMapPickerVisible] = useState<boolean>(false);
   const [isConvertingAddress, setIsConvertingAddress] = useState<boolean>(false);
   const [locationSource, setLocationSource] = useState<'saved' | 'map' | 'manual' | 'gps'>('saved');
-  const [paymentMethod, setPaymentMethod] = useState<'pay_on_delivery' | 'razorpay'>(
-    draft?.paymentMethod === 'razorpay' ? 'razorpay' : 'pay_on_delivery'
-  );
 
   // Sync saved addresses on mount or profile load
   useEffect(() => {
@@ -428,13 +425,12 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
       }
     }
 
-    // 3. Update booking draft with exact coordinates and payment choice
+    // 3. Update booking draft with exact coordinates
     updateDraft({
       serviceAddress: finalFullAddress,
       unitOrFloor: flatNo.trim(),
       latitude: finalLat,
       longitude: finalLng,
-      paymentMethod: paymentMethod,
     });
 
     // 4. Continue to schedule
@@ -913,102 +909,6 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                 </View>
               </View>
             )}
-          </View>
-
-          {/* Section 4: CHOOSE PAYMENT OPTION */}
-          <View style={styles.paymentCard}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.sectionTitleGroup}>
-                <AppIcon name="CreditCard" size={16} color={Colors.secondaryCobalt} />
-                <Text style={styles.sectionTitleCaps}>PAYMENT OPTION</Text>
-              </View>
-              <View style={styles.escrowPill}>
-                <AppIcon name="ShieldCheck" size={12} color="#059669" />
-                <Text style={styles.escrowPillText}>Secure Checkout</Text>
-              </View>
-            </View>
-
-            <Text style={styles.paymentCardSub}>
-              Choose how you would like to pay for your service:
-            </Text>
-
-            <View style={styles.paymentMethodsRow}>
-              {/* Option 1: Pay on Delivery */}
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodCard,
-                  paymentMethod === 'pay_on_delivery' && styles.paymentMethodCardActive,
-                ]}
-                onPress={() => setPaymentMethod('pay_on_delivery')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.paymentMethodHeader}>
-                  <View
-                    style={[
-                      styles.paymentRadio,
-                      paymentMethod === 'pay_on_delivery' && styles.paymentRadioActive,
-                    ]}
-                  >
-                    {paymentMethod === 'pay_on_delivery' && <View style={styles.paymentRadioDot} />}
-                  </View>
-                  <View style={styles.popularTag}>
-                    <Text style={styles.popularTagText}>NO ADVANCE</Text>
-                  </View>
-                </View>
-
-                <View style={styles.paymentMethodBody}>
-                  <View style={styles.paymentIconBubble}>
-                    <AppIcon
-                      name="Truck"
-                      size={20}
-                      color={paymentMethod === 'pay_on_delivery' ? Colors.secondaryCobalt : Colors.onSurfaceVariant}
-                    />
-                  </View>
-                  <Text style={styles.paymentMethodTitle}>Pay on Delivery</Text>
-                  <Text style={styles.paymentMethodDesc}>
-                    Pay cash or UPI after repair inspection
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Option 2: Razorpay Online */}
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethodCard,
-                  paymentMethod === 'razorpay' && styles.paymentMethodCardActive,
-                ]}
-                onPress={() => setPaymentMethod('razorpay')}
-                activeOpacity={0.85}
-              >
-                <View style={styles.paymentMethodHeader}>
-                  <View
-                    style={[
-                      styles.paymentRadio,
-                      paymentMethod === 'razorpay' && styles.paymentRadioActive,
-                    ]}
-                  >
-                    {paymentMethod === 'razorpay' && <View style={styles.paymentRadioDot} />}
-                  </View>
-                  <View style={styles.razorpayTag}>
-                    <Text style={styles.razorpayTagText}>INSTANT</Text>
-                  </View>
-                </View>
-
-                <View style={styles.paymentMethodBody}>
-                  <View style={styles.paymentIconBubble}>
-                    <AppIcon
-                      name="Zap"
-                      size={20}
-                      color={paymentMethod === 'razorpay' ? '#0284c7' : Colors.onSurfaceVariant}
-                    />
-                  </View>
-                  <Text style={styles.paymentMethodTitle}>Razorpay Online</Text>
-                  <Text style={styles.paymentMethodDesc}>
-                    UPI, GPay, PhonePe, Cards & NetBanking
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </View>
           </View>
 
           {/* Workspace Space Requirement Note */}

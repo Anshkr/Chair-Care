@@ -46,7 +46,9 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
   const visitDate = draft?.visitDate || 'Standard visit';
   const timeSlot = draft?.timeSlot || 'Scheduled slot';
   const photos = draft?.photoUris || [];
-  const chosenPaymentMethod = (draft as any)?.paymentMethod || 'pay_on_delivery';
+  const [chosenPaymentMethod, setChosenPaymentMethod] = useState<'pay_on_delivery' | 'razorpay'>(
+    (draft as any)?.paymentMethod || 'pay_on_delivery'
+  );
 
   const handleConfirmRequest = async () => {
     if (!isCustomerAuthorized) {
@@ -300,31 +302,87 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardHeaderLeft}>
                 <View style={styles.cardIconBox}>
-                  <AppIcon
-                    name={chosenPaymentMethod === 'razorpay' ? 'Zap' : 'Truck'}
-                    size={18}
-                    color={chosenPaymentMethod === 'razorpay' ? '#0284C7' : Colors.secondaryCobalt}
-                  />
+                  <AppIcon name="CreditCard" size={18} color={Colors.secondaryCobalt} />
                 </View>
                 <View style={styles.cardTitleGroup}>
-                  <Text style={styles.cardCategoryTag}>PAYMENT OPTION</Text>
+                  <Text style={styles.cardCategoryTag}>PAYMENT PREFERENCE</Text>
                   <Text style={styles.cardMainTitle}>
                     {chosenPaymentMethod === 'razorpay' ? 'Razorpay Online' : 'Pay on Delivery'}
                   </Text>
                   <Text style={styles.cardSubText}>
-                    {chosenPaymentMethod === 'razorpay'
-                      ? 'Instant digital checkout (UPI, GPay, Cards, NetBanking)'
-                      : 'Zero upfront deposit. Pay via Cash or UPI post-inspection'}
+                    Select how you would like to pay for your service:
                   </Text>
                 </View>
               </View>
+            </View>
+
+            <View style={styles.paymentSelectRow}>
+              {/* Option 1: Pay on Delivery */}
               <TouchableOpacity
-                style={styles.editBtn}
-                onPress={() => navigation.navigate('BookingStep3')}
-                activeOpacity={0.7}
+                style={[
+                  styles.paymentOptionBox,
+                  chosenPaymentMethod === 'pay_on_delivery' && styles.paymentOptionBoxActive,
+                ]}
+                onPress={() => setChosenPaymentMethod('pay_on_delivery')}
+                activeOpacity={0.85}
               >
-                <AppIcon name="Edit" size={18} />
-                <Text style={styles.editText}>Edit</Text>
+                <View style={styles.paymentOptionTop}>
+                  <View
+                    style={[
+                      styles.paymentRadio,
+                      chosenPaymentMethod === 'pay_on_delivery' && styles.paymentRadioActive,
+                    ]}
+                  >
+                    {chosenPaymentMethod === 'pay_on_delivery' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                  <View style={styles.popularTag}>
+                    <Text style={styles.popularTagText}>NO ADVANCE</Text>
+                  </View>
+                </View>
+
+                <View style={styles.paymentOptionBody}>
+                  <AppIcon
+                    name="Truck"
+                    size={20}
+                    color={chosenPaymentMethod === 'pay_on_delivery' ? Colors.secondaryCobalt : Colors.onSurfaceVariant}
+                  />
+                  <Text style={styles.paymentOptionTitle}>Pay on Delivery</Text>
+                  <Text style={styles.paymentOptionDesc}>Cash or UPI after inspection</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Option 2: Razorpay Online */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionBox,
+                  chosenPaymentMethod === 'razorpay' && styles.paymentOptionBoxActive,
+                ]}
+                onPress={() => setChosenPaymentMethod('razorpay')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.paymentOptionTop}>
+                  <View
+                    style={[
+                      styles.paymentRadio,
+                      chosenPaymentMethod === 'razorpay' && styles.paymentRadioActive,
+                    ]}
+                  >
+                    {chosenPaymentMethod === 'razorpay' && <View style={styles.paymentRadioDot} />}
+                  </View>
+                  <View style={styles.razorpayTag}>
+                    <Text style={styles.razorpayTagText}>INSTANT</Text>
+                  </View>
+                </View>
+
+                <View style={styles.paymentOptionBody}>
+                  <AppIcon
+                    name="Zap"
+                    size={20}
+                    color={chosenPaymentMethod === 'razorpay' ? '#0284c7' : Colors.onSurfaceVariant}
+                  />
+                  <Text style={styles.paymentOptionTitle}>Razorpay Online</Text>
+                  <Text style={styles.paymentOptionDesc}>UPI, Cards & NetBanking</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -916,5 +974,86 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
     textAlign: 'center',
     paddingHorizontal: 8,
+  },
+  paymentSelectRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  paymentOptionBox: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 12,
+    justifyContent: 'space-between',
+  },
+  paymentOptionBoxActive: {
+    borderColor: Colors.secondaryCobalt,
+    backgroundColor: '#F0F9FF',
+  },
+  paymentOptionTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  paymentRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentRadioActive: {
+    borderColor: Colors.secondaryCobalt,
+  },
+  paymentRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.secondaryCobalt,
+  },
+  popularTag: {
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  popularTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#166534',
+    letterSpacing: 0.4,
+  },
+  razorpayTag: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  razorpayTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#0369A1',
+    letterSpacing: 0.4,
+  },
+  paymentOptionBody: {
+    gap: 4,
+  },
+  paymentOptionTitle: {
+    ...Typography.titleSm,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  paymentOptionDesc: {
+    ...Typography.bodySm,
+    fontSize: 10,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 14,
   },
 });
