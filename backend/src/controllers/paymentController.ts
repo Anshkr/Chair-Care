@@ -58,45 +58,77 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response) => {
       });
     }
 
-    // Retrieve service request from database
-    const reqRes = await query(
-      `SELECT sr.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone
-       FROM service_requests sr
-       LEFT JOIN users u ON sr.customer_id = u.id
-       WHERE sr.id = $1;`,
-      [requestId]
-    );
+    let serviceRequest: any = null;
+    let customerName = req.user?.name || 'Valued Customer';
+    let customerEmail = req.user?.email || 'customer@chaircare.in';
+    let customerPhone = '+919876543210';
+    let trackingCode = 'CC-ONLINE';
+    let chairModel = 'Ergonomic Chair';
+    let totalAmount = Number(requestedAmount || 299);
 
-    if (reqRes.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Service request not found.',
-      });
+    const isExistingJob =
+      requestId &&
+      requestId !== 'NEW_BOOKING' &&
+      requestId !== 'demo-request-id' &&
+      !requestId.startsWith('demo-');
+
+    if (isExistingJob) {
+      try {
+        const reqRes = await query(
+          `SELECT sr.*, u.name as customer_name, u.email as customer_email, u.phone as customer_phone
+           FROM service_requests sr
+           LEFT JOIN users u ON sr.customer_id = u.id
+           WHERE sr.id::text = $1 OR sr.tracking_code = $1;`,
+          [requestId]
+        );
+
+        if (reqRes.rows.length > 0) {
+          serviceRequest = reqRes.rows[0];
+
+          // Enforce single-payment constraint: One order can only have one payment
+          if (serviceRequest.is_paid) {
+            return res.status(400).json({
+              success: false,
+              alreadyPaid: true,
+              error: 'This service request has already been paid online. Multiple payments are not allowed for a single order.',
+            });
+          }
+
+          const completedPaymentCheck = await query(
+            `SELECT id, transaction_id FROM payments WHERE request_id = $1 AND status = 'completed' LIMIT 1;`,
+            [serviceRequest.id]
+          );
+
+          if (completedPaymentCheck.rows.length > 0) {
+            await query(`UPDATE service_requests SET is_paid = true WHERE id = $1;`, [serviceRequest.id]);
+            return res.status(400).json({
+              success: false,
+              alreadyPaid: true,
+              error: 'Payment for this order has already been completed. No duplicate payment allowed.',
+            });
+          }
+
+          customerName = serviceRequest.customer_name || customerName;
+          customerEmail = serviceRequest.customer_email || customerEmail;
+          customerPhone = serviceRequest.customer_phone || customerPhone;
+          trackingCode = serviceRequest.tracking_code || `REQ-${serviceRequest.id.substring(0, 6)}`;
+          chairModel = serviceRequest.chair_model || chairModel;
+          totalAmount = Number(serviceRequest.total_amount || requestedAmount || totalAmount);
+        }
+      } catch (dbErr) {
+        console.warn('DB query in createPaymentOrder:', dbErr);
+      }
     }
 
-    const serviceRequest = reqRes.rows[0];
-
-    // Determine amount: prioritize DB total_amount, then requestedAmount, default to 599
-    const totalAmount = Number(serviceRequest.total_amount || requestedAmount || 599);
-
-    if (serviceRequest.is_paid) {
-      return res.status(400).json({
-        success: false,
-        error: 'This service request has already been paid.',
-      });
-    }
-
-    const trackingCode = serviceRequest.tracking_code || `REQ-${serviceRequest.id.substring(0, 6)}`;
-
-    // Call Razorpay Service to create an order
+    // Call Razorpay Service to create a REAL order on Razorpay
     const order = await razorpayService.createOrder({
       amountInRupees: totalAmount,
-      receipt: trackingCode,
+      receipt: trackingCode.slice(0, 40),
       notes: {
-        requestId: serviceRequest.id,
+        requestId: serviceRequest?.id || requestId || 'NEW_BOOKING',
         trackingCode,
-        chairModel: serviceRequest.chair_model || 'Ergonomic Chair',
-        customerId: serviceRequest.customer_id,
+        chairModel,
+        customerId: serviceRequest?.customer_id || userId || 'customer',
       },
     });
 
@@ -112,16 +144,16 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response) => {
         isTestMode: razorpayService.isTestMode(),
         isSimulator: order.isSimulator,
         prefill: {
-          name: serviceRequest.customer_name || 'Valued Customer',
-          email: serviceRequest.customer_email || 'customer@chaircare.in',
-          contact: serviceRequest.customer_phone || '+919876543210',
+          name: customerName,
+          email: customerEmail,
+          contact: customerPhone,
         },
         serviceDetails: {
-          requestId: serviceRequest.id,
+          requestId: serviceRequest?.id || requestId,
           trackingCode,
-          chairModel: serviceRequest.chair_model,
-          issueDescription: serviceRequest.issue_description,
-          address: serviceRequest.address,
+          chairModel,
+          issueDescription: serviceRequest?.issue_description,
+          address: serviceRequest?.address,
         },
       },
     });
@@ -189,6 +221,33 @@ export const verifyPayment = async (req: AuthRequest, res: Response) => {
     const serviceRequest = existingRes.rows[0];
     const amountNum = Number(serviceRequest.total_amount || 599);
     const trackingCode = serviceRequest.tracking_code || 'JOB';
+
+    // Idempotency check: If already paid or transaction already recorded, return existing payment record
+    const existingPaymentCheck = await query(
+      `SELECT * FROM payments 
+       WHERE (request_id = $1 OR transaction_id = $2) AND status = 'completed'
+       ORDER BY created_at DESC LIMIT 1;`,
+      [requestId, razorpay_payment_id]
+    );
+
+    if (serviceRequest.is_paid || existingPaymentCheck.rows.length > 0) {
+      const existingPayment = existingPaymentCheck.rows[0];
+      return res.status(200).json({
+        success: true,
+        alreadyPaid: true,
+        message: 'This service request is already marked as paid. Duplicate payment avoided.',
+        data: {
+          requestId: serviceRequest.id,
+          trackingCode,
+          amount: amountNum,
+          paymentId: existingPayment?.transaction_id || razorpay_payment_id,
+          orderId: razorpay_order_id,
+          status: 'completed',
+          isPaid: true,
+          method: serviceRequest.payment_method || payment_method,
+        },
+      });
+    }
 
     // 1. Update service_requests status
     const updatedReqRes = await query(

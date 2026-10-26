@@ -24,7 +24,7 @@ export const loginSchema = z.object({
 });
 
 export const createRequestSchema = z.object({
-  serviceId: z.string().uuid().optional(),
+  serviceId: z.string().optional(),
   serviceCode: z.string().optional(),
   chairModel: z.string().min(2, 'Chair brand and model is required'),
   issueDescription: z.string().min(5, 'Please provide details about the issue'),

@@ -59,12 +59,14 @@ export const createRequest = async (req: AuthenticatedRequest, res: Response): P
     razorpaySignature,
   } = req.body;
 
-  let finalServiceId = serviceId;
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  let finalServiceId = serviceId && isUuid.test(serviceId) ? serviceId : null;
+  const lookupCode = serviceCode || (serviceId && !isUuid.test(serviceId) ? serviceId : null);
   let finalPrice = totalAmount || 0;
 
-  if (!finalServiceId && serviceCode) {
+  if (!finalServiceId && lookupCode) {
     const srvRes = await query('SELECT id, estimated_price FROM services WHERE code = $1 LIMIT 1;', [
-      serviceCode,
+      lookupCode,
     ]);
     if (srvRes.rows.length > 0) {
       finalServiceId = srvRes.rows[0].id;
