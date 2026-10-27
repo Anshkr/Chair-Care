@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
@@ -1408,11 +1409,15 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
         animationType="fade"
         onRequestClose={() => setSelectedFulfillRequest(null)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setSelectedFulfillRequest(null)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlayCenter}
         >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setSelectedFulfillRequest(null)}
+          />
           <View style={styles.fulfillModalSheet}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeftGroup}>
@@ -1422,6 +1427,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
               <TouchableOpacity
                 onPress={() => setSelectedFulfillRequest(null)}
                 style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <AppIcon name="close" size={20} />
               </TouchableOpacity>
@@ -1451,6 +1457,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                     <TouchableOpacity
                       onPress={() => setFulfillTempPassword(generateSuggestedPassword())}
                       style={styles.regenBtn}
+                      activeOpacity={0.7}
                     >
                       <AppIcon name="refresh" size={13} color={Colors.primary} />
                       <Text style={styles.regenBtnText}>Regenerate</Text>
@@ -1459,11 +1466,13 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                   <TextInput
                     style={styles.tempPassInput}
                     value={fulfillTempPassword}
-                    onChangeText={setFulfillTempPassword}
+                    onChangeText={(val) => setFulfillTempPassword(val)}
                     placeholder="Enter or generate temporary password"
                     placeholderTextColor={Colors.onSurfaceVariant}
                     autoCapitalize="none"
                     autoCorrect={false}
+                    editable={!isFulfilling}
+                    selectTextOnFocus
                   />
                 </View>
 
@@ -1476,16 +1485,16 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
 
                 <View style={styles.modalButtonRow}>
                   <TouchableOpacity
-                    style={styles.modalCancelBtn}
+                    style={styles.fulfillCancelBtn}
                     onPress={() => setSelectedFulfillRequest(null)}
                     disabled={isFulfilling}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                    <Text style={styles.fulfillCancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.modalSubmitBtn, isFulfilling && { opacity: 0.6 }]}
+                    style={[styles.fulfillSubmitBtn, isFulfilling && { opacity: 0.6 }]}
                     onPress={handleFulfillSubmit}
                     disabled={isFulfilling}
                     activeOpacity={0.85}
@@ -1495,7 +1504,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                     ) : (
                       <>
                         <AppIcon name="send" size={16} color="#FFFFFF" />
-                        <Text style={styles.modalSubmitBtnText}>Issue & Send</Text>
+                        <Text style={styles.fulfillSubmitBtnText}>Issue & Send</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -1503,7 +1512,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
               </View>
             )}
           </View>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* 2. Manual On-Demand Issue Modal for Any User */}
@@ -1513,11 +1522,15 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
         animationType="fade"
         onRequestClose={() => setIsManualIssueModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setIsManualIssueModalVisible(false)}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlayCenter}
         >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setIsManualIssueModalVisible(false)}
+          />
           <View style={styles.fulfillModalSheet}>
             <View style={styles.modalHeader}>
               <View style={styles.modalHeaderLeftGroup}>
@@ -1527,6 +1540,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
               <TouchableOpacity
                 onPress={() => setIsManualIssueModalVisible(false)}
                 style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <AppIcon name="close" size={20} />
               </TouchableOpacity>
@@ -1584,6 +1598,7 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                   <TouchableOpacity
                     onPress={() => setManualTempPassword(generateSuggestedPassword())}
                     style={styles.regenBtn}
+                    activeOpacity={0.7}
                   >
                     <AppIcon name="refresh" size={13} color={Colors.primary} />
                     <Text style={styles.regenBtnText}>Regenerate</Text>
@@ -1592,27 +1607,29 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                 <TextInput
                   style={styles.tempPassInput}
                   value={manualTempPassword}
-                  onChangeText={setManualTempPassword}
+                  onChangeText={(val) => setManualTempPassword(val)}
                   placeholder="Enter or generate temporary password"
                   placeholderTextColor={Colors.onSurfaceVariant}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!isManualIssuing}
+                  selectTextOnFocus
                 />
               </View>
 
               <View style={styles.modalButtonRow}>
                 <TouchableOpacity
-                  style={styles.modalCancelBtn}
+                  style={styles.fulfillCancelBtn}
                   onPress={() => setIsManualIssueModalVisible(false)}
                   disabled={isManualIssuing}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                  <Text style={styles.fulfillCancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[
-                    styles.modalSubmitBtn,
+                    styles.fulfillSubmitBtn,
                     (!selectedManualUser || isManualIssuing) && { opacity: 0.6 }
                   ]}
                   onPress={handleManualIssueSubmit}
@@ -1624,14 +1641,14 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                   ) : (
                     <>
                       <AppIcon name="send" size={16} color="#FFFFFF" />
-                      <Text style={styles.modalSubmitBtnText}>Issue & Deliver</Text>
+                      <Text style={styles.fulfillSubmitBtnText}>Issue & Deliver</Text>
                     </>
                   )}
                 </TouchableOpacity>
               </View>
             </View>
           </View>
-        </TouchableOpacity>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Real Change Password Modal */}
@@ -2824,16 +2841,15 @@ const styles = StyleSheet.create({
     color: '#005236',
   },
   tempPassInput: {
-    height: 44,
+    height: 48,
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
     borderRadius: 8,
-    paddingHorizontal: 12,
-    fontFamily: 'JetBrainsMono-Medium',
-    fontSize: 14,
+    paddingHorizontal: 14,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   fulfillNoticeBox: {
     flexDirection: 'row',
@@ -2931,5 +2947,42 @@ const styles = StyleSheet.create({
   },
   reqAvatarTextCust: {
     color: '#0369A1',
+  },
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  fulfillSubmitBtn: {
+    flex: 1.4,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#005236',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    ...Shadows.small,
+  },
+  fulfillSubmitBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  fulfillCancelBtn: {
+    flex: 1,
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fulfillCancelBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#475569',
   },
 });
