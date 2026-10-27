@@ -8,6 +8,7 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -35,6 +36,7 @@ interface FormattedTechNotification {
   chairModel?: string;
   address?: string;
   totalAmount?: number;
+  temporaryPassword?: string;
   badgeLabel: string;
   badgeBg: string;
   badgeColor: string;
@@ -101,6 +103,13 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
       iconName = 'MessageSquare';
       iconBg = '#EEF2FF';
       iconColor = '#6366F1';
+    } else if (nType === 'temporary_password' || nType.includes('password') || Boolean(data.temporaryPassword)) {
+      badgeLabel = '🔑 TEMP PASSWORD';
+      badgeBg = '#FEE2E2';
+      badgeColor = '#B91C1C';
+      iconName = 'Key';
+      iconBg = '#FEE2E2';
+      iconColor = '#DC2626';
     } else if (nType === 'payout') {
       badgeLabel = 'PAYOUT';
       badgeBg = '#ECFDF5';
@@ -130,6 +139,7 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
       chairModel: data.chairModel,
       address: data.address,
       totalAmount: data.totalAmount,
+      temporaryPassword: data.temporaryPassword,
       badgeLabel,
       badgeBg,
       badgeColor,
@@ -186,6 +196,28 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
     }
 
     // 2. Role-safe navigation for technician
+    if (
+      item.type === 'temporary_password' ||
+      item.type?.includes('password') ||
+      Boolean(item.temporaryPassword)
+    ) {
+      try {
+        navigation.navigate('TechProfileTab', {
+          screen: 'TechnicianProfile',
+          params: {
+            openChangePassword: true,
+            temporaryPassword: item.temporaryPassword,
+          },
+        });
+      } catch {
+        navigation.navigate('TechnicianProfile', {
+          openChangePassword: true,
+          temporaryPassword: item.temporaryPassword,
+        });
+      }
+      return;
+    }
+
     if (item.type === 'chat_message' && item.requestId) {
       navigation.navigate('TechnicianChat', {
         requestId: item.requestId,
@@ -226,7 +258,12 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
     }
     if (activeFilter === 'system') {
       return notifications.filter(
-        (n) => n.type === 'system' || n.type === 'payout'
+        (n) =>
+          n.type === 'system' ||
+          n.type === 'payout' ||
+          n.type === 'temporary_password' ||
+          n.type?.includes('password') ||
+          Boolean(n.temporaryPassword)
       );
     }
     return notifications;
@@ -453,6 +490,30 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
                         )}
                       </View>
                     )}
+
+                    {/* Temporary password preview box */}
+                    {Boolean(item.temporaryPassword) && (
+                      <View style={styles.tempPassBox}>
+                        <View style={styles.tempPassLeft}>
+                          <AppIcon name="Key" size={13} color="#DC2626" />
+                          <Text style={styles.tempPassLabel}>TEMP PASSWORD:</Text>
+                          <Text style={styles.tempPassValue} selectable>{item.temporaryPassword}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.copyPassBtn}
+                          onPress={() => {
+                            if (typeof navigator !== 'undefined' && (navigator as any).clipboard?.writeText) {
+                              (navigator as any).clipboard.writeText(item.temporaryPassword!);
+                            }
+                            Alert.alert('Temporary Password Copied', `Temporary password '${item.temporaryPassword}' copied to clipboard. Use it in Profile > Change Password.`);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <AppIcon name="Copy" size={12} color="#DC2626" />
+                          <Text style={styles.copyPassText}>Copy</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -474,7 +535,11 @@ export const TechnicianNotificationsChaircareMobileScreen: React.FC<{
                         ? 'Open Chat →'
                         : item.type === 'admin_job_assigned'
                         ? 'View Assigned Job →'
-                        : 'View Job Details →'}
+                        : item.type === 'job_alert'
+                        ? 'View Job Details →'
+                        : item.type === 'temporary_password' || item.temporaryPassword
+                        ? 'Change Password →'
+                        : 'View Details →'}
                     </Text>
                   </View>
                 </View>
@@ -813,5 +878,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: Colors.secondaryCobalt,
+  },
+  tempPassBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginTop: 8,
+    gap: 8,
+  },
+  tempPassLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  tempPassLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#991B1B',
+    letterSpacing: 0.5,
+  },
+  tempPassValue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#DC2626',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  copyPassBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  copyPassText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
 });

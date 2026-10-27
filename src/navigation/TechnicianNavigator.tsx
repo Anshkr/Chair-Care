@@ -204,6 +204,7 @@ export const TechnicianNavigator: React.FC = () => {
       <Stack.Screen name="TechnicianChat" component={TechnicianChatChaircareMobileScreen} />
       <Stack.Screen name="TechnicianProfile" component={TechnicianProfileChaircareMobileScreen} />
       <Stack.Screen name="Notifications" component={TechnicianNotificationsChaircareMobileScreen} />
+      <Stack.Screen name="TechnicianNotifications" component={TechnicianNotificationsChaircareMobileScreen} />
       <Stack.Screen name="TechnicianJobHistory" component={TechnicianJobHistoryChaircareMobileScreen} />
       <Stack.Screen name="JobHistory" component={TechnicianJobHistoryChaircareMobileScreen} />
     </Stack.Navigator>

@@ -40,10 +40,12 @@ const PRESET_TECHNICIAN_AVATARS = [
 
 interface TechnicianProfileProps {
   navigation?: any;
+  route?: any;
 }
 
 export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileProps> = ({
   navigation,
+  route,
 }) => {
   const insets = useSafeAreaInsets();
   const { currentUser, logout, updateTechnicianProfile } = useAuth();
@@ -134,6 +136,12 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
   const [autoAcceptPriority, setAutoAcceptPriority] = useState(false);
   const [soundOnAlert, setSoundOnAlert] = useState(true);
   const [changePasswordModalVisible, setChangePasswordModalVisible] = useState(false);
+
+  React.useEffect(() => {
+    if (route?.params?.openChangePassword) {
+      setChangePasswordModalVisible(true);
+    }
+  }, [route?.params?.openChangePassword]);
 
   React.useEffect(() => {
     let isMounted = true;

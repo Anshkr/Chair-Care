@@ -3017,7 +3017,7 @@ export const fulfillTemporaryPasswordRequest = async (
 
       await query(
         `INSERT INTO notifications (user_id, title, message, type, data, metadata)
-         VALUES ($1, $2, $3, 'system', $4, $4);`,
+         VALUES ($1, $2, $3, 'temporary_password', $4, $4);`,
         [
           reqItem.user_id,
           '🔑 Temporary Password Issued',
@@ -3116,7 +3116,7 @@ export const setUserTemporaryPassword = async (
 
       await query(
         `INSERT INTO notifications (user_id, title, message, type, data, metadata)
-         VALUES ($1, $2, $3, 'system', $4, $4);`,
+         VALUES ($1, $2, $3, 'temporary_password', $4, $4);`,
         [
           targetUser.id,
           '🔑 Temporary Password Issued',

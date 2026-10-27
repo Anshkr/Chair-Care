@@ -59,30 +59,35 @@ export const getNotifications = async (
     // Notifications are strictly bound to the authenticated user's ID AND isolated to their own bookings/assigned jobs.
     let roleFilter = '';
     if (requestedRole === 'customer') {
-      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_in_route', 'technician_arrived', 'technician_in_progress', 'technician_completed', 'technician_status', 'chat_message', 'support_chat', 'service_update', 'payment', 'invoice', 'promo', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
+      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_in_route', 'technician_arrived', 'technician_in_progress', 'technician_completed', 'technician_status', 'chat_message', 'support_chat', 'service_update', 'payment', 'invoice', 'promo', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general', 'temporary_password', 'password_reset', 'password_reset_fulfilled') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'customer')
                     AND (
-                      (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)
+                      type IN ('temporary_password', 'password_reset', 'password_reset_fulfilled', 'system', 'announcement', 'broadcast', 'general')
+                      OR (COALESCE(data->>'requestId', data->>'request_id') IS NULL AND COALESCE(data->>'trackingCode', data->>'tracking_code') IS NULL)
                       OR EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND sr.customer_id = $1
                       )
                     )`;
     } else if (requestedRole === 'technician') {
-      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'support_chat', 'technician_status', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
+      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'support_chat', 'technician_status', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general', 'temporary_password', 'password_reset', 'password_reset_fulfilled') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'technician')
                     AND (
-                      (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)
+                      type IN ('temporary_password', 'password_reset', 'password_reset_fulfilled', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general')
+                      OR (COALESCE(data->>'requestId', data->>'request_id') IS NULL AND COALESCE(data->>'trackingCode', data->>'tracking_code') IS NULL)
                       OR (type = 'job_alert' AND EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND (sr.technician_id IS NULL OR sr.technician_id = $1)
                           AND sr.status NOT IN ('completed', 'cancelled')
                       ))
                       OR EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND sr.technician_id = $1
                       )
                     )`;
@@ -200,30 +205,35 @@ export const getUnreadCount = async (
 
     let roleFilter = '';
     if (requestedRole === 'customer') {
-      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_in_route', 'technician_arrived', 'technician_in_progress', 'technician_completed', 'technician_status', 'chat_message', 'support_chat', 'service_update', 'payment', 'invoice', 'promo', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
+      roleFilter = `AND (type IN ('booking_confirmed', 'technician_assigned', 'technician_in_route', 'technician_arrived', 'technician_in_progress', 'technician_completed', 'technician_status', 'chat_message', 'support_chat', 'service_update', 'payment', 'invoice', 'promo', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general', 'temporary_password', 'password_reset', 'password_reset_fulfilled') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'customer')
                     AND (
-                      (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)
+                      type IN ('temporary_password', 'password_reset', 'password_reset_fulfilled', 'system', 'announcement', 'broadcast', 'general')
+                      OR (COALESCE(data->>'requestId', data->>'request_id') IS NULL AND COALESCE(data->>'trackingCode', data->>'tracking_code') IS NULL)
                       OR EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND sr.customer_id = $1
                       )
                     )`;
     } else if (requestedRole === 'technician') {
-      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'support_chat', 'technician_status', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general') OR type IS NULL)
+      roleFilter = `AND (type IN ('job_alert', 'admin_job_assigned', 'chat_message', 'support_chat', 'technician_status', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general', 'temporary_password', 'password_reset', 'password_reset_fulfilled') OR type IS NULL)
                     AND NOT (type = 'chat_message' AND (data->>'senderRole')::text = 'technician')
                     AND (
-                      (data->>'requestId' IS NULL AND data->>'trackingCode' IS NULL)
+                      type IN ('temporary_password', 'password_reset', 'password_reset_fulfilled', 'system', 'payout', 'announcement', 'service_alert', 'maintenance', 'emergency', 'broadcast', 'general')
+                      OR (COALESCE(data->>'requestId', data->>'request_id') IS NULL AND COALESCE(data->>'trackingCode', data->>'tracking_code') IS NULL)
                       OR (type = 'job_alert' AND EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND (sr.technician_id IS NULL OR sr.technician_id = $1)
                           AND sr.status NOT IN ('completed', 'cancelled')
                       ))
                       OR EXISTS (
                         SELECT 1 FROM service_requests sr
-                        WHERE (sr.id::text = (notifications.data->>'requestId')::text OR sr.tracking_code::text = (notifications.data->>'trackingCode')::text)
+                        WHERE (sr.id::text = COALESCE((notifications.data->>'requestId')::text, (notifications.data->>'request_id')::text)
+                               OR sr.tracking_code::text = COALESCE((notifications.data->>'trackingCode')::text, (notifications.data->>'tracking_code')::text))
                           AND sr.technician_id = $1
                       )
                     )`;

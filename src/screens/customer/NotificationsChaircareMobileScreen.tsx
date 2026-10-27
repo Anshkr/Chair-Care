@@ -295,6 +295,13 @@ export const NotificationsChaircareMobileScreen: React.FC<{
               icon = 'UserCheck';
               iconBgColor = '#F0FDF4';
               iconTextColor = '#16A34A';
+            } else if (nType === 'temporary_password' || nType.includes('password') || Boolean(dbNotif.data?.temporaryPassword)) {
+              cat = 'system';
+              actionType = 'details';
+              actionLabel = 'Change Password';
+              icon = 'Key';
+              iconBgColor = '#FEE2E2';
+              iconTextColor = '#DC2626';
             }
 
             generated.push({
