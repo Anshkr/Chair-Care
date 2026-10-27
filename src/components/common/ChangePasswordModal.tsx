@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -42,6 +42,64 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [tempPassRequest, setTempPassRequest] = useState<{
+    hasRequest: boolean;
+    status: 'pending' | 'fulfilled' | 'rejected' | null;
+    temporaryPassword?: string;
+    resolvedAt?: string;
+    message?: string;
+  } | null>(null);
+  const [isRequestingTemp, setIsRequestingTemp] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      loadTempPasswordStatus();
+    }
+  }, [visible]);
+
+  const loadTempPasswordStatus = async () => {
+    try {
+      const res = await authApi.getMyTemporaryPasswordStatus();
+      if (res.success && res.data) {
+        setTempPassRequest(res.data);
+      }
+    } catch {
+      // Non-critical, ignore
+    }
+  };
+
+  const handleRequestTemporaryPassword = () => {
+    Alert.alert(
+      'Forgot Current Password?',
+      'Request the Admin team to generate a temporary password for your account? You will receive it via in-app message/notification.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Request',
+          onPress: async () => {
+            try {
+              setIsRequestingTemp(true);
+              const res = await authApi.requestTemporaryPassword('User requested temporary password from Change Password screen');
+              if (res.success) {
+                Alert.alert(
+                  'Request Submitted',
+                  'Admin has been notified. Once approved, your temporary password will be sent to your notifications and will appear here.'
+                );
+                await loadTempPasswordStatus();
+              } else {
+                Alert.alert('Request Failed', sanitizeUserErrorMessage(res.error) || 'Could not submit request.');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', sanitizeUserErrorMessage(err) || 'Something went wrong.');
+            } finally {
+              setIsRequestingTemp(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleReset = () => {
     setCurrentPassword('');
@@ -169,7 +227,18 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
 
             {/* Field 1: Current Password */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Current Password</Text>
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Current Password</Text>
+                <TouchableOpacity
+                  onPress={handleRequestTemporaryPassword}
+                  disabled={isRequestingTemp}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={styles.forgotCurrentLink}>
+                    {isRequestingTemp ? 'Requesting...' : 'Forgot Current?'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <View style={styles.inputFieldWrap}>
                 <TextInput
                   style={styles.textInput}
@@ -197,6 +266,53 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
                   />
                 </TouchableOpacity>
               </View>
+
+              {/* Temporary Password Banners */}
+              {tempPassRequest?.status === 'fulfilled' && tempPassRequest.temporaryPassword ? (
+                <View style={styles.tempPassCard}>
+                  <View style={styles.tempPassCardHeader}>
+                    <View style={styles.tempPassTag}>
+                      <AppIcon name="ShieldCheck" size={13} color="#005236" />
+                      <Text style={styles.tempPassTagText}>Admin Temporary Password</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.useTempPassBtn}
+                      onPress={() => {
+                        setCurrentPassword(tempPassRequest.temporaryPassword!);
+                        if (errorMessage) setErrorMessage(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.useTempPassBtnText}>Use Now</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.tempPassCodeText} selectable>
+                    {tempPassRequest.temporaryPassword}
+                  </Text>
+                  <Text style={styles.tempPassHint}>
+                    Tap 'Use Now' to autofill into Current Password field above.
+                  </Text>
+                </View>
+              ) : tempPassRequest?.status === 'pending' ? (
+                <View style={styles.pendingRequestCard}>
+                  <AppIcon name="Clock" size={14} color="#B45309" />
+                  <Text style={styles.pendingRequestText}>
+                    Temporary password request submitted. Admin will issue one shortly via notification.
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.requestAdminTempRow}
+                  onPress={handleRequestTemporaryPassword}
+                  disabled={isRequestingTemp}
+                  activeOpacity={0.7}
+                >
+                  <AppIcon name="HelpCircle" size={14} color={Colors.primary} />
+                  <Text style={styles.requestAdminTempText}>
+                    Forgot current password? Request temporary password from Admin
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Field 2: New Password */}
@@ -476,5 +592,91 @@ const styles = StyleSheet.create({
     ...Typography.bodyMedium,
     fontWeight: '700',
     color: '#FFFFFF',
+  },
+  forgotCurrentLink: {
+    ...Typography.labelSmall,
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  requestAdminTempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 2,
+  },
+  requestAdminTempText: {
+    ...Typography.bodySmall,
+    color: Colors.primary,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  tempPassCard: {
+    marginTop: 8,
+    backgroundColor: '#E8F5E9',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#A5D6A7',
+    padding: Spacing.sm,
+  },
+  tempPassCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tempPassTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  tempPassTagText: {
+    ...Typography.labelSmall,
+    fontWeight: '700',
+    color: '#005236',
+    fontSize: 11,
+  },
+  useTempPassBtn: {
+    backgroundColor: '#005236',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
+  },
+  useTempPassBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  tempPassCodeText: {
+    ...Typography.labelMono,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#1B5E20',
+    letterSpacing: 1.5,
+    marginVertical: 2,
+  },
+  tempPassHint: {
+    ...Typography.bodySmall,
+    fontSize: 11,
+    color: '#2E7D32',
+  },
+  pendingRequestCard: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    padding: Spacing.sm,
+  },
+  pendingRequestText: {
+    ...Typography.bodySmall,
+    color: '#92400E',
+    fontSize: 11.5,
+    flex: 1,
+    fontWeight: '500',
   },
 });

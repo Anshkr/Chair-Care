@@ -93,6 +93,25 @@ export const authApi = {
     });
   },
 
+  requestTemporaryPassword: async (
+    reason?: string
+  ): Promise<ApiResponse<{ message: string; requestId: string }>> => {
+    return apiRequest<{ message: string; requestId: string }>('/auth/request-temporary-password', {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  getMyTemporaryPasswordStatus: async (): Promise<ApiResponse<{
+    hasRequest: boolean;
+    status: 'pending' | 'fulfilled' | 'rejected' | null;
+    temporaryPassword?: string;
+    resolvedAt?: string;
+    message?: string;
+  }>> => {
+    return apiRequest('/auth/my-temporary-password-status');
+  },
+
   logout: () => {
     setApiAuthToken(null);
   },

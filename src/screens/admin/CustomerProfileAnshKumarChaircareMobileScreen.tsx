@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { adminApi } from '../../services/api/adminApi';
 
 interface CustomerProfileProps {
   navigation?: any;
@@ -122,6 +123,35 @@ export const CustomerProfileAnshKumarChaircareMobileScreen: React.FC<CustomerPro
         requestId: ticketCode,
       });
     }
+  };
+
+  const handleIssueTemporaryPassword = () => {
+    Alert.alert(
+      'Issue Temporary Password',
+      `Generate a secure temporary password for ${custName}? An in-app notification with the temporary password will be sent to the customer immediately.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate & Issue',
+          onPress: async () => {
+            try {
+              const res = await adminApi.setUserTemporaryPassword(passedId);
+              if (res.success && res.data) {
+                Alert.alert(
+                  'Temporary Password Issued',
+                  `Temporary password: '${res.data.temporaryPassword}'\n\nThis has been sent to ${custName} via in-app notification.`
+                );
+                showToast(`Temporary password issued for ${custName}`);
+              } else {
+                Alert.alert('Failed', res.error || 'Could not issue temporary password.');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Something went wrong.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -632,6 +662,15 @@ export const CustomerProfileAnshKumarChaircareMobileScreen: React.FC<CustomerPro
           >
             <AppIcon name="ShieldCheck" size={18} />
             <Text style={styles.primaryActionText}>Manage Customer Account & Access</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.primaryActionBtn, { backgroundColor: '#005236', marginTop: 8 }]}
+            onPress={handleIssueTemporaryPassword}
+            activeOpacity={0.88}
+          >
+            <AppIcon name="Key" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryActionText}>Issue Temporary Password</Text>
           </TouchableOpacity>
 
           {/* Secondary Dual-Button Row */}

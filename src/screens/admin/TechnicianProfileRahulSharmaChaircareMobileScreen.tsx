@@ -169,6 +169,41 @@ export const TechnicianProfileRahulSharmaChaircareMobileScreen: React.FC<Technic
     }
   };
 
+  const handleIssueTemporaryPassword = () => {
+    const targetUserId = techData?.id || passedId;
+    if (!targetUserId) {
+      Alert.alert('Error', 'No technician ID available.');
+      return;
+    }
+
+    Alert.alert(
+      'Issue Temporary Password',
+      `Generate and issue a temporary password for technician ${techName}? An in-app notification will be delivered immediately.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate & Issue',
+          onPress: async () => {
+            try {
+              const res = await adminApi.setUserTemporaryPassword(targetUserId);
+              if (res.success && res.data) {
+                Alert.alert(
+                  'Temporary Password Issued',
+                  `Temporary password: '${res.data.temporaryPassword}'\n\nThis has been sent to ${techName} via in-app notification.`
+                );
+                showToast(`Temporary password issued for ${techName}`);
+              } else {
+                Alert.alert('Failed', res.error || 'Could not issue temporary password.');
+              }
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Something went wrong.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleViewReviews = () => {
     if (navigation) {
       navigation.navigate('ReviewsRatings');
@@ -661,6 +696,15 @@ export const TechnicianProfileRahulSharmaChaircareMobileScreen: React.FC<Technic
             >
               <AppIcon name="ShieldCheck" size={18} color={Colors.onPrimary} />
               <Text style={styles.manageStatusBtnText}>Manage Status & Access</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.manageStatusPrimaryBtn, { backgroundColor: '#005236', marginTop: 8 }]}
+              onPress={handleIssueTemporaryPassword}
+              activeOpacity={0.88}
+            >
+              <AppIcon name="Key" size={18} color={Colors.onPrimary} />
+              <Text style={styles.manageStatusBtnText}>Issue Temporary Password</Text>
             </TouchableOpacity>
 
             <View style={styles.dualSecondaryGrid}>

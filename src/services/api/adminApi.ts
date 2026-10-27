@@ -281,7 +281,58 @@ export const adminApi = {
     if (res.success) adminSyncEmitter.notifySync();
     return res;
   },
+
+  getTemporaryPasswordRequests: async (status?: string): Promise<ApiResponse<TemporaryPasswordRequestItem[]>> => {
+    const url = status ? `/admin/temporary-password-requests?status=${encodeURIComponent(status)}` : '/admin/temporary-password-requests';
+    return apiRequest<TemporaryPasswordRequestItem[]>(url);
+  },
+
+  fulfillTemporaryPasswordRequest: async (
+    id: string,
+    temporaryPassword?: string
+  ): Promise<ApiResponse<{ message: string; temporaryPassword: string; user: any }>> => {
+    const res = await apiRequest<{ message: string; temporaryPassword: string; user: any }>(
+      `/admin/temporary-password-requests/${id}/fulfill`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ temporaryPassword }),
+      }
+    );
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
+
+  setUserTemporaryPassword: async (
+    userId: string,
+    temporaryPassword?: string
+  ): Promise<ApiResponse<{ message: string; temporaryPassword: string; user: any }>> => {
+    const res = await apiRequest<{ message: string; temporaryPassword: string; user: any }>(
+      `/admin/users/${userId}/set-temporary-password`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ temporaryPassword }),
+      }
+    );
+    if (res.success) adminSyncEmitter.notifySync();
+    return res;
+  },
 };
+
+export interface TemporaryPasswordRequestItem {
+  id: string;
+  user_id: string;
+  role: 'customer' | 'technician' | string;
+  user_name: string;
+  user_email: string;
+  user_phone?: string;
+  reason?: string;
+  status: 'pending' | 'fulfilled' | 'rejected' | 'cancelled';
+  temporary_password?: string;
+  resolved_by?: string;
+  resolved_at?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface PlatformConfigData {
   id?: number;

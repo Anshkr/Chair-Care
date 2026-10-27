@@ -2882,4 +2882,258 @@ export const sendBroadcastNotification = async (
   }
 };
 
+function generateSecureTempPassword(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let rand = '';
+  for (let i = 0; i < 4; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  const digits = Math.floor(1000 + Math.random() * 9000);
+  return `Temp#${digits}${rand}`;
+}
+
+export const getTemporaryPasswordRequests = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const result = await query(
+      `SELECT pr.*, 
+              u.name as current_user_name, 
+              u.email as current_user_email, 
+              u.phone as current_user_phone,
+              u.role as current_user_role,
+              admin.name as resolved_by_name
+       FROM password_reset_requests pr
+       JOIN users u ON pr.user_id = u.id
+       LEFT JOIN users admin ON pr.resolved_by = admin.id
+       ORDER BY (pr.status = 'pending') DESC, pr.created_at DESC;`
+    );
+
+    res.json({
+      success: true,
+      data: result.rows.map((row) => ({
+        id: row.id,
+        userId: row.user_id,
+        role: row.role || row.current_user_role,
+        userName: row.user_name || row.current_user_name,
+        userEmail: row.user_email || row.current_user_email,
+        userPhone: row.user_phone || row.current_user_phone,
+        reason: row.reason,
+        status: row.status,
+        temporaryPassword: row.temporary_password,
+        resolvedBy: row.resolved_by_name,
+        resolvedAt: row.resolved_at,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    });
+  } catch (err: any) {
+    console.error('Failed to get temporary password requests:', err);
+    res.status(500).json({ success: false, error: 'Failed to retrieve temporary password requests.' });
+  }
+};
+
+export const fulfillTemporaryPasswordRequest = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { id } = req.params;
+    let { temporaryPassword } = req.body || {};
+
+    const existingRes = await query(
+      `SELECT pr.*, u.name as user_name, u.email as user_email, u.phone as user_phone, u.role as user_role
+       FROM password_reset_requests pr
+       JOIN users u ON pr.user_id = u.id
+       WHERE pr.id = $1;`,
+      [id]
+    );
+
+    if (existingRes.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'Temporary password request not found.' });
+      return;
+    }
+
+    const reqItem = existingRes.rows[0];
+
+    if (!temporaryPassword || String(temporaryPassword).trim().length < 6) {
+      temporaryPassword = generateSecureTempPassword();
+    } else {
+      temporaryPassword = String(temporaryPassword).trim();
+    }
+
+    const newHash = await bcrypt.hash(temporaryPassword, 10);
+
+    // 1. Update user password in database
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2;`,
+      [newHash, reqItem.user_id]
+    );
+
+    // 2. Mark request as fulfilled
+    await query(
+      `UPDATE password_reset_requests 
+       SET status = 'fulfilled', temporary_password = $1, resolved_by = $2, resolved_at = NOW(), updated_at = NOW()
+       WHERE id = $3;`,
+      [temporaryPassword, req.user?.userId || null, id]
+    );
+
+    // 3. Log admin action
+    if (req.user?.userId) {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'TEMPORARY_PASSWORD_ISSUED', 'USER', $2, $3);`,
+        [
+          req.user.userId,
+          reqItem.user_id,
+          JSON.stringify({
+            temporaryPassword,
+            targetRole: reqItem.user_role,
+            userName: reqItem.user_name,
+            requestId: id,
+          }),
+        ]
+      ).catch(() => {});
+    }
+
+    // 4. Send in-app notification to the user
+    try {
+      const notifData = JSON.stringify({
+        type: 'temporary_password',
+        temporaryPassword,
+        role: reqItem.user_role,
+        issuedAt: new Date().toISOString(),
+      });
+
+      await query(
+        `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+         VALUES ($1, $2, $3, 'system', $4, $4);`,
+        [
+          reqItem.user_id,
+          '🔑 Temporary Password Issued',
+          `Your temporary password is: ${temporaryPassword}. Please use this as your 'Current Password' to set your new personal password in Profile > Change Password.`,
+          notifData,
+        ]
+      );
+    } catch (notifErr: any) {
+      console.warn('⚠️ [Notification warning on temp password]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Temporary password '${temporaryPassword}' generated and delivered to user successfully.`,
+      data: {
+        id,
+        userId: reqItem.user_id,
+        userName: reqItem.user_name,
+        temporaryPassword,
+        status: 'fulfilled',
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to fulfill temporary password request:', err);
+    res.status(500).json({ success: false, error: 'Failed to issue temporary password.' });
+  }
+};
+
+export const setUserTemporaryPassword = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    let { temporaryPassword } = req.body || {};
+
+    const userRes = await query(
+      `SELECT id, name, email, phone, role FROM users WHERE id = $1;`,
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'User account not found.' });
+      return;
+    }
+
+    const targetUser = userRes.rows[0];
+
+    if (!temporaryPassword || String(temporaryPassword).trim().length < 6) {
+      temporaryPassword = generateSecureTempPassword();
+    } else {
+      temporaryPassword = String(temporaryPassword).trim();
+    }
+
+    const newHash = await bcrypt.hash(temporaryPassword, 10);
+
+    // 1. Update user password
+    await query(
+      `UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2;`,
+      [newHash, targetUser.id]
+    );
+
+    // 2. Mark any pending request for this user as fulfilled
+    await query(
+      `UPDATE password_reset_requests 
+       SET status = 'fulfilled', temporary_password = $1, resolved_by = $2, resolved_at = NOW(), updated_at = NOW()
+       WHERE user_id = $3 AND status = 'pending';`,
+      [temporaryPassword, req.user?.userId || null, targetUser.id]
+    );
+
+    // 3. Log admin action
+    if (req.user?.userId) {
+      await query(
+        `INSERT INTO admin_activity_logs (admin_id, action, target_type, target_id, details)
+         VALUES ($1, 'TEMPORARY_PASSWORD_ISSUED', 'USER', $2, $3);`,
+        [
+          req.user.userId,
+          targetUser.id,
+          JSON.stringify({
+            temporaryPassword,
+            targetRole: targetUser.role,
+            userName: targetUser.name,
+          }),
+        ]
+      ).catch(() => {});
+    }
+
+    // 4. Send in-app notification
+    try {
+      const notifData = JSON.stringify({
+        type: 'temporary_password',
+        temporaryPassword,
+        role: targetUser.role,
+        issuedAt: new Date().toISOString(),
+      });
+
+      await query(
+        `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+         VALUES ($1, $2, $3, 'system', $4, $4);`,
+        [
+          targetUser.id,
+          '🔑 Temporary Password Issued',
+          `An administrator has generated a temporary password for your account: ${temporaryPassword}. Please use this as your 'Current Password' to change your password in Security settings.`,
+          notifData,
+        ]
+      );
+    } catch (notifErr: any) {
+      console.warn('⚠️ [Notification warning on temp password]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message: `Temporary password '${temporaryPassword}' set for ${targetUser.name} and delivered to their account.`,
+      data: {
+        userId: targetUser.id,
+        userName: targetUser.name,
+        role: targetUser.role,
+        temporaryPassword,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to set temporary password for user:', err);
+    res.status(500).json({ success: false, error: 'Failed to set temporary password for user.' });
+  }
+};
+
+
 

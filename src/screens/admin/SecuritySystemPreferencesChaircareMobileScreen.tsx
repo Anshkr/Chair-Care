@@ -11,11 +11,14 @@ import {
   Modal,
   Platform,
   useWindowDimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
+import { adminApi, TemporaryPasswordRequestItem } from '../../services/api/adminApi';
 
 interface SecurityPreferencesProps {
   navigation?: any;
@@ -99,6 +102,154 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
   const [newPasswordInput, setNewPasswordInput] = useState<string>('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState<string>('');
 
+  // Temporary Password Requests Management
+  const [tempRequests, setTempRequests] = useState<TemporaryPasswordRequestItem[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState<boolean>(false);
+  const [requestsFilter, setRequestsFilter] = useState<'pending' | 'all'>('pending');
+
+  // Fulfill Modal State
+  const [selectedFulfillRequest, setSelectedFulfillRequest] = useState<TemporaryPasswordRequestItem | null>(null);
+  const [fulfillTempPassword, setFulfillTempPassword] = useState<string>('');
+  const [isFulfilling, setIsFulfilling] = useState<boolean>(false);
+
+  // Manual On-Demand Issue Modal State
+  const [isManualIssueModalVisible, setIsManualIssueModalVisible] = useState<boolean>(false);
+  const [manualUserRole, setManualUserRole] = useState<'customer' | 'technician'>('customer');
+  const [manualUserList, setManualUserList] = useState<any[]>([]);
+  const [selectedManualUser, setSelectedManualUser] = useState<any | null>(null);
+  const [manualTempPassword, setManualTempPassword] = useState<string>('');
+  const [isManualIssuing, setIsManualIssuing] = useState<boolean>(false);
+
+  const generateSuggestedPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    let res = 'ChairCare#';
+    for (let i = 0; i < 4; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
+  const loadTemporaryPasswordRequests = async () => {
+    try {
+      setIsLoadingRequests(true);
+      const res = await adminApi.getTemporaryPasswordRequests();
+      if (res.success && Array.isArray(res.data)) {
+        setTempRequests(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load temporary password requests:', err);
+    } finally {
+      setIsLoadingRequests(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTemporaryPasswordRequests();
+  }, []);
+
+  const handleOpenFulfillModal = (req: TemporaryPasswordRequestItem) => {
+    setSelectedFulfillRequest(req);
+    setFulfillTempPassword(generateSuggestedPassword());
+  };
+
+  const handleFulfillSubmit = async () => {
+    if (!selectedFulfillRequest) return;
+    if (!fulfillTempPassword.trim()) {
+      Alert.alert('Required', 'Please enter or generate a temporary password.');
+      return;
+    }
+
+    try {
+      setIsFulfilling(true);
+      const res = await adminApi.fulfillTemporaryPasswordRequest(
+        selectedFulfillRequest.id,
+        fulfillTempPassword.trim()
+      );
+      if (res.success) {
+        Alert.alert(
+          'Temporary Password Issued!',
+          `Temporary password '${res.data?.temporaryPassword || fulfillTempPassword.trim()}' has been set for ${selectedFulfillRequest.user_name} (${selectedFulfillRequest.role}) and delivered to their in-app notifications.`
+        );
+        setSelectedFulfillRequest(null);
+        await loadTemporaryPasswordRequests();
+        displayToast('Temporary password issued & notification dispatched.');
+      } else {
+        Alert.alert('Error', res.error || 'Failed to fulfill request.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setIsFulfilling(false);
+    }
+  };
+
+  const handleOpenManualIssueModal = async () => {
+    setIsManualIssueModalVisible(true);
+    setManualTempPassword(generateSuggestedPassword());
+    setSelectedManualUser(null);
+    try {
+      if (manualUserRole === 'customer') {
+        const res = await adminApi.getAllCustomers();
+        if (res.success && Array.isArray(res.data)) {
+          setManualUserList(res.data);
+        }
+      } else {
+        const res = await adminApi.getAllTechnicians();
+        if (res.success && Array.isArray(res.data)) {
+          setManualUserList(res.data);
+        }
+      }
+    } catch {}
+  };
+
+  const handleSwitchManualRole = async (role: 'customer' | 'technician') => {
+    setManualUserRole(role);
+    setSelectedManualUser(null);
+    try {
+      if (role === 'customer') {
+        const res = await adminApi.getAllCustomers();
+        if (res.success && Array.isArray(res.data)) setManualUserList(res.data);
+      } else {
+        const res = await adminApi.getAllTechnicians();
+        if (res.success && Array.isArray(res.data)) setManualUserList(res.data);
+      }
+    } catch {}
+  };
+
+  const handleManualIssueSubmit = async () => {
+    if (!selectedManualUser) {
+      Alert.alert('Required', 'Please select a customer or technician from the list.');
+      return;
+    }
+    if (!manualTempPassword.trim()) {
+      Alert.alert('Required', 'Please enter or generate a temporary password.');
+      return;
+    }
+
+    try {
+      setIsManualIssuing(true);
+      const res = await adminApi.setUserTemporaryPassword(
+        selectedManualUser.id,
+        manualTempPassword.trim()
+      );
+      if (res.success) {
+        Alert.alert(
+          'Temporary Password Issued!',
+          `Temporary password '${res.data?.temporaryPassword || manualTempPassword.trim()}' has been set for ${selectedManualUser.name} and delivered to their notifications.`
+        );
+        setIsManualIssueModalVisible(false);
+        await loadTemporaryPasswordRequests();
+        displayToast('Temporary password successfully issued.');
+      } else {
+        Alert.alert('Error', res.error || 'Failed to issue temporary password.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setIsManualIssuing(false);
+    }
+  };
+
   // Save Button Micro-interaction State
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isSaved, setIsSaved] = useState<boolean>(false);
@@ -151,6 +302,10 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
       }, 2000);
     }, 1000);
   };
+
+  const pendingRequests = tempRequests.filter((r) => r.status === 'pending');
+  const pendingCount = pendingRequests.length;
+  const displayedRequests = requestsFilter === 'pending' ? pendingRequests : tempRequests;
 
   return (
     <View style={styles.screenContainer}>
@@ -531,6 +686,159 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
               <AppIcon name="chevron_right" size={20} />
             </TouchableOpacity>
           </View>
+        </View>
+
+        {/* Temporary Password Requests & User Password Reset Card */}
+        <View style={styles.cardContainer}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              <AppIcon name="key" size={20} />
+              <Text style={styles.cardTitle}>Temporary Password Requests</Text>
+            </View>
+            <View style={[
+              styles.reqCountBadge,
+              pendingCount > 0 ? styles.reqCountBadgePending : styles.reqCountBadgeClear
+            ]}>
+              <Text style={[
+                styles.reqCountBadgeText,
+                pendingCount > 0 ? styles.reqCountBadgeTextPending : styles.reqCountBadgeTextClear
+              ]}>
+                {pendingCount > 0 ? `${pendingCount} PENDING` : 'ALL RESOLVED'}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={styles.cardSubheadingText}>
+            Logged-in customers and technicians who forgot their current password can request a temporary password from Admin. Admin can fulfill requests or issue passwords on demand.
+          </Text>
+
+          {/* Filter Bar */}
+          <View style={styles.requestsFilterBar}>
+            <TouchableOpacity
+              style={[styles.filterChip, requestsFilter === 'pending' && styles.filterChipActive]}
+              onPress={() => setRequestsFilter('pending')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterChipText, requestsFilter === 'pending' && styles.filterChipTextActive]}>
+                Pending ({pendingCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterChip, requestsFilter === 'all' && styles.filterChipActive]}
+              onPress={() => setRequestsFilter('all')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterChipText, requestsFilter === 'all' && styles.filterChipTextActive]}>
+                All History ({tempRequests.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.refreshIconBtn}
+              onPress={loadTemporaryPasswordRequests}
+              activeOpacity={0.7}
+            >
+              <AppIcon name="refresh" size={16} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Requests List */}
+          {isLoadingRequests ? (
+            <View style={styles.requestsLoadingWrap}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={styles.requestsLoadingText}>Checking password requests...</Text>
+            </View>
+          ) : displayedRequests.length === 0 ? (
+            <View style={styles.requestsEmptyBox}>
+              <AppIcon name="check_circle" size={24} />
+              <Text style={styles.requestsEmptyTitle}>
+                {requestsFilter === 'pending' ? 'No Pending Requests' : 'No Request History'}
+              </Text>
+              <Text style={styles.requestsEmptySubtitle}>
+                {requestsFilter === 'pending'
+                  ? 'All customer and technician temporary password requests have been fulfilled.'
+                  : 'No temporary password requests recorded in the system.'}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.requestsListContainer}>
+              {displayedRequests.map((req) => (
+                <View key={req.id} style={styles.requestItemCard}>
+                  <View style={styles.requestItemHeader}>
+                    <View style={styles.requestUserMeta}>
+                      <Text style={styles.requestUserName}>{req.user_name}</Text>
+                      <View style={[
+                        styles.rolePill,
+                        req.role === 'technician' ? styles.rolePillTech : styles.rolePillCust
+                      ]}>
+                        <Text style={[
+                          styles.rolePillText,
+                          req.role === 'technician' ? styles.rolePillTextTech : styles.rolePillTextCust
+                        ]}>
+                          {req.role.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[
+                      styles.statusPillSmall,
+                      req.status === 'pending' ? styles.statusPillSmallPending : styles.statusPillSmallFulfilled
+                    ]}>
+                      <Text style={[
+                        styles.statusPillSmallText,
+                        req.status === 'pending' ? styles.statusPillSmallTextPending : styles.statusPillSmallTextFulfilled
+                      ]}>
+                        {req.status === 'pending' ? 'Pending' : 'Fulfilled'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.requestEmailText}>
+                    {req.user_email} {req.user_phone ? `• ${req.user_phone}` : ''}
+                  </Text>
+                  
+                  {req.reason ? (
+                    <Text style={styles.requestReasonText}>Reason: "{req.reason}"</Text>
+                  ) : null}
+
+                  <View style={styles.requestFooterRow}>
+                    <Text style={styles.requestDateText}>
+                      {new Date(req.created_at).toLocaleDateString()} at {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+
+                    {req.status === 'pending' ? (
+                      <TouchableOpacity
+                        style={styles.fulfillActionBtn}
+                        onPress={() => handleOpenFulfillModal(req)}
+                        activeOpacity={0.8}
+                      >
+                        <AppIcon name="key" size={14} color="#FFFFFF" />
+                        <Text style={styles.fulfillActionBtnText}>Issue Password</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.fulfilledBadgeBox}>
+                        <Text style={styles.fulfilledPasswordText}>
+                          Temp Pass: <Text style={styles.boldPasswordCode}>{req.temporary_password || '••••••'}</Text>
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Quick Action Button: Generate on demand */}
+          <TouchableOpacity
+            style={styles.manualIssueOpenBtn}
+            onPress={handleOpenManualIssueModal}
+            activeOpacity={0.8}
+          >
+            <AppIcon name="add" size={18} color={Colors.primary} />
+            <Text style={styles.manualIssueOpenBtnText}>
+              + Issue Temporary Password for Any User
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* 4. Data Governance & Regulatory Privacy */}
@@ -1054,6 +1362,237 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 1. Fulfill Temporary Password Request Modal */}
+      <Modal
+        visible={selectedFulfillRequest !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedFulfillRequest(null)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSelectedFulfillRequest(null)}
+        >
+          <View style={styles.fulfillModalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeftGroup}>
+                <AppIcon name="key" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Issue Temporary Password</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedFulfillRequest(null)}
+                style={styles.modalCloseBtn}
+              >
+                <AppIcon name="close" size={20} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedFulfillRequest && (
+              <View style={styles.modalFormContent}>
+                {/* User Info Box */}
+                <View style={styles.fulfillUserInfoBox}>
+                  <Text style={styles.fulfillUserNameText}>{selectedFulfillRequest.user_name}</Text>
+                  <Text style={styles.fulfillUserSubText}>
+                    {selectedFulfillRequest.role.toUpperCase()} • {selectedFulfillRequest.user_email}
+                  </Text>
+                  {selectedFulfillRequest.reason ? (
+                    <Text style={styles.fulfillUserReasonText}>
+                      User note: "{selectedFulfillRequest.reason}"
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Password Input & Generator */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.passLabelRow}>
+                    <Text style={styles.inputLabel}>Temporary Password to Issue</Text>
+                    <TouchableOpacity
+                      onPress={() => setFulfillTempPassword(generateSuggestedPassword())}
+                      style={styles.regenBtn}
+                    >
+                      <AppIcon name="refresh" size={13} color={Colors.primary} />
+                      <Text style={styles.regenBtnText}>Regenerate</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.tempPassInput}
+                    value={fulfillTempPassword}
+                    onChangeText={setFulfillTempPassword}
+                    placeholder="Enter or generate temporary password"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                </View>
+
+                <View style={styles.fulfillNoticeBox}>
+                  <AppIcon name="info" size={16} color={Colors.primary} />
+                  <Text style={styles.fulfillNoticeText}>
+                    Setting this temporary password will overwrite the user's password hash and dispatch an in-app message/notification to them immediately. The user can then use it in their 'Current Password' field to create a new password.
+                  </Text>
+                </View>
+
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setSelectedFulfillRequest(null)}
+                    disabled={isFulfilling}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.modalSubmitBtn, isFulfilling && { opacity: 0.6 }]}
+                    onPress={handleFulfillSubmit}
+                    disabled={isFulfilling}
+                    activeOpacity={0.85}
+                  >
+                    {isFulfilling ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <AppIcon name="send" size={16} color="#FFFFFF" />
+                        <Text style={styles.modalSubmitBtnText}>Issue & Send</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 2. Manual On-Demand Issue Modal for Any User */}
+      <Modal
+        visible={isManualIssueModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsManualIssueModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setIsManualIssueModalVisible(false)}
+        >
+          <View style={styles.fulfillModalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeftGroup}>
+                <AppIcon name="vpn_key" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Issue Password for User</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsManualIssueModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <AppIcon name="close" size={20} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalFormContent}>
+              {/* Role Selector Tabs */}
+              <View style={styles.roleTabsWrap}>
+                <TouchableOpacity
+                  style={[styles.roleTab, manualUserRole === 'customer' && styles.roleTabActive]}
+                  onPress={() => handleSwitchManualRole('customer')}
+                >
+                  <Text style={[styles.roleTabText, manualUserRole === 'customer' && styles.roleTabTextActive]}>
+                    Customer
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.roleTab, manualUserRole === 'technician' && styles.roleTabActive]}
+                  onPress={() => handleSwitchManualRole('technician')}
+                >
+                  <Text style={[styles.roleTabText, manualUserRole === 'technician' && styles.roleTabTextActive]}>
+                    Technician
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* User Selection List */}
+              <Text style={styles.inputLabel}>Select {manualUserRole === 'customer' ? 'Customer' : 'Technician'}:</Text>
+              <ScrollView style={styles.userPickerScroll} nestedScrollEnabled>
+                {manualUserList.map((u) => {
+                  const isSelected = selectedManualUser?.id === u.id;
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[styles.userPickerItem, isSelected && styles.userPickerItemSelected]}
+                      onPress={() => setSelectedManualUser(u)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.userPickerName, isSelected && styles.userPickerNameSelected]}>
+                          {u.name}
+                        </Text>
+                        <Text style={styles.userPickerEmail}>{u.email} {u.phone ? `• ${u.phone}` : ''}</Text>
+                      </View>
+                      {isSelected ? <AppIcon name="check" size={18} color={Colors.primary} /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+
+              {/* Password Generator */}
+              <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                <View style={styles.passLabelRow}>
+                  <Text style={styles.inputLabel}>Temporary Password</Text>
+                  <TouchableOpacity
+                    onPress={() => setManualTempPassword(generateSuggestedPassword())}
+                    style={styles.regenBtn}
+                  >
+                    <AppIcon name="refresh" size={13} color={Colors.primary} />
+                    <Text style={styles.regenBtnText}>Regenerate</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.tempPassInput}
+                  value={manualTempPassword}
+                  onChangeText={setManualTempPassword}
+                  placeholder="Enter or generate temporary password"
+                  placeholderTextColor={Colors.onSurfaceVariant}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setIsManualIssueModalVisible(false)}
+                  disabled={isManualIssuing}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalSubmitBtn,
+                    (!selectedManualUser || isManualIssuing) && { opacity: 0.6 }
+                  ]}
+                  onPress={handleManualIssueSubmit}
+                  disabled={!selectedManualUser || isManualIssuing}
+                  activeOpacity={0.85}
+                >
+                  {isManualIssuing ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <AppIcon name="send" size={16} color="#FFFFFF" />
+                      <Text style={styles.modalSubmitBtnText}>Issue & Deliver</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </TouchableOpacity>
       </Modal>
@@ -1942,5 +2481,394 @@ const styles = StyleSheet.create({
     fontFamily: 'JetBrainsMono-Medium',
     fontSize: 12,
     color: '#191c1e',
+  },
+  reqCountBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  reqCountBadgePending: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  reqCountBadgeClear: {
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  reqCountBadgeText: {
+    fontFamily: 'JetBrainsMono-Medium',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  reqCountBadgeTextPending: {
+    color: '#B45309',
+  },
+  reqCountBadgeTextClear: {
+    color: '#15803D',
+  },
+  cardSubheadingText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12.5,
+    color: '#555A64',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  requestsFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  filterChipActive: {
+    backgroundColor: '#005236',
+  },
+  filterChipText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12,
+    color: '#475569',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  refreshIconBtn: {
+    marginLeft: 'auto',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestsLoadingWrap: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  requestsLoadingText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#64748B',
+  },
+  requestsEmptyBox: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 6,
+  },
+  requestsEmptyTitle: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  requestsEmptySubtitle: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#64748B',
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  requestsListContainer: {
+    gap: 10,
+    marginBottom: 12,
+  },
+  requestItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    padding: 12,
+    gap: 6,
+  },
+  requestItemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  requestUserMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  requestUserName: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 14,
+    color: '#0F172A',
+  },
+  rolePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  rolePillTech: {
+    backgroundColor: '#F3E8FF',
+  },
+  rolePillCust: {
+    backgroundColor: '#E0F2FE',
+  },
+  rolePillText: {
+    fontFamily: 'JetBrainsMono-Medium',
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  rolePillTextTech: {
+    color: '#7E22CE',
+  },
+  rolePillTextCust: {
+    color: '#0369A1',
+  },
+  statusPillSmall: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  statusPillSmallPending: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusPillSmallFulfilled: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillSmallText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusPillSmallTextPending: {
+    color: '#B45309',
+  },
+  statusPillSmallTextFulfilled: {
+    color: '#15803D',
+  },
+  requestEmailText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#64748B',
+  },
+  requestReasonText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#334155',
+    backgroundColor: '#F8FAFC',
+    padding: 6,
+    borderRadius: 6,
+  },
+  requestFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  requestDateText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  fulfillActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#005236',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  fulfillActionBtnText: {
+    color: '#FFFFFF',
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11.5,
+  },
+  fulfilledBadgeBox: {
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  fulfilledPasswordText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#166534',
+  },
+  boldPasswordCode: {
+    fontFamily: 'JetBrainsMono-Medium',
+    fontWeight: '700',
+    color: '#14532D',
+  },
+  manualIssueOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#005236',
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(0, 82, 54, 0.04)',
+    marginTop: 4,
+  },
+  manualIssueOpenBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: '#005236',
+  },
+  fulfillModalSheet: {
+    width: '92%',
+    maxWidth: 480,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    ...Shadows.large,
+  },
+  modalHeaderLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fulfillUserInfoBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 3,
+  },
+  fulfillUserNameText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 15,
+    color: '#0F172A',
+  },
+  fulfillUserSubText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    color: '#64748B',
+  },
+  fulfillUserReasonText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: '#475569',
+    marginTop: 4,
+  },
+  passLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  regenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: 'rgba(0, 82, 54, 0.08)',
+    borderRadius: 4,
+  },
+  regenBtnText: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 11,
+    color: '#005236',
+  },
+  tempPassInput: {
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontFamily: 'JetBrainsMono-Medium',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  fulfillNoticeBox: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: 'rgba(0, 82, 54, 0.06)',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 4,
+    alignItems: 'flex-start',
+  },
+  fulfillNoticeText: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11.5,
+    color: '#005236',
+    flex: 1,
+    lineHeight: 16,
+  },
+  roleTabsWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 3,
+    marginBottom: 10,
+  },
+  roleTab: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  roleTabActive: {
+    backgroundColor: '#FFFFFF',
+    ...Shadows.small,
+  },
+  roleTabText: {
+    fontFamily: 'Inter-Medium',
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+  roleTabTextActive: {
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  userPickerScroll: {
+    maxHeight: 140,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  userPickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  userPickerItemSelected: {
+    backgroundColor: 'rgba(0, 82, 54, 0.08)',
+  },
+  userPickerName: {
+    fontFamily: 'Inter-SemiBold',
+    fontSize: 13,
+    color: '#1E293B',
+  },
+  userPickerNameSelected: {
+    color: '#005236',
+    fontWeight: '700',
+  },
+  userPickerEmail: {
+    fontFamily: 'Inter-Regular',
+    fontSize: 11,
+    color: '#64748B',
   },
 });

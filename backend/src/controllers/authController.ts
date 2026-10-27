@@ -487,3 +487,163 @@ export const changePassword = async (
     res.status(500).json({ success: false, error: 'Failed to change password. Please try again later.' });
   }
 };
+
+export const requestTemporaryPassword = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      return;
+    }
+
+    const userId = req.user.userId;
+    const { reason } = req.body || {};
+
+    const userRes = await query(
+      `SELECT id, name, email, phone, role FROM users WHERE id = $1;`,
+      [userId]
+    );
+
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ success: false, error: 'User account not found.' });
+      return;
+    }
+
+    const user = userRes.rows[0];
+
+    // Check if there is already a pending request
+    const existingRes = await query(
+      `SELECT id, status, created_at 
+       FROM password_reset_requests 
+       WHERE user_id = $1 AND status = 'pending' 
+       ORDER BY created_at DESC LIMIT 1;`,
+      [userId]
+    );
+
+    let requestId: string;
+
+    if (existingRes.rows.length > 0) {
+      requestId = existingRes.rows[0].id;
+      await query(
+        `UPDATE password_reset_requests 
+         SET reason = COALESCE($1, reason), updated_at = NOW() 
+         WHERE id = $2;`,
+        [reason || 'Forgot current password', requestId]
+      );
+    } else {
+      const insertRes = await query(
+        `INSERT INTO password_reset_requests 
+           (user_id, role, user_name, user_email, user_phone, reason, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+         RETURNING id;`,
+        [
+          userId,
+          user.role,
+          user.name,
+          user.email,
+          user.phone,
+          reason || 'Forgot current password',
+        ]
+      );
+      requestId = insertRes.rows[0].id;
+    }
+
+    // Notify all admin users
+    try {
+      const adminsRes = await query(
+        `SELECT id FROM users WHERE role = 'admin' AND is_active = true;`
+      );
+      const notifData = JSON.stringify({
+        type: 'password_reset_request',
+        requestId,
+        targetUserId: userId,
+        userName: user.name,
+        userRole: user.role,
+      });
+
+      for (const admin of adminsRes.rows) {
+        await query(
+          `INSERT INTO notifications (user_id, title, message, type, data, metadata)
+           VALUES ($1, $2, $3, 'system', $4, $4);`,
+          [
+            admin.id,
+            '🔐 Temporary Password Request',
+            `${user.name} (${user.role.toUpperCase()}: ${user.email || user.phone}) requested a temporary password.`,
+            notifData,
+          ]
+        );
+      }
+    } catch (notifErr: any) {
+      console.warn('⚠️ [Admin notification warning on password reset request]:', notifErr.message);
+    }
+
+    res.json({
+      success: true,
+      message:
+        'Temporary password request sent to Admin. You will receive an in-app notification with your temporary password once approved.',
+      data: {
+        requestId,
+        status: 'pending',
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to request temporary password:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Unable to process temporary password request. Please try again.',
+    });
+  }
+};
+
+export const getMyTemporaryPasswordStatus = async (
+  req: AuthenticatedRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    if (!req.user || !req.user.userId) {
+      res.status(401).json({ success: false, error: 'Unauthorized session.' });
+      return;
+    }
+
+    const userId = req.user.userId;
+
+    const result = await query(
+      `SELECT id, status, temporary_password, reason, created_at, resolved_at
+       FROM password_reset_requests
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1;`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.json({
+        success: true,
+        data: null,
+      });
+      return;
+    }
+
+    const row = result.rows[0];
+    res.json({
+      success: true,
+      data: {
+        id: row.id,
+        status: row.status,
+        temporaryPassword: row.status === 'fulfilled' ? row.temporary_password : null,
+        reason: row.reason,
+        createdAt: row.created_at,
+        resolvedAt: row.resolved_at,
+      },
+    });
+  } catch (err: any) {
+    console.error('Failed to get temporary password status:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve temporary password status.',
+    });
+  }
+};
+

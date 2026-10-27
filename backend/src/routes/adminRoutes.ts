@@ -34,6 +34,9 @@ import {
   updateAdminNotificationPreferences,
   getNotificationAudiences,
   sendBroadcastNotification,
+  getTemporaryPasswordRequests,
+  fulfillTemporaryPasswordRequest,
+  setUserTemporaryPassword,
 } from '../controllers/adminController';
 import { authenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
@@ -87,5 +90,10 @@ router.get('/notification-preferences', getAdminNotificationPreferences);
 router.put('/notification-preferences', updateAdminNotificationPreferences);
 router.get('/notifications/audiences', getNotificationAudiences);
 router.post('/notifications/broadcast', sendBroadcastNotification);
+
+// Temporary Password Requests & Management
+router.get('/temporary-password-requests', getTemporaryPasswordRequests);
+router.post('/temporary-password-requests/:id/fulfill', fulfillTemporaryPasswordRequest);
+router.post('/users/:userId/set-temporary-password', setUserTemporaryPassword);
 
 export default router;
