@@ -763,68 +763,103 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
             </View>
           ) : (
             <View style={styles.requestsListContainer}>
-              {displayedRequests.map((req) => (
-                <View key={req.id} style={styles.requestItemCard}>
-                  <View style={styles.requestItemHeader}>
-                    <View style={styles.requestUserMeta}>
-                      <Text style={styles.requestUserName}>{req.user_name}</Text>
+              {displayedRequests.map((req) => {
+                const reqUserName = req.userName || req.user_name || 'ChairCare User';
+                const reqUserEmail = req.userEmail || req.user_email || '';
+                const reqUserPhone = req.userPhone || req.user_phone || '';
+                const reqRole = req.role || 'user';
+                const reqPass = req.temporaryPassword || req.temporary_password;
+                const rawDate = req.createdAt || req.created_at;
+                const formattedDate = rawDate && !isNaN(new Date(rawDate).getTime())
+                  ? `${new Date(rawDate).toLocaleDateString()} at ${new Date(rawDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Recently requested';
+
+                const initials = reqUserName
+                  .split(' ')
+                  .map((w: string) => w[0])
+                  .join('')
+                  .substring(0, 2)
+                  .toUpperCase() || 'U';
+
+                return (
+                  <View key={req.id} style={styles.requestItemCard}>
+                    <View style={styles.requestItemHeader}>
+                      <View style={styles.requestUserMeta}>
+                        <View style={[
+                          styles.reqAvatarCircle,
+                          reqRole === 'technician' ? styles.reqAvatarTech : styles.reqAvatarCust
+                        ]}>
+                          <Text style={[
+                            styles.reqAvatarText,
+                            reqRole === 'technician' ? styles.reqAvatarTextTech : styles.reqAvatarTextCust
+                          ]}>
+                            {initials}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.requestUserName}>{reqUserName}</Text>
+                            <View style={[
+                              styles.rolePill,
+                              reqRole === 'technician' ? styles.rolePillTech : styles.rolePillCust
+                            ]}>
+                              <Text style={[
+                                styles.rolePillText,
+                                reqRole === 'technician' ? styles.rolePillTextTech : styles.rolePillTextCust
+                              ]}>
+                                {reqRole.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          {reqUserEmail ? (
+                            <Text style={styles.requestEmailText}>
+                              {reqUserEmail} {reqUserPhone ? `• ${reqUserPhone}` : ''}
+                            </Text>
+                          ) : null}
+                        </View>
+                      </View>
                       <View style={[
-                        styles.rolePill,
-                        req.role === 'technician' ? styles.rolePillTech : styles.rolePillCust
+                        styles.statusPillSmall,
+                        req.status === 'pending' ? styles.statusPillSmallPending : styles.statusPillSmallFulfilled
                       ]}>
                         <Text style={[
-                          styles.rolePillText,
-                          req.role === 'technician' ? styles.rolePillTextTech : styles.rolePillTextCust
+                          styles.statusPillSmallText,
+                          req.status === 'pending' ? styles.statusPillSmallTextPending : styles.statusPillSmallTextFulfilled
                         ]}>
-                          {req.role.toUpperCase()}
+                          {req.status === 'pending' ? 'Pending' : 'Fulfilled'}
                         </Text>
                       </View>
                     </View>
-                    <View style={[
-                      styles.statusPillSmall,
-                      req.status === 'pending' ? styles.statusPillSmallPending : styles.statusPillSmallFulfilled
-                    ]}>
-                      <Text style={[
-                        styles.statusPillSmallText,
-                        req.status === 'pending' ? styles.statusPillSmallTextPending : styles.statusPillSmallTextFulfilled
-                      ]}>
-                        {req.status === 'pending' ? 'Pending' : 'Fulfilled'}
+
+                    {req.reason ? (
+                      <Text style={styles.requestReasonText}>Reason: "{req.reason}"</Text>
+                    ) : null}
+
+                    <View style={styles.requestFooterRow}>
+                      <Text style={styles.requestDateText}>
+                        Requested: {formattedDate}
                       </Text>
+
+                      {req.status === 'pending' ? (
+                        <TouchableOpacity
+                          style={styles.fulfillActionBtn}
+                          onPress={() => handleOpenFulfillModal(req)}
+                          activeOpacity={0.8}
+                        >
+                          <AppIcon name="key" size={14} color="#FFFFFF" />
+                          <Text style={styles.fulfillActionBtnText}>Issue Password</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.fulfilledBadgeBox}>
+                          <Text style={styles.fulfilledPasswordText}>
+                            Temp Pass: <Text style={styles.boldPasswordCode}>{reqPass || '••••••'}</Text>
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
-
-                  <Text style={styles.requestEmailText}>
-                    {req.user_email} {req.user_phone ? `• ${req.user_phone}` : ''}
-                  </Text>
-                  
-                  {req.reason ? (
-                    <Text style={styles.requestReasonText}>Reason: "{req.reason}"</Text>
-                  ) : null}
-
-                  <View style={styles.requestFooterRow}>
-                    <Text style={styles.requestDateText}>
-                      {new Date(req.created_at).toLocaleDateString()} at {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-
-                    {req.status === 'pending' ? (
-                      <TouchableOpacity
-                        style={styles.fulfillActionBtn}
-                        onPress={() => handleOpenFulfillModal(req)}
-                        activeOpacity={0.8}
-                      >
-                        <AppIcon name="key" size={14} color="#FFFFFF" />
-                        <Text style={styles.fulfillActionBtnText}>Issue Password</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={styles.fulfilledBadgeBox}>
-                        <Text style={styles.fulfilledPasswordText}>
-                          Temp Pass: <Text style={styles.boldPasswordCode}>{req.temporary_password || '••••••'}</Text>
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ))}
+                );
+              })}
             </View>
           )}
 
@@ -1396,9 +1431,11 @@ export const SecuritySystemPreferencesChaircareMobileScreen: React.FC<
               <View style={styles.modalFormContent}>
                 {/* User Info Box */}
                 <View style={styles.fulfillUserInfoBox}>
-                  <Text style={styles.fulfillUserNameText}>{selectedFulfillRequest.user_name}</Text>
+                  <Text style={styles.fulfillUserNameText}>
+                    {selectedFulfillRequest.userName || selectedFulfillRequest.user_name || 'ChairCare User'}
+                  </Text>
                   <Text style={styles.fulfillUserSubText}>
-                    {selectedFulfillRequest.role.toUpperCase()} • {selectedFulfillRequest.user_email}
+                    {(selectedFulfillRequest.role || 'user').toUpperCase()} • {selectedFulfillRequest.userEmail || selectedFulfillRequest.user_email || 'No email registered'} {selectedFulfillRequest.userPhone || selectedFulfillRequest.user_phone ? `• ${selectedFulfillRequest.userPhone || selectedFulfillRequest.user_phone}` : ''}
                   </Text>
                   {selectedFulfillRequest.reason ? (
                     <Text style={styles.fulfillUserReasonText}>
@@ -2870,5 +2907,29 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter-Regular',
     fontSize: 11,
     color: '#64748B',
+  },
+  reqAvatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 6,
+  },
+  reqAvatarTech: {
+    backgroundColor: '#F3E8FF',
+  },
+  reqAvatarCust: {
+    backgroundColor: '#E0F2FE',
+  },
+  reqAvatarText: {
+    fontFamily: 'Inter-Bold',
+    fontSize: 13,
+  },
+  reqAvatarTextTech: {
+    color: '#7E22CE',
+  },
+  reqAvatarTextCust: {
+    color: '#0369A1',
   },
 });

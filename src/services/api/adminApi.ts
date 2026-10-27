@@ -320,18 +320,27 @@ export const adminApi = {
 
 export interface TemporaryPasswordRequestItem {
   id: string;
-  user_id: string;
+  user_id?: string;
+  userId?: string;
   role: 'customer' | 'technician' | string;
-  user_name: string;
-  user_email: string;
+  user_name?: string;
+  userName?: string;
+  user_email?: string;
+  userEmail?: string;
   user_phone?: string;
+  userPhone?: string;
   reason?: string;
   status: 'pending' | 'fulfilled' | 'rejected' | 'cancelled';
   temporary_password?: string;
+  temporaryPassword?: string;
   resolved_by?: string;
+  resolvedBy?: string;
   resolved_at?: string;
-  created_at: string;
-  updated_at: string;
+  resolvedAt?: string;
+  created_at?: string;
+  createdAt?: string;
+  updated_at?: string;
+  updatedAt?: string;
 }
 
 export interface PlatformConfigData {
