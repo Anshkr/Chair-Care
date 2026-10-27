@@ -421,3 +421,7 @@ For technical assistance, architecture walkthroughs, or deployment support:
 - **Primary Support Line**: `+91 92174 60742`
 - **Email Contact**: `enquiry@offheman.in`
 - **Reference Documentation**: See [ChairCare_Developer_Codebase_Reference.pdf](ChairCare_Developer_Codebase_Reference.pdf) in the project root for file-by-file technical architecture.
+
+## 💻 Developers 
+
+-- **Ansh & smruthi**
