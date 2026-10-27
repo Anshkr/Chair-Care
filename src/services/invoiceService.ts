@@ -424,7 +424,7 @@ export function generateInvoiceHtml(details: InvoiceDetails): string {
             Plot 42, Sector 44, Cyber City<br />
             Gurugram, Haryana - 122003<br />
             <strong>GSTIN:</strong> 06AAACH7492K1Z8<br />
-            <strong>Support:</strong> care@chaircare.in | +91 800 555 0199
+            <strong>Support:</strong> enquiry@offheman.in | +91 92174 60742
           </div>
         </div>
         <div>

@@ -8,6 +8,10 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  Modal,
+  TextInput,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
@@ -38,6 +42,7 @@ interface EarningRecord {
   breakdown: string;
   icon: string;
   status: 'completed' | 'pending_settlement';
+  isDirectQr?: boolean;
 }
 
 interface ChartDay {
@@ -54,8 +59,22 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
   route,
 }) => {
   const insets = useSafeAreaInsets();
-  const { acceptedRequest } = useTechnician();
+  const {
+    acceptedRequest,
+    upiId,
+    upiPhone,
+    updateUpiSettings,
+    qrCollections,
+  } = useTechnician();
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(5);
+
+  // UPI QR and Dynamic Edit Modals
+  const [showQrModal, setShowQrModal] = useState<boolean>(false);
+  const [showEditUpiModal, setShowEditUpiModal] = useState<boolean>(false);
+  const [editUpiInput, setEditUpiInput] = useState<string>(upiId || '');
+  const [editPhoneInput, setEditPhoneInput] = useState<string>(upiPhone || '');
+  const [isSavingUpi, setIsSavingUpi] = useState<boolean>(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
 
   const [earningsState, setEarningsState] = useState<{
     todayEarnings: number;
@@ -118,10 +137,69 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
     };
   }, []);
 
+  // Sync input values when upiId / upiPhone change
+  React.useEffect(() => {
+    if (upiId) setEditUpiInput(upiId);
+  }, [upiId]);
+
+  React.useEffect(() => {
+    if (upiPhone) setEditPhoneInput(upiPhone);
+  }, [upiPhone]);
+
+  const handleSaveUpi = async () => {
+    const cleanUpi = editUpiInput.trim();
+    const cleanPhone = editPhoneInput.trim();
+    if (!cleanUpi && !cleanPhone) {
+      Alert.alert('Input Required', 'Please enter a valid UPI ID (e.g. yourname@paytm) or Mobile Phone number.');
+      return;
+    }
+    setIsSavingUpi(true);
+    try {
+      await updateUpiSettings(cleanUpi, cleanPhone);
+      setSaveSuccessMsg('UPI configuration updated successfully!');
+      setTimeout(() => {
+        setSaveSuccessMsg('');
+        setShowEditUpiModal(false);
+      }, 1000);
+    } catch {
+      Alert.alert('Error', 'Could not save UPI configuration.');
+    } finally {
+      setIsSavingUpi(false);
+    }
+  };
+
+  // Convert QR collections to EarningRecord
+  const directQrItems: EarningRecord[] = React.useMemo(() => {
+    return (qrCollections || []).map((col) => ({
+      id: col.id,
+      serviceTitle: col.serviceTitle || 'Chair Service & Repair',
+      customerName: col.customerName || 'Customer',
+      chairModel: col.chairModel || 'Ergonomic Task Chair',
+      amount: Number(col.amount) || 0,
+      completedAt: col.completedAt || 'Direct QR',
+      breakdown: `Direct UPI (${col.upiId || upiId || 'Technician Account'})`,
+      icon: 'QrCode',
+      status: 'completed',
+      isDirectQr: true,
+    }));
+  }, [qrCollections, upiId]);
+
+  const realQrTotal = React.useMemo(() => {
+    return directQrItems.reduce((acc, item) => acc + item.amount, 0);
+  }, [directQrItems]);
+
+  const computedTodayEarnings = earningsState.todayEarnings + realQrTotal;
+  const computedWeeklyEarnings = earningsState.weeklyEarnings + realQrTotal;
+
+  // Active Standby UPI QR url
+  const cleanActiveUpi = (upiId || (upiPhone ? `${upiPhone.replace(/[^0-9]/g, '')}@paytm` : '9217460742@paytm')).trim();
+  const standbyUpiUrl = `upi://pay?pa=${encodeURIComponent(cleanActiveUpi)}&pn=${encodeURIComponent('ChairCare Technician')}&cu=INR&tn=${encodeURIComponent('ChairCare Service Payout')}`;
+  const standbyQrImg = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=12&data=${encodeURIComponent(standbyUpiUrl)}`;
+
   // Dynamic context integration
   const dynamicRequest = route?.params?.request || acceptedRequest;
   const dynamicEarningsList = React.useMemo(() => {
-    let list = [...earningsState.recentPayouts];
+    let list = [...directQrItems, ...earningsState.recentPayouts];
     if (dynamicRequest && dynamicRequest.status === 'completed') {
       const baseCost = Number(dynamicRequest.totalAmount) || Number(dynamicRequest.total_amount) || dynamicRequest.baseRate || 599;
       const additionalCost =
@@ -140,12 +218,13 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
         breakdown: additionalCost > 0 ? `Booked Price ₹${baseCost} + Parts ₹${additionalCost}` : `Booked Service Price ₹${baseCost}`,
         icon: 'Wrench',
         status: 'completed',
+        isDirectQr: Boolean(dynamicRequest.paymentMethod === 'direct_upi_qr'),
       };
 
       list = [dynamicItem, ...list.filter((i) => i.id !== dynamicItem.id)];
     }
     return list;
-  }, [dynamicRequest, earningsState.recentPayouts]);
+  }, [directQrItems, dynamicRequest, earningsState.recentPayouts]);
 
   const weeklyChartData: ChartDay[] = React.useMemo(() => {
     const days = [
@@ -157,7 +236,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
       { day: 'Sat', label: 'S', pct: 0.3, isPeak: true },
       { day: 'Sun', label: 'S', pct: 0.0, isOff: true },
     ];
-    const total = earningsState.weeklyEarnings;
+    const total = computedWeeklyEarnings;
     return days.map((d) => {
       const amt = Math.round(total * d.pct);
       const height = total > 0 ? Math.min(Math.max(Math.round((amt / (total * 0.35 || 1)) * 100), 10), 98) : (d.isOff ? 8 : 20);
@@ -170,7 +249,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
         isOff: d.isOff,
       };
     });
-  }, [earningsState.weeklyEarnings]);
+  }, [computedWeeklyEarnings]);
 
   const handleSelectEarning = (item: EarningRecord) => {
     if (navigation) {
@@ -216,14 +295,6 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
 
         <View style={styles.headerRight}>
           <ThemeSwitchButton variant="header" style={{ marginRight: 6 }} />
-          <TouchableOpacity
-            style={styles.tuneButton}
-            onPress={() => Alert.alert('Filters', 'Filter earnings by date range, chair brand, or service tier.')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="Sliders" size={18} />
-          </TouchableOpacity>
-
           <TechnicianHeaderAvatar
             size={38}
             onPress={() => navigation?.navigate?.('TechProfileTab')}
@@ -239,6 +310,78 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Platform Policy / Admin Reference Notice for Technician Platform */}
+        <View style={styles.adminAuditNoticeCard}>
+          <View style={styles.adminAuditIconBox}>
+            <AppIcon name="ShieldAlert" size={18} color="#D97706" />
+          </View>
+          <View style={styles.adminAuditContent}>
+            <View style={styles.adminAuditTitleRow}>
+              <Text style={styles.adminAuditTag}>PLATFORM AUDIT POLICY</Text>
+              <View style={styles.adminOnlyBadge}>
+                <Text style={styles.adminOnlyBadgeText}>Admin Reference Only</Text>
+              </View>
+            </View>
+            <Text style={styles.adminAuditText}>
+              Historical payouts and demo records below are preserved for administrative reference & platform audit only. Real money collected directly from customers via your Direct UPI QR goes 100% straight to your personal account.
+            </Text>
+          </View>
+        </View>
+
+        {/* Dynamic Personal Direct UPI QR Settlement Card */}
+        <View style={styles.upiDirectCard}>
+          <View style={styles.upiDirectHeaderRow}>
+            <View style={styles.upiDirectLeft}>
+              <View style={styles.upiIconBubble}>
+                <AppIcon name="QrCode" size={20} color="#059669" />
+              </View>
+              <View>
+                <View style={styles.directPayoutBadge}>
+                  <Text style={styles.directPayoutBadgeText}>DIRECT TO YOUR ACCOUNT</Text>
+                </View>
+                <Text style={styles.upiDirectTitle}>Personal UPI Collection QR</Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={styles.upiEditBtn}
+              onPress={() => {
+                setEditUpiInput(upiId || '');
+                setEditPhoneInput(upiPhone || '');
+                setShowEditUpiModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <AppIcon name="Pencil" size={13} color="#0284C7" />
+              <Text style={styles.upiEditBtnText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.upiDetailsRow}>
+            <View style={styles.upiDetailCol}>
+              <Text style={styles.upiDetailLabel}>LINKED UPI ID (VPA)</Text>
+              <Text style={styles.upiDetailValueMono} numberOfLines={1}>
+                {cleanActiveUpi}
+              </Text>
+            </View>
+            <View style={styles.upiDividerVertical} />
+            <View style={styles.upiDetailCol}>
+              <Text style={styles.upiDetailLabel}>PHONE / MOBILE</Text>
+              <Text style={styles.upiDetailValueMono} numberOfLines={1}>
+                {upiPhone || '+91 92174 60742'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.showQrActionBtn}
+            onPress={() => setShowQrModal(true)}
+            activeOpacity={0.85}
+          >
+            <AppIcon name="QrCode" size={17} color="#FFFFFF" />
+            <Text style={styles.showQrActionBtnText}>Show My Standby QR Code</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Metadata & Payout Notice Subtitle */}
         <View style={styles.noticeSection}>
           <View style={styles.bankIconCircle}>
@@ -247,7 +390,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
           <View style={styles.noticeTextCol}>
             <Text style={styles.financialOverviewTag}>FINANCIAL OVERVIEW</Text>
             <Text style={styles.payoutNoticeText}>
-              Auto-payout every Monday to{' '}
+              Auto-payout ledger every Monday to{' '}
               <Text style={styles.bankAccountMono}>HDFC Bank ••4921</Text>
             </Text>
           </View>
@@ -276,10 +419,10 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
           <View style={styles.bentoAmountRow}>
             <View>
               <Text style={styles.grossAccruedAmount}>
-                ₹{(earningsState.todayEarnings + earningsState.weeklyEarnings).toLocaleString('en-IN')}
+                ₹{(computedTodayEarnings + computedWeeklyEarnings).toLocaleString('en-IN')}
               </Text>
               <Text style={styles.grossAccruedLabel}>
-                Gross accrued technician earnings
+                Gross technician earnings (Real QR + Accrued)
               </Text>
             </View>
 
@@ -300,10 +443,10 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
             </View>
             <View style={styles.metricCardBottomCol}>
               <Text style={styles.metricValue}>
-                ₹{earningsState.todayEarnings.toLocaleString('en-IN')}
+                ₹{computedTodayEarnings.toLocaleString('en-IN')}
               </Text>
               <Text style={styles.metricSub}>
-                {earningsState.completedJobsToday} jobs done
+                {earningsState.completedJobsToday + directQrItems.length} jobs done
               </Text>
             </View>
           </View>
@@ -316,10 +459,10 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
             </View>
             <View style={styles.metricCardBottomCol}>
               <Text style={styles.metricValue}>
-                ₹{earningsState.weeklyEarnings.toLocaleString('en-IN')}
+                ₹{computedWeeklyEarnings.toLocaleString('en-IN')}
               </Text>
               <Text style={styles.metricSub}>
-                {earningsState.weeklyCompletedJobs} jobs done
+                {earningsState.weeklyCompletedJobs + directQrItems.length} jobs done
               </Text>
             </View>
           </View>
@@ -332,7 +475,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
             </View>
             <View style={styles.metricCardBottomCol}>
               <Text style={styles.metricValue}>
-                {earningsState.completedJobsToday + earningsState.weeklyCompletedJobs}
+                {earningsState.completedJobsToday + earningsState.weeklyCompletedJobs + directQrItems.length}
               </Text>
               <Text style={styles.metricSuccessSub}>
                 ⭐ {earningsState.rating.toFixed(1)} rating
@@ -347,7 +490,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
             <View>
               <Text style={styles.chartTitle}>Weekly Trend</Text>
               <Text style={styles.chartSubtitle}>
-                Last 7 Days (₹{earningsState.weeklyEarnings.toLocaleString('en-IN')} total)
+                Last 7 Days (₹{computedWeeklyEarnings.toLocaleString('en-IN')} total)
               </Text>
             </View>
             <View style={styles.peakBadge}>
@@ -421,7 +564,7 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
             <View style={styles.scheduleContentCol}>
               <Text style={styles.scheduleTag}>NEXT SCHEDULED PAYOUT</Text>
               <Text style={styles.scheduleAmount}>
-                ₹{earningsState.weeklyEarnings.toLocaleString('en-IN')}
+                ₹{computedWeeklyEarnings.toLocaleString('en-IN')}
               </Text>
               <Text style={styles.scheduleDateText}>
                 Monday Settlement • Direct Bank Transfer
@@ -478,14 +621,24 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
               dynamicEarningsList.map((item) => (
                 <TouchableOpacity
                   key={item.id}
-                  style={styles.earningItemCard}
+                  style={[
+                    styles.earningItemCard,
+                    item.isDirectQr && styles.earningItemCardDirectQr,
+                  ]}
                   onPress={() => handleSelectEarning(item)}
                   activeOpacity={0.88}
                 >
                   <View style={styles.earningItemTopRow}>
                     <View style={styles.earningItemLeft}>
-                      <View style={styles.itemIconContainer}>
-                        <AppIcon name={item.icon} size={20} />
+                      <View style={[
+                        styles.itemIconContainer,
+                        item.isDirectQr && { backgroundColor: '#ECFDF5' },
+                      ]}>
+                        <AppIcon
+                          name={item.icon}
+                          size={20}
+                          color={item.isDirectQr ? '#059669' : Colors.primary}
+                        />
                       </View>
                       <View style={styles.itemMetaCol}>
                         <Text style={styles.itemTitle} numberOfLines={1}>
@@ -497,18 +650,30 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
                       </View>
                     </View>
 
-                    <Text style={styles.itemAmount}>
+                    <Text style={[
+                      styles.itemAmount,
+                      item.isDirectQr && { color: '#059669', fontWeight: '800' },
+                    ]}>
                       ₹{item.amount.toLocaleString('en-IN')}
                     </Text>
                   </View>
 
                   <View style={styles.earningItemBottomRow}>
-                    <View style={styles.completedBadge}>
-                      <View style={styles.emeraldDot} />
-                      <Text style={styles.completedBadgeText}>
-                        Completed • {item.completedAt}
-                      </Text>
-                    </View>
+                    {item.isDirectQr ? (
+                      <View style={styles.directQrBadge}>
+                        <View style={styles.emeraldDot} />
+                        <Text style={styles.directQrBadgeText}>
+                          DIRECT UPI QR • REAL SETTLEMENT
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.adminRefBadge}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#94A3B8' }} />
+                        <Text style={styles.adminRefBadgeText}>
+                          ADMIN REFERENCE • {item.completedAt}
+                        </Text>
+                      </View>
+                    )}
                     <Text style={styles.itemBreakdownText} numberOfLines={1}>
                       {item.breakdown}
                     </Text>
@@ -519,6 +684,171 @@ export const EarningsChaircareMobileScreen: React.FC<EarningsProps> = ({
           </View>
         </View>
       </ScrollView>
+
+      {/* Standby QR Display Modal */}
+      <Modal
+        visible={showQrModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowQrModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalPreTitle}>DIRECT SETTLEMENT</Text>
+                <Text style={styles.modalTitle}>Your Collection UPI QR</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowQrModal(false)}
+                style={styles.modalCloseBtn}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="X" size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Customers can scan this QR code using Google Pay, PhonePe, Paytm, Cred, or BHIM. Money transfers straight to your account.
+            </Text>
+
+            {/* High-contrast QR card */}
+            <View style={styles.qrCardBox}>
+              <Image
+                source={{ uri: standbyQrImg }}
+                style={styles.qrImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.qrScanNotice}>
+                ⚡ All UPI Apps Supported (GPay / PhonePe / Paytm / BHIM)
+              </Text>
+            </View>
+
+            {/* UPI Details preview */}
+            <View style={styles.modalUpiInfoBox}>
+              <View style={styles.modalUpiRow}>
+                <Text style={styles.modalUpiLabel}>UPI ID:</Text>
+                <Text style={styles.modalUpiValueMono}>{cleanActiveUpi}</Text>
+              </View>
+              <View style={styles.modalUpiRow}>
+                <Text style={styles.modalUpiLabel}>Phone:</Text>
+                <Text style={styles.modalUpiValueMono}>{upiPhone || '+91 92174 60742'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalSwitchEditBtn}
+              onPress={() => {
+                setShowQrModal(false);
+                setEditUpiInput(upiId || '');
+                setEditPhoneInput(upiPhone || '');
+                setShowEditUpiModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <AppIcon name="Pencil" size={15} color="#0284C7" />
+              <Text style={styles.modalSwitchEditText}>Edit UPI ID / Phone Number</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalDismissBtn}
+              onPress={() => setShowQrModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalDismissText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Dynamic Edit UPI & Phone Modal */}
+      <Modal
+        visible={showEditUpiModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditUpiModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalPreTitle}>ACCOUNT CONFIGURATION</Text>
+                <Text style={styles.modalTitle}>Edit Collection UPI & Phone</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowEditUpiModal(false)}
+                style={styles.modalCloseBtn}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="X" size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Update your UPI ID or linked phone number anytime. When saved, the customer payment QR code updates instantly.
+            </Text>
+
+            {saveSuccessMsg ? (
+              <View style={styles.modalSuccessBanner}>
+                <AppIcon name="Check" size={16} color="#059669" />
+                <Text style={styles.modalSuccessText}>{saveSuccessMsg}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>UPI ID (VPA)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={editUpiInput}
+                onChangeText={setEditUpiInput}
+                placeholder="e.g. 9800000000@paytm or name@okaxis"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.modalInputHint}>
+                Format: mobile@bank (e.g. 9812345678@paytm, 9812345678@okhdfcbank)
+              </Text>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>MOBILE PHONE NUMBER</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={editPhoneInput}
+                onChangeText={setEditPhoneInput}
+                placeholder="e.g. +91 92174 60742"
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowEditUpiModal(false)}
+                activeOpacity={0.8}
+                disabled={isSavingUpi}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveUpi}
+                activeOpacity={0.8}
+                disabled={isSavingUpi}
+              >
+                {isSavingUpi ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save UPI Details</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -1129,5 +1459,409 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     color: Colors.onSurfaceVariant,
     maxWidth: '48%',
+  },
+  // Admin Reference Banner
+  adminAuditNoticeCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+    borderWidth: 1,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    gap: 12,
+  },
+  adminAuditIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminAuditContent: {
+    flex: 1,
+  },
+  adminAuditTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  adminAuditTag: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+    letterSpacing: 0.8,
+  },
+  adminOnlyBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: '#FCD34D',
+  },
+  adminOnlyBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  adminAuditText: {
+    ...Typography.bodySm,
+    fontSize: 11.5,
+    lineHeight: 16.5,
+    color: '#92400E',
+  },
+  // UPI Direct Card
+  upiDirectCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#A7F3D0',
+    ...Shadows.level1,
+    gap: 12,
+  },
+  upiDirectHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  upiDirectLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  upiIconBubble: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  directPayoutBadge: {
+    backgroundColor: '#ECFDF5',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  directPayoutBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.7,
+  },
+  upiDirectTitle: {
+    ...Typography.titleLg,
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  upiEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  upiEditBtnText: {
+    ...Typography.labelMd,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  upiDetailsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceContainerLowest,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.outlineVariant,
+  },
+  upiDetailCol: {
+    flex: 1,
+  },
+  upiDetailLabel: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  upiDetailValueMono: {
+    ...Typography.labelMono,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  upiDividerVertical: {
+    width: 1,
+    height: 28,
+    backgroundColor: Colors.outlineVariant,
+    marginHorizontal: 12,
+  },
+  showQrActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+  },
+  showQrActionBtnText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  // Earning Item Direct QR vs Admin Reference badges
+  earningItemCardDirectQr: {
+    borderColor: '#A7F3D0',
+    borderWidth: 1.5,
+    backgroundColor: '#FAFDFB',
+  },
+  directQrBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  directQrBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#059669',
+    letterSpacing: 0.4,
+  },
+  adminRefBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.surfaceContainerHighest,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  adminRefBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  // Modals
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    width: '100%',
+    maxWidth: 420,
+    ...Shadows.level2,
+    gap: 12,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  modalPreTitle: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: Colors.secondaryCobalt,
+    letterSpacing: 0.8,
+  },
+  modalTitle: {
+    ...Typography.headlineSm,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  modalCloseBtn: {
+    padding: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainerHighest,
+  },
+  modalSubtitle: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16.5,
+  },
+  qrCardBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  qrImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  qrScanNotice: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    textAlign: 'center',
+  },
+  modalUpiInfoBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    gap: 4,
+  },
+  modalUpiRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalUpiLabel: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalUpiValueMono: {
+    ...Typography.labelMono,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalSwitchEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  modalSwitchEditText: {
+    ...Typography.labelMd,
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  modalDismissBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  modalDismissText: {
+    ...Typography.labelMd,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  modalSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+  },
+  modalSuccessText: {
+    ...Typography.labelMd,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  modalInputGroup: {
+    gap: 4,
+  },
+  modalInputLabel: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    letterSpacing: 0.5,
+  },
+  modalTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    ...Typography.bodyMd,
+    fontSize: 13.5,
+    color: '#0F172A',
+  },
+  modalInputHint: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.onSurfaceVariant,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+  },
+  modalCancelText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalSaveBtn: {
+    flex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+  },
+  modalSaveText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

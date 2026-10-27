@@ -108,7 +108,7 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
             const trackingCode = item.trackingCode || item.tracking_code;
             const isPaid = item.isPaid !== undefined 
               ? Boolean(item.isPaid) 
-              : (item.is_paid !== undefined ? Boolean(item.is_paid) : itemStatus === 'completed');
+              : Boolean(item.is_paid);
 
             const chairModel = item.chairModel || item.chair_model || 'Office Chair';
             const issueDescription = item.issueDescription || item.issue_description || 'General inspection & repair';
@@ -259,10 +259,6 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                 {ticketsData.length} Total
               </Text>
             </View>
-          </View>
-
-          <View style={styles.filterBtn}>
-            <AppIcon name="SlidersHorizontal" size={16} color={Colors.onSurface} />
           </View>
         </View>
 
@@ -557,6 +553,23 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                           </Text>
                         </View>
                       )}
+
+                      {/* Payment Status Bar for Active Ticket */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <AppIcon
+                            name={ticket.isPaid ? 'ShieldCheck' : 'Banknote'}
+                            size={14}
+                            color={ticket.isPaid ? '#15803D' : '#B45309'}
+                          />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: ticket.isPaid ? '#15803D' : '#B45309' }}>
+                            {ticket.isPaid ? 'Paid Online • Do not pay tech' : 'Pay on Delivery • Due on fix'}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: ticket.isPaid ? '#15803D' : Colors.onSurface }}>
+                          ₹{ticket.amount}
+                        </Text>
+                      </View>
                     </View>
                   )}
 
@@ -588,10 +601,12 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                           {ticket.dateInfo}
                         </Text>
                       </View>
-                      <View style={styles.paidAmountBadge}>
-                        <Text style={styles.paidAmountText}>
+                      <View style={[styles.paidAmountBadge, ticket.isPaid && { backgroundColor: '#DCFCE7' }]}>
+                        <Text style={[styles.paidAmountText, ticket.isPaid && { color: '#15803D' }]}>
                           ₹{ticket.amount}{' '}
-                          <Text style={styles.paidLabel}>({ticket.isPaid ? 'Paid' : 'Completed'})</Text>
+                          <Text style={[styles.paidLabel, ticket.isPaid && { color: '#15803D', fontWeight: '800' }]}>
+                            ({ticket.isPaid ? 'Paid Online' : 'Pay on Delivery'})
+                          </Text>
                         </Text>
                       </View>
                     </View>

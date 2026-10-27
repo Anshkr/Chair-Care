@@ -43,6 +43,13 @@ export const CustomerRegistrationChaircareMobileScreen: React.FC<{
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const isFormValid =
+    fullName.trim().length > 0 &&
+    email.trim().includes('@') &&
+    phone.trim().length >= 8 &&
+    password.length >= 6 &&
+    password === confirmPassword;
+
   const handleRegister = async () => {
     setErrorMessage(null);
 
@@ -322,16 +329,18 @@ export const CustomerRegistrationChaircareMobileScreen: React.FC<{
 
               {/* Submit CTA Button */}
               <TouchableOpacity
-                style={[styles.submitBtn, isLoading && styles.submitBtnDisabled]}
+                style={[styles.submitBtn, (isLoading || !isFormValid) && styles.submitBtnDisabled]}
                 onPress={handleRegister}
-                disabled={isLoading}
+                disabled={isLoading || !isFormValid}
                 activeOpacity={0.88}
               >
                 {isLoading ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.submitBtnText}>Create My Account</Text>
+                    <Text style={styles.submitBtnText}>
+                      {!isFormValid ? 'Fill Required Fields *' : 'Create My Account'}
+                    </Text>
                     <AppIcon name="ArrowRight" size={18} color="#FFFFFF" />
                   </>
                 )}

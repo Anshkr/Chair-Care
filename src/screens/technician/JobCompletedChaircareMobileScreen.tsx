@@ -1,5 +1,5 @@
 import { AppIcon } from '../../components/common/AppIcon';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,11 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  Modal,
+  TextInput,
+  Image,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, BorderRadius, Shadows, Spacing } from '../../constants/theme';
@@ -31,7 +36,14 @@ export const JobCompletedChaircareMobileScreen: React.FC<JobCompletedProps> = ({
   route,
 }) => {
   const insets = useSafeAreaInsets();
-  const { acceptedRequest, setAcceptedRequest } = useTechnician();
+  const {
+    acceptedRequest,
+    setAcceptedRequest,
+    upiId,
+    upiPhone,
+    updateUpiSettings,
+    recordQrPayment,
+  } = useTechnician();
 
   const passedRequest = route?.params?.request || acceptedRequest;
   const passedId = route?.params?.requestId || route?.params?.jobId;
@@ -54,6 +66,91 @@ export const JobCompletedChaircareMobileScreen: React.FC<JobCompletedProps> = ({
   const additionalCost = ticket.additionalWork?.totalCost || ticket.additionalPartsCost || 0;
   const grandTotal = baseRate + additionalCost;
   const duration = ticket.durationMinutes || (ticket.durationSeconds ? Math.ceil(ticket.durationSeconds / 60) : 48);
+
+  const isPaid = Boolean(
+    ticket.isPaid ??
+    ticket.is_paid ??
+    acceptedRequest?.isPaid ??
+    acceptedRequest?.is_paid
+  );
+
+  const [isQrPaid, setIsQrPaid] = useState<boolean>(isPaid);
+  const [showDirectQrModal, setShowDirectQrModal] = useState<boolean>(false);
+  const [showEditUpiModal, setShowEditUpiModal] = useState<boolean>(false);
+  const [editUpiInput, setEditUpiInput] = useState<string>(upiId || '');
+  const [editPhoneInput, setEditPhoneInput] = useState<string>(upiPhone || '');
+  const [isSavingUpi, setIsSavingUpi] = useState<boolean>(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string>('');
+  const [isConfirmingPayment, setIsConfirmingPayment] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (upiId) setEditUpiInput(upiId);
+  }, [upiId]);
+
+  useEffect(() => {
+    if (upiPhone) setEditPhoneInput(upiPhone);
+  }, [upiPhone]);
+
+  useEffect(() => {
+    if (isPaid) setIsQrPaid(true);
+  }, [isPaid]);
+
+  const cleanActiveUpi = (upiId || (upiPhone ? `${upiPhone.replace(/[^0-9]/g, '')}@paytm` : '9217460742@paytm')).trim();
+  const jobTracking = ticket.trackingCode || ticket.ticketNumber || ticket.dispatchNumber || 'CHAIR';
+  const directUpiUrl = `upi://pay?pa=${encodeURIComponent(cleanActiveUpi)}&pn=${encodeURIComponent('ChairCare Technician')}&am=${grandTotal}&cu=INR&tn=${encodeURIComponent('ChairCare Service ' + jobTracking)}`;
+  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=12&data=${encodeURIComponent(directUpiUrl)}`;
+
+  const handleSaveUpi = async () => {
+    const cleanUpi = editUpiInput.trim();
+    const cleanPhone = editPhoneInput.trim();
+    if (!cleanUpi && !cleanPhone) {
+      Alert.alert('Input Required', 'Please enter a valid UPI ID (e.g. yourname@paytm) or Mobile Phone number.');
+      return;
+    }
+    setIsSavingUpi(true);
+    try {
+      await updateUpiSettings(cleanUpi, cleanPhone);
+      setSaveSuccessMsg('UPI configuration updated!');
+      setTimeout(() => {
+        setSaveSuccessMsg('');
+        setShowEditUpiModal(false);
+      }, 1000);
+    } catch {
+      Alert.alert('Error', 'Could not save UPI configuration.');
+    } finally {
+      setIsSavingUpi(false);
+    }
+  };
+
+  const handleConfirmQrPayment = async () => {
+    setIsConfirmingPayment(true);
+    try {
+      recordQrPayment({
+        trackingCode: String(jobTracking),
+        customerName: ticket.customerName || 'Customer',
+        chairModel: ticket.chairModel || 'Ergonomic Task Chair',
+        serviceTitle: ticket.serviceTitle || 'Office Chair Repair',
+        amount: grandTotal,
+      });
+
+      if (ticket.id) {
+        await technicianApi.updateJobStatus(ticket.id, 'completed', 'Payment collected via Direct UPI QR').catch(() => {});
+      }
+
+      setIsQrPaid(true);
+      setShowDirectQrModal(false);
+      Alert.alert(
+        'Payment Confirmed!',
+        `₹${grandTotal} successfully collected via Direct UPI QR into your account (${cleanActiveUpi}). This transaction is now logged in your Earnings tab.`,
+        [{ text: 'OK' }]
+      );
+    } catch {
+      setIsQrPaid(true);
+      setShowDirectQrModal(false);
+    } finally {
+      setIsConfirmingPayment(false);
+    }
+  };
 
   // Celebratory Ripple Animation
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -336,19 +433,73 @@ export const JobCompletedChaircareMobileScreen: React.FC<JobCompletedProps> = ({
             )}
           </View>
 
-          {/* Payout Status Banner */}
-          <View style={styles.payoutStatusBanner}>
-            <View style={styles.payoutStatusHeader}>
-              <View style={styles.amberDot} />
-              <Text style={styles.payoutStatusTitle}>
-                Pending Invoice Settlement
+          {/* Payout & Direct QR Collection Section */}
+          {isQrPaid ? (
+            <View style={[styles.payoutStatusBanner, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC', borderWidth: 1.5 }]}>
+              <View style={styles.payoutStatusHeader}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#15803D' }} />
+                <Text style={[styles.payoutStatusTitle, { color: '#15803D', fontWeight: '800' }]}>
+                  {isPaid ? 'PAID ONLINE • SETTLED' : 'PAID VIA DIRECT UPI QR • SETTLED'}
+                </Text>
+              </View>
+              <Text style={[styles.payoutStatusBody, { color: '#166534' }]}>
+                {isPaid
+                  ? `Customer paid ₹${grandTotal} online via Razorpay. Your earnings are credited directly to your payout ledger.`
+                  : `₹${grandTotal} collected directly via personal UPI QR into your account (${cleanActiveUpi}). This transaction is logged in your Earnings tab.`}
               </Text>
             </View>
-            <Text style={styles.payoutStatusBody}>
-              Customer is currently reviewing digital bill. Direct bank transfer &
-              UPI auto-credit will release instantly upon confirmation.
-            </Text>
-          </View>
+          ) : (
+            <View style={styles.directQrCollectionCard}>
+              <View style={styles.directQrCardHeader}>
+                <View style={styles.qrIconBubble}>
+                  <AppIcon name="QrCode" size={22} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.directSettlementBadge}>
+                    <Text style={styles.directSettlementBadgeText}>DIRECT TO YOUR ACCOUNT</Text>
+                  </View>
+                  <Text style={styles.directQrCardTitle}>Collect ₹{grandTotal} via Personal UPI QR</Text>
+                  <Text style={styles.directQrCardSub}>
+                    Ask the customer to scan your QR with Google Pay, PhonePe, Paytm, or BHIM.
+                  </Text>
+                </View>
+              </View>
+
+              {/* Active Account Info row */}
+              <View style={styles.activeUpiRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.activeUpiLabel}>RECEIVING UPI ID / PHONE</Text>
+                  <Text style={styles.activeUpiValue} numberOfLines={1}>
+                    {cleanActiveUpi} • {upiPhone || '+91 92174 60742'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.editUpiBtn}
+                  onPress={() => {
+                    setEditUpiInput(upiId || '');
+                    setEditPhoneInput(upiPhone || '');
+                    setShowEditUpiModal(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <AppIcon name="Pencil" size={13} color="#0284C7" />
+                  <Text style={styles.editUpiBtnText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Action Button: Show Customer Payment QR */}
+              <TouchableOpacity
+                style={styles.showCustomerQrBtn}
+                onPress={() => setShowDirectQrModal(true)}
+                activeOpacity={0.88}
+              >
+                <AppIcon name="QrCode" size={20} color="#FFFFFF" />
+                <Text style={styles.showCustomerQrBtnText}>
+                  Show Customer Payment QR (₹{grandTotal})
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* Operational Follow-up Actions */}
@@ -376,6 +527,193 @@ export const JobCompletedChaircareMobileScreen: React.FC<JobCompletedProps> = ({
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Customer Payment UPI QR Modal */}
+      <Modal
+        visible={showDirectQrModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDirectQrModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalPreTitle}>CUSTOMER UPI PAYMENT</Text>
+                <Text style={styles.modalTitle}>Scan & Pay ₹{grandTotal}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowDirectQrModal(false)}
+                style={styles.modalCloseBtn}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="X" size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Show this QR to the customer. Any UPI app (Google Pay, PhonePe, Paytm, Cred, BHIM) can scan and pay.
+            </Text>
+
+            {/* High-contrast QR card */}
+            <View style={styles.qrCardBox}>
+              <Image
+                source={{ uri: qrImgUrl }}
+                style={styles.qrImage}
+                resizeMode="contain"
+              />
+              <View style={styles.qrAmountBadge}>
+                <Text style={styles.qrAmountText}>Exact Amount: ₹{grandTotal}.00</Text>
+              </View>
+              <Text style={styles.qrScanNotice}>
+                ⚡ Money transfers straight to your personal account
+              </Text>
+            </View>
+
+            {/* UPI Details preview */}
+            <View style={styles.modalUpiInfoBox}>
+              <View style={styles.modalUpiRow}>
+                <Text style={styles.modalUpiLabel}>Receiving UPI:</Text>
+                <Text style={styles.modalUpiValueMono}>{cleanActiveUpi}</Text>
+              </View>
+              <View style={styles.modalUpiRow}>
+                <Text style={styles.modalUpiLabel}>Phone:</Text>
+                <Text style={styles.modalUpiValueMono}>{upiPhone || '+91 92174 60742'}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalSwitchEditBtn}
+              onPress={() => {
+                setShowDirectQrModal(false);
+                setEditUpiInput(upiId || '');
+                setEditPhoneInput(upiPhone || '');
+                setShowEditUpiModal(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <AppIcon name="Pencil" size={14} color="#0284C7" />
+              <Text style={styles.modalSwitchEditText}>Change UPI ID / Phone Number</Text>
+            </TouchableOpacity>
+
+            {/* Confirm Payment Received Action */}
+            <TouchableOpacity
+              style={styles.confirmPaymentBtn}
+              onPress={handleConfirmQrPayment}
+              activeOpacity={0.88}
+              disabled={isConfirmingPayment}
+            >
+              {isConfirmingPayment ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <>
+                  <AppIcon name="CheckCircle2" size={18} color="#FFFFFF" />
+                  <Text style={styles.confirmPaymentBtnText}>
+                    Confirm Payment Received (₹{grandTotal})
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalDismissBtn}
+              onPress={() => setShowDirectQrModal(false)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.modalDismissText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Dynamic Edit UPI & Phone Modal */}
+      <Modal
+        visible={showEditUpiModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowEditUpiModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalPreTitle}>ACCOUNT CONFIGURATION</Text>
+                <Text style={styles.modalTitle}>Edit Collection UPI & Phone</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setShowEditUpiModal(false)}
+                style={styles.modalCloseBtn}
+                activeOpacity={0.7}
+              >
+                <AppIcon name="X" size={20} color={Colors.onSurface} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalSubtitle}>
+              Update your UPI ID or linked phone number anytime. The customer payment QR code will immediately update with these details.
+            </Text>
+
+            {saveSuccessMsg ? (
+              <View style={styles.modalSuccessBanner}>
+                <AppIcon name="Check" size={16} color="#059669" />
+                <Text style={styles.modalSuccessText}>{saveSuccessMsg}</Text>
+              </View>
+            ) : null}
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>UPI ID (VPA)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={editUpiInput}
+                onChangeText={setEditUpiInput}
+                placeholder="e.g. 9800000000@paytm or name@okaxis"
+                placeholderTextColor="#94A3B8"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.modalInputHint}>
+                Format: mobile@bank (e.g. 9812345678@paytm, 9812345678@okhdfcbank)
+              </Text>
+            </View>
+
+            <View style={styles.modalInputGroup}>
+              <Text style={styles.modalInputLabel}>MOBILE PHONE NUMBER</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={editPhoneInput}
+                onChangeText={setEditPhoneInput}
+                placeholder="e.g. +91 92174 60742"
+                placeholderTextColor="#94A3B8"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.modalActionsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowEditUpiModal(false)}
+                activeOpacity={0.8}
+                disabled={isSavingUpi}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveUpi}
+                activeOpacity={0.8}
+                disabled={isSavingUpi}
+              >
+                {isSavingUpi ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save UPI Details</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -870,5 +1208,341 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '700',
     color: Colors.onSurface,
+  },
+
+  // Direct UPI QR Collection block
+  directQrCollectionCard: {
+    backgroundColor: '#FAFDFB',
+    borderColor: '#A7F3D0',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    gap: 12,
+    marginTop: 6,
+  },
+  directQrCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  qrIconBubble: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  directSettlementBadge: {
+    backgroundColor: '#ECFDF5',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    marginBottom: 2,
+  },
+  directSettlementBadgeText: {
+    ...Typography.labelMono,
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#059669',
+    letterSpacing: 0.6,
+  },
+  directQrCardTitle: {
+    ...Typography.titleLg,
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  directQrCardSub: {
+    ...Typography.bodySm,
+    fontSize: 11.5,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  activeUpiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderColor: Colors.outlineVariant,
+    borderWidth: 1,
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    gap: 8,
+  },
+  activeUpiLabel: {
+    ...Typography.labelMono,
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  activeUpiValue: {
+    ...Typography.labelMono,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  editUpiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  editUpiBtnText: {
+    ...Typography.labelMd,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  showCustomerQrBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+    ...Shadows.level1,
+  },
+  showCustomerQrBtnText: {
+    ...Typography.titleLg,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Modals
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: Spacing.md,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.xxl,
+    padding: Spacing.lg,
+    width: '100%',
+    maxWidth: 420,
+    ...Shadows.level2,
+    gap: 12,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  modalPreTitle: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: Colors.secondaryCobalt,
+    letterSpacing: 0.8,
+  },
+  modalTitle: {
+    ...Typography.headlineSm,
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.onSurface,
+  },
+  modalCloseBtn: {
+    padding: 4,
+    borderRadius: BorderRadius.full,
+    backgroundColor: Colors.surfaceContainerHighest,
+  },
+  modalSubtitle: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 16.5,
+  },
+  qrCardBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 10,
+  },
+  qrImage: {
+    width: 220,
+    height: 220,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  qrAmountBadge: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+  },
+  qrAmountText: {
+    ...Typography.headlineSm,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  qrScanNotice: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    textAlign: 'center',
+  },
+  modalUpiInfoBox: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+    padding: 10,
+    gap: 4,
+  },
+  modalUpiRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  modalUpiLabel: {
+    ...Typography.labelMono,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalUpiValueMono: {
+    ...Typography.labelMono,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalSwitchEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E0F2FE',
+    paddingVertical: 9,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  modalSwitchEditText: {
+    ...Typography.labelMd,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  confirmPaymentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+    gap: 8,
+    ...Shadows.level2,
+  },
+  confirmPaymentBtnText: {
+    ...Typography.titleLg,
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  modalDismissBtn: {
+    alignItems: 'center',
+    paddingVertical: 6,
+  },
+  modalDismissText: {
+    ...Typography.labelMd,
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: Colors.onSurfaceVariant,
+  },
+  modalSuccessBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+  },
+  modalSuccessText: {
+    ...Typography.labelMd,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#059669',
+  },
+  modalInputGroup: {
+    gap: 4,
+  },
+  modalInputLabel: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.onSurface,
+    letterSpacing: 0.5,
+  },
+  modalTextInput: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+    borderWidth: 1.5,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    ...Typography.bodyMd,
+    fontSize: 13.5,
+    color: '#0F172A',
+  },
+  modalInputHint: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    color: Colors.onSurfaceVariant,
+  },
+  modalActionsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 6,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    backgroundColor: '#F1F5F9',
+    borderRadius: BorderRadius.md,
+  },
+  modalCancelText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalSaveBtn: {
+    flex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+  },
+  modalSaveText: {
+    ...Typography.labelMd,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

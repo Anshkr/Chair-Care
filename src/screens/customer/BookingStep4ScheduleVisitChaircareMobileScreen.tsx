@@ -167,7 +167,11 @@ export const BookingStep4ScheduleVisitChaircareMobileScreen: React.FC<{
     if (isExpress) setIsExpress(false);
   };
 
+  const isScheduleValid = isExpress || (!!selectedDateId && !!selectedTimeId);
+
   const handleContinue = () => {
+    if (!isScheduleValid) return;
+
     const finalVisitDate = isExpress
       ? 'Today (Express Dispatch)'
       : selectedDateObj.fullDate;
@@ -206,15 +210,20 @@ export const BookingStep4ScheduleVisitChaircareMobileScreen: React.FC<{
           </View>
         </View>
 
-        {isAuthenticated && (
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('CustomerProfileTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('CustomerProfileTab');
+            } else {
+              navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep4' });
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
+        >
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -500,10 +509,11 @@ export const BookingStep4ScheduleVisitChaircareMobileScreen: React.FC<{
         </View>
 
         <PrecisionButton
-          title="Continue to Review →"
+          title={!isScheduleValid ? 'Select Date & Time Slot *' : 'Continue to Review →'}
           size="lg"
           variant="primary"
           onPress={handleContinue}
+          disabled={!isScheduleValid}
           style={styles.continueBtn}
         />
       </View>
@@ -648,10 +658,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   profileBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

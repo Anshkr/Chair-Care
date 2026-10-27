@@ -45,7 +45,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
 }) => {
   const insets = useSafeAreaInsets();
   const { currentUser, logout, updateTechnicianProfile } = useAuth();
-  const { isOnline } = useTechnician();
+  const { isOnline, upiId, upiPhone, updateUpiSettings } = useTechnician();
 
   const [profile, setProfile] = useState<any>(null);
   const [experience] = useState<string>('Certified Ergonomic Specialist');
@@ -105,7 +105,17 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
   const [bankModalVisible, setBankModalVisible] = useState(false);
   const [bankAccount, setBankAccount] = useState('•••• •••• 4921');
   const [bankIfsc, setBankIfsc] = useState('HDFC0001234');
-  const [bankUpi, setBankUpi] = useState('ravi.verma@okhdfcbank');
+  const [bankUpi, setBankUpi] = useState(upiId || '9217460742@paytm');
+  const [bankPhone, setBankPhone] = useState(upiPhone || '+91 92174 60742');
+  const [isSavingBank, setIsSavingBank] = useState(false);
+
+  React.useEffect(() => {
+    if (upiId) setBankUpi(upiId);
+  }, [upiId]);
+
+  React.useEffect(() => {
+    if (upiPhone) setBankPhone(upiPhone);
+  }, [upiPhone]);
 
   // Notifications State
   const [notifModalVisible, setNotifModalVisible] = useState(false);
@@ -139,6 +149,12 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
           }
           if (res.data.currentZone) {
             setSelectedZone(res.data.currentZone);
+          }
+          if (res.data.upiId) {
+            setBankUpi(res.data.upiId);
+          }
+          if (res.data.upiPhone) {
+            setBankPhone(res.data.upiPhone);
           }
         }
       } catch (err) {
@@ -283,9 +299,26 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
     }
   };
 
-  const handleSaveBankDetails = () => {
-    setBankModalVisible(false);
-    Alert.alert('Payout Settings Saved', 'Your instant settlement bank and UPI account have been confirmed.');
+  const handleSaveBankDetails = async () => {
+    setIsSavingBank(true);
+    try {
+      const cleanUpi = bankUpi.trim();
+      const cleanPhone = bankPhone.trim();
+      if (!cleanUpi && !cleanPhone) {
+        Alert.alert('Input Required', 'Please enter a valid UPI ID (e.g. yourname@paytm) or Mobile Phone number.');
+        return;
+      }
+      await updateUpiSettings(cleanUpi, cleanPhone);
+      setBankModalVisible(false);
+      Alert.alert(
+        'Payout Settings Saved',
+        `Direct payout UPI (${cleanUpi}) and phone (${cleanPhone}) have been saved and linked to your customer collection QR.`
+      );
+    } catch {
+      Alert.alert('Update Failed', 'Unable to save payout details right now.');
+    } finally {
+      setIsSavingBank(false);
+    }
   };
 
   const handleOpenAvailability = () => {
@@ -325,15 +358,6 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
 
         <View style={styles.headerRight}>
           <ThemeSwitchButton variant="header" style={{ marginRight: 6 }} />
-          <TouchableOpacity
-            style={styles.tuneButton}
-            onPress={() => setPrefModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityLabel="Preferences"
-          >
-            <AppIcon name="Sliders" size={18} />
-          </TouchableOpacity>
-
           <TechnicianHeaderAvatar size={38} onPress={handleOpenEditModal} />
         </View>
       </View>
@@ -382,7 +406,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
           {/* Technician Name & Verified Badge */}
           <Text style={styles.techNameText}>{techName}</Text>
           <View style={styles.verifiedSpecialistPill}>
-            <AppIcon name="Check" size={18} />
+            <AppIcon name="Check" size={13} color="#047857" strokeWidth={2.5} />
             <Text style={styles.verifiedSpecialistText}>Verified Fleet Specialist</Text>
           </View>
 
@@ -400,20 +424,12 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
               <Text style={styles.statLabel}>Rating</Text>
             </TouchableOpacity>
 
-            <View style={[styles.statCol, styles.statColMiddle]}>
+            <View style={[styles.statCol, { borderLeftWidth: 1, borderColor: Colors.surfaceContainer }]}>
               <View style={styles.statValRow}>
                 <AppIcon name="Check" size={18} />
                 <Text style={styles.statNum}>{completedCount}</Text>
               </View>
               <Text style={styles.statLabel}>Completed</Text>
-            </View>
-
-            <View style={styles.statCol}>
-              <View style={styles.statValRow}>
-                <AppIcon name="Award" size={18} color="#D97706" />
-                <Text style={styles.statNum}>{techExpYears}</Text>
-              </View>
-              <Text style={styles.statLabel}>Active Exp.</Text>
             </View>
           </View>
 
@@ -457,14 +473,6 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
               <Text style={styles.metaLineVal}>{email}</Text>
             </View>
 
-            {/* Experience */}
-            <View style={styles.metaLine}>
-              <View style={styles.metaLineLeft}>
-                <AppIcon name="FileText" size={16} color={Colors.onSurfaceVariant} />
-                <Text style={styles.metaLineLabel}>Experience</Text>
-              </View>
-              <Text style={styles.metaLineVal}>{profile?.experienceYears ? `${profile.experienceYears} Years Specialized Calibration` : experience}</Text>
-            </View>
 
             {/* Fleet Vehicle */}
             <View style={styles.metaLine}>
@@ -638,7 +646,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                 <View style={styles.menuTextCol}>
                   <Text style={styles.menuItemTitle}>Bank & Payout Details</Text>
                   <Text style={styles.menuItemSub}>
-                    HDFC Bank • Instant UPI ({bankUpi})
+                    Instant UPI ({bankUpi || upiId || 'Configure UPI'}) • {bankPhone || upiPhone || '+91 92174 60742'}
                   </Text>
                 </View>
               </View>
@@ -678,7 +686,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                 <View style={styles.menuTextCol}>
                   <Text style={styles.menuItemTitle}>Help & Support</Text>
                   <Text style={styles.menuItemSub}>
-                    24/7 Technician Fleet Operations Hotline
+                    +91 92174 60742 • enquiry@offheman.in
                   </Text>
                 </View>
               </View>
@@ -914,17 +922,6 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                   />
                 </View>
 
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>EXPERIENCE (YEARS)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={editExpYears}
-                    onChangeText={setEditExpYears}
-                    placeholder="6"
-                    placeholderTextColor={Colors.onSurfaceVariant}
-                    keyboardType="numeric"
-                  />
-                </View>
 
                 <TouchableOpacity
                   style={styles.saveProfileBtn}
@@ -1128,15 +1125,33 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 380, marginVertical: 12 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 440, marginVertical: 12 }} showsVerticalScrollIndicator={false}>
               <View style={styles.bankStatusBanner}>
                 <View style={styles.bankStatusIconBox}>
                   <AppIcon name="ShieldCheck" size={18} color="#16A34A" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.bankStatusTitle}>Direct Payout Active</Text>
-                  <Text style={styles.bankStatusSub}>Transferred directly to UPI or bank after job completion.</Text>
+                  <Text style={styles.bankStatusTitle}>Direct Payout & UPI QR Active</Text>
+                  <Text style={styles.bankStatusSub}>
+                    Payments collected from customers go directly into your linked UPI account.
+                  </Text>
                 </View>
+              </View>
+
+              {/* Dynamic QR preview box */}
+              <View style={styles.profileQrPreviewBox}>
+                <Image
+                  source={{
+                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=8&data=${encodeURIComponent(
+                      `upi://pay?pa=${encodeURIComponent(bankUpi || upiId || '9217460742@paytm')}&pn=${encodeURIComponent(techName)}&cu=INR&tn=${encodeURIComponent('ChairCare Technician Settlement')}`
+                    )}`,
+                  }}
+                  style={{ width: 140, height: 140, borderRadius: 8, backgroundColor: '#FFFFFF' }}
+                  resizeMode="contain"
+                />
+                <Text style={styles.profileQrSubText}>
+                  ⚡ Scannable Customer Collection QR (GPay / PhonePe / Paytm / BHIM)
+                </Text>
               </View>
 
               <View style={styles.editForm}>
@@ -1146,9 +1161,21 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                     style={styles.textInput}
                     value={bankUpi}
                     onChangeText={setBankUpi}
-                    placeholder="technician@okhdfcbank"
+                    placeholder="e.g. yourname@paytm or yourname@okhdfcbank"
                     placeholderTextColor={Colors.onSurfaceVariant}
                     autoCapitalize="none"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>LINKED MOBILE PHONE NUMBER</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={bankPhone}
+                    onChangeText={setBankPhone}
+                    placeholder="e.g. +91 92174 60742"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                    keyboardType="phone-pad"
                   />
                 </View>
 
@@ -1195,8 +1222,13 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
               style={styles.saveProfileBtn}
               onPress={handleSaveBankDetails}
               activeOpacity={0.88}
+              disabled={isSavingBank}
             >
-              <Text style={styles.saveProfileBtnText}>Save Payout Details</Text>
+              {isSavingBank ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveProfileBtnText}>Save Payout Details</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>
@@ -1328,7 +1360,7 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={styles.modalHeaderTitle}>Help & Fleet Support</Text>
-                <Text style={styles.modalHeaderSubtitle}>24/7 dedicated technician assistance channels</Text>
+                <Text style={styles.modalHeaderSubtitle}>Official ChairCare Support Channels</Text>
               </View>
               <TouchableOpacity
                 style={styles.modalCloseBtn}
@@ -1338,12 +1370,13 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
               </TouchableOpacity>
             </View>
 
-            <View style={{ gap: 10, marginVertical: 14 }}>
+            <View style={{ gap: 12, marginVertical: 14 }}>
+              {/* Phone Channel */}
               <TouchableOpacity
                 style={styles.supportChannelBtn}
                 onPress={() => {
                   setHelpModalVisible(false);
-                  phoneCallService.callNumber('+91 1800 200 4892', 'Fleet Operations Hotline');
+                  phoneCallService.callNumber('+91 92174 60742', 'ChairCare Support');
                 }}
                 activeOpacity={0.7}
               >
@@ -1351,48 +1384,50 @@ export const TechnicianProfileChaircareMobileScreen: React.FC<TechnicianProfileP
                   <AppIcon name="PhoneCall" size={20} color="#2563EB" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.supportTitle}>Fleet Operations Hotline</Text>
-                  <Text style={styles.supportSub}>Toll Free: 1800-200-4892 (Instant Response)</Text>
+                  <Text style={styles.supportTitle}>Customer Support Helpline</Text>
+                  <Text style={styles.supportSub}>+91 92174 60742 (Direct Call)</Text>
                 </View>
                 <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
+              {/* Email Channel */}
               <TouchableOpacity
                 style={styles.supportChannelBtn}
                 onPress={() => {
                   setHelpModalVisible(false);
-                  Linking.openURL('https://wa.me/9118002004892?text=ChairCare%20Technician%20Support%20SOS').catch(() => {
-                    Alert.alert('WhatsApp Support', 'Message +91 1800 200 4892');
+                  Linking.openURL('mailto:enquiry@offheman.in?subject=ChairCare%20Technician%20Support').catch(() => {
+                    Alert.alert('Email Support', 'Please email enquiry@offheman.in');
                   });
                 }}
                 activeOpacity={0.7}
               >
                 <View style={[styles.supportIconBox, { backgroundColor: '#F0FDF4' }]}>
-                  <AppIcon name="MessageSquare" size={20} color="#16A34A" />
+                  <AppIcon name="Mail" size={20} color="#16A34A" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.supportTitle}>WhatsApp Fleet Desk</Text>
-                  <Text style={styles.supportSub}>Live chat with Dispatch Coordinator</Text>
+                  <Text style={styles.supportTitle}>Email Support</Text>
+                  <Text style={styles.supportSub}>enquiry@offheman.in</Text>
                 </View>
                 <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
               </TouchableOpacity>
 
+              {/* WhatsApp Channel */}
               <TouchableOpacity
                 style={styles.supportChannelBtn}
                 onPress={() => {
-                  Alert.alert(
-                    'SOS Breakdown Reported',
-                    'A fleet coordinator has been notified of your location. Stay at your vehicle if safe.'
-                  );
+                  setHelpModalVisible(false);
+                  Linking.openURL('https://wa.me/919217460742?text=ChairCare%20Technician%20Support%20Enquiry').catch(() => {
+                    Alert.alert('WhatsApp Support', 'Please message +91 92174 60742');
+                  });
                 }}
                 activeOpacity={0.7}
               >
-                <View style={[styles.supportIconBox, { backgroundColor: '#FEF2F2' }]}>
-                  <AppIcon name="AlertTriangle" size={20} color="#DC2626" />
+                <View style={[styles.supportIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <AppIcon name="MessageSquare" size={20} color="#059669" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.supportTitle, { color: '#DC2626' }]}>Vehicle Breakdown / SOS</Text>
-                  <Text style={styles.supportSub}>Report route emergency or equipment issue</Text>
+                  <Text style={styles.supportTitle}>WhatsApp Support</Text>
+                  <Text style={styles.supportSub}>+91 92174 60742 (Direct Chat)</Text>
                 </View>
                 <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
               </TouchableOpacity>
@@ -1596,39 +1631,47 @@ const styles = StyleSheet.create({
   ambientGlow: {
     position: 'absolute',
     top: -20,
-    width: 160,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(0, 81, 213, 0.1)',
+    width: 140,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'rgba(15, 23, 42, 0.03)',
   },
   avatarWrapper: {
     position: 'relative',
-    marginBottom: 10,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   avatarBorder: {
     width: 96,
     height: 96,
     borderRadius: 48,
-    padding: 3,
-    backgroundColor: Colors.surfaceContainerLow,
-    ...Shadows.level1,
+    backgroundColor: '#0F172A',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.level2,
   },
   avatarImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 45,
+    borderRadius: 48,
   },
   cameraBadgeBtn: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.primaryContainer,
+    bottom: -2,
+    right: -2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    ...Shadows.level1,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+    ...Shadows.level2,
   },
   cameraIcon: {
     fontSize: 14,
@@ -1643,23 +1686,25 @@ const styles = StyleSheet.create({
   verifiedSpecialistPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#6ffbbe',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 3.5,
     borderRadius: BorderRadius.full,
-    marginTop: 4,
+    marginTop: 6,
   },
   verifiedCheckIcon: {
     fontSize: 12,
     fontWeight: '900',
-    color: '#005236',
+    color: '#047857',
   },
   verifiedSpecialistText: {
     ...Typography.labelMd,
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#005236',
+    color: '#047857',
   },
   statsGrid: {
     flexDirection: 'row',
@@ -2077,15 +2122,18 @@ const styles = StyleSheet.create({
   avatarInitialsBox: {
     width: '100%',
     height: '100%',
-    backgroundColor: Colors.secondaryCobalt,
+    borderRadius: 48,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   avatarInitialsBoxText: {
     ...Typography.headlineSm,
     color: '#FFFFFF',
     fontWeight: '800',
-    fontSize: 28,
+    fontSize: 34,
+    letterSpacing: -0.5,
   },
   modalBackdrop: {
     flex: 1,
@@ -2142,32 +2190,35 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   modalAvatarPreview: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     borderWidth: 2,
-    borderColor: Colors.secondaryCobalt,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
   },
   modalAvatarPlaceholder: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EEF2FF',
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: '#0F172A',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.secondaryCobalt,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
   },
   modalAvatarPlaceholderText: {
     ...Typography.headlineSm,
-    color: Colors.secondaryCobalt,
-    fontWeight: '700',
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 26,
   },
   modalAvatarOverlayBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    backgroundColor: Colors.secondaryCobalt,
+    backgroundColor: Colors.primary,
     borderRadius: 12,
     width: 24,
     height: 24,
@@ -2175,6 +2226,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+    ...Shadows.level1,
   },
   avatarEditActions: {
     flex: 1,
@@ -2627,5 +2679,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748B',
     marginTop: 2,
+  },
+  profileQrPreviewBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginVertical: 10,
+    gap: 6,
+  },
+  profileQrSubText: {
+    ...Typography.labelMono,
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#059669',
+    textAlign: 'center',
   },
 });

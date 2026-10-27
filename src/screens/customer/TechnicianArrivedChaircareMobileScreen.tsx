@@ -337,13 +337,6 @@ export const TechnicianArrivedChaircareMobileScreen: React.FC<{
               </Text>
               <Text style={styles.metricSublabel}>Repairs</Text>
             </View>
-
-            <View style={styles.metricDivider} />
-
-            <View style={styles.metricCell}>
-              <Text style={styles.metricMainValue}>{technician.experienceYears} Yrs</Text>
-              <Text style={styles.metricSublabel}>Experience</Text>
-            </View>
           </View>
 
           {/* Specializations */}

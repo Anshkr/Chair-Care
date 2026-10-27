@@ -780,9 +780,7 @@ export const TechniciansChaircareMobileScreen: React.FC<TechniciansScreenProps> 
                     )}
 
                     <Text style={styles.jobCountSubText}>
-                      {tech.completedJobsCount
-                        ? `${tech.completedJobsCount} jobs`
-                        : `Exp: ${tech.experienceYears} yrs`}
+                      {`${tech.completedJobsCount || 0} jobs`}
                     </Text>
                   </View>
                 </TouchableOpacity>

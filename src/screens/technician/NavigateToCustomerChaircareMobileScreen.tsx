@@ -683,8 +683,8 @@ export const NavigateToCustomerChaircareMobileScreen: React.FC<
                   ₹{ticket.totalAmount || (ticket as any).total || 599}
                 </Text>
               </View>
-              <Text style={styles.gatePassSub}>
-                {ticket.isPaid ? 'Prepaid Online' : 'Pay After Fix'}
+              <Text style={[styles.gatePassSub, ticket.isPaid && { color: '#15803D', fontWeight: '800' }]}>
+                {ticket.isPaid ? 'Prepaid Online • Do Not Collect' : 'Pay After Fix • Collect Cash/UPI'}
               </Text>
             </View>
           </View>

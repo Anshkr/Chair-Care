@@ -371,6 +371,7 @@ export const updateJobStatus = async (
         `UPDATE service_requests
          SET status = $1::varchar,
              warranty_valid_until = ${warrantyDays},
+             is_paid = CASE WHEN $1::text = 'completed' THEN TRUE ELSE is_paid END,
              started_at = CASE 
                WHEN $1::text = 'in_progress' AND started_at IS NULL THEN NOW() 
                ELSE started_at 
@@ -515,7 +516,7 @@ export const getEarnings = async (
   }
 
   const profileRes = await query(
-    `SELECT rating, completed_jobs_count, today_earnings
+    `SELECT rating, completed_jobs_count, today_earnings, upi_id, upi_phone
      FROM technician_profiles WHERE user_id = $1;`,
     [technicianId]
   );
@@ -524,6 +525,8 @@ export const getEarnings = async (
     rating: 5.0,
     completed_jobs_count: 0,
     today_earnings: 0,
+    upi_id: '',
+    upi_phone: '',
   };
 
   // Calculate this week's completed jobs and payout
@@ -564,6 +567,8 @@ export const getEarnings = async (
       completedJobsToday: Number(profile.completed_jobs_count || 0),
       weeklyCompletedJobs: Number(weeklyData?.weekly_count || 0),
       rating: Number(profile.rating || 5.0),
+      upiId: profile.upi_id || '',
+      upiPhone: profile.upi_phone || '',
       recentPayouts: payoutsRes.rows.map((p) => ({
         id: p.id,
         trackingCode: p.tracking_code,
@@ -638,7 +643,8 @@ export const getProfile = async (
       tp.rating, tp.completed_jobs_count, tp.is_online, tp.verification_status,
       tp.rejection_reason, tp.reupload_notes,
       tp.id_proof_type, tp.id_proof_number, tp.id_proof_document_url,
-      tp.current_zone, tp.vehicle_info, tp.specializations, tp.experience_years, tp.today_earnings
+      tp.current_zone, tp.vehicle_info, tp.specializations, tp.experience_years, tp.today_earnings,
+      tp.upi_id, tp.upi_phone
      FROM users u
      JOIN technician_profiles tp ON u.id = tp.user_id
      WHERE u.id = $1;`,
@@ -673,6 +679,8 @@ export const getProfile = async (
       specializations: row.specializations || 'Hydraulic Tuning, Multi-Angle Tilt Lock, Herman Miller & Steelcase',
       experienceYears: Number(row.experience_years || 8),
       todayEarnings: Number(row.today_earnings || 0),
+      upiId: row.upi_id || '',
+      upiPhone: row.upi_phone || '',
     },
   });
 };
@@ -697,6 +705,8 @@ export const updateTechnicianProfile = async (
     idProofType,
     idProofNumber,
     idProofDocumentUrl,
+    upiId,
+    upiPhone,
   } = req.body;
 
   if (name !== undefined || avatarUrl !== undefined) {
@@ -738,7 +748,9 @@ export const updateTechnicianProfile = async (
     currentZone !== undefined ||
     vehicleInfo !== undefined ||
     specializations !== undefined ||
-    experienceYears !== undefined
+    experienceYears !== undefined ||
+    upiId !== undefined ||
+    upiPhone !== undefined
   ) {
     await query(
       `UPDATE technician_profiles
@@ -746,13 +758,17 @@ export const updateTechnicianProfile = async (
            vehicle_info = COALESCE($2, vehicle_info),
            specializations = COALESCE($3, specializations),
            experience_years = COALESCE($4, experience_years),
+           upi_id = CASE WHEN $5::text IS NOT NULL THEN $5::text ELSE upi_id END,
+           upi_phone = CASE WHEN $6::text IS NOT NULL THEN $6::text ELSE upi_phone END,
            updated_at = NOW()
-       WHERE user_id = $5;`,
+       WHERE user_id = $7;`,
       [
         currentZone !== undefined ? currentZone.trim() : null,
         vehicleInfo !== undefined ? vehicleInfo.trim() : null,
         specializations !== undefined ? specializations.trim() : null,
         experienceYears !== undefined ? Number(experienceYears) : null,
+        upiId !== undefined ? upiId.trim() : null,
+        upiPhone !== undefined ? upiPhone.trim() : null,
         technicianId,
       ]
     );
@@ -762,7 +778,8 @@ export const updateTechnicianProfile = async (
     `SELECT 
       u.id, u.name, u.email, u.phone, u.avatar_url,
       tp.rating, tp.completed_jobs_count, tp.is_online, tp.verification_status,
-      tp.current_zone, tp.vehicle_info, tp.specializations, tp.experience_years, tp.today_earnings
+      tp.current_zone, tp.vehicle_info, tp.specializations, tp.experience_years, tp.today_earnings,
+      tp.upi_id, tp.upi_phone
      FROM users u
      JOIN technician_profiles tp ON u.id = tp.user_id
      WHERE u.id = $1;`,
@@ -788,6 +805,8 @@ export const updateTechnicianProfile = async (
       specializations: row.specializations || 'Hydraulic Tuning, Multi-Angle Tilt Lock, Herman Miller & Steelcase',
       experienceYears: Number(row.experience_years || 8),
       todayEarnings: Number(row.today_earnings || 0),
+      upiId: row.upi_id || '',
+      upiPhone: row.upi_phone || '',
     },
   });
 };

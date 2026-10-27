@@ -8,6 +8,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import { AppIcon } from './AppIcon';
 import { useAuth } from '../../context/AuthContext';
 import { Typography } from '../../constants/typography';
 
@@ -25,19 +26,6 @@ export const CustomerHeaderAvatar: React.FC<CustomerHeaderAvatarProps> = ({
   accessibilityLabel = 'Customer Profile',
 }) => {
   const { currentUser } = useAuth();
-
-  const userInitial = useMemo(() => {
-    if (currentUser?.name) {
-      const parts = currentUser.name.trim().split(/\s+/).filter(Boolean);
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
-      }
-      if (parts.length === 1 && parts[0].length > 0) {
-        return parts[0][0].toUpperCase();
-      }
-    }
-    return 'U';
-  }, [currentUser?.name]);
 
   return (
     <TouchableOpacity
@@ -62,14 +50,12 @@ export const CustomerHeaderAvatar: React.FC<CustomerHeaderAvatarProps> = ({
         />
       ) : (
         <View style={styles.fallbackCircle}>
-          <Text
-            style={[
-              styles.initialText,
-              { fontSize: Math.max(11, Math.round(size * 0.38)) },
-            ]}
-          >
-            {userInitial}
-          </Text>
+          <AppIcon
+            name="User"
+            size={Math.max(16, Math.round(size * 0.5))}
+            color="#FFFFFF"
+            strokeWidth={2}
+          />
         </View>
       )}
     </TouchableOpacity>

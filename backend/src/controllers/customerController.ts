@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { query } from '../config/database';
 import { AuthenticatedRequest } from '../types';
 import { notifyAllTechniciansAboutNewJob } from '../services/notificationService';
@@ -890,3 +890,26 @@ export const createDisputeOrTicket = async (req: AuthenticatedRequest, res: Resp
     },
   });
 };
+
+export const getPlatformConfigCustomer = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const configRes = await query(
+      'SELECT platform_fee_percent, min_floor_charge, allow_same_day_booking FROM platform_configurations WHERE id = 1 LIMIT 1;'
+    );
+    const cfg = configRes.rows[0] || {};
+    res.json({
+      success: true,
+      data: {
+        platformFeePercent: Number(cfg.platform_fee_percent ?? 10),
+        minFloorCharge: Number(cfg.min_floor_charge ?? 299),
+        allowSameDayBooking: Boolean(cfg.allow_same_day_booking ?? true),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve platform configurations.',
+    });
+  }
+};
+

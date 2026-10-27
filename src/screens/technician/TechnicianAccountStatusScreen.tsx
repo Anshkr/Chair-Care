@@ -235,12 +235,12 @@ export const TechnicianAccountStatusScreen: React.FC<{
   };
 
   const handleCallSupport = () => {
-    phoneCallService.callNumber('+91 800 555 0199', 'ChairCare Customer Support');
+    phoneCallService.callNumber('+91 92174 60742', 'ChairCare Customer Support');
   };
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@chaircare.in?subject=Technician%20Application%20Inquiry').catch(() => {
-      Alert.alert('Email Support', 'Please write to support@chaircare.in');
+    Linking.openURL('mailto:enquiry@offheman.in?subject=Technician%20Application%20Inquiry').catch(() => {
+      Alert.alert('Email Support', 'Please write to enquiry@offheman.in');
     });
   };
 
@@ -398,7 +398,7 @@ export const TechnicianAccountStatusScreen: React.FC<{
             {/* Contact Actions */}
             <TouchableOpacity style={styles.callSupportBtn} onPress={handleCallSupport} activeOpacity={0.85}>
               <AppIcon name="Phone" size={18} color="#FFFFFF" />
-              <Text style={styles.callSupportBtnText}>Call Customer Care (+91 800 555 0199)</Text>
+              <Text style={styles.callSupportBtnText}>Call Customer Care (+91 92174 60742)</Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.emailSupportBtn} onPress={handleEmailSupport} activeOpacity={0.8}>

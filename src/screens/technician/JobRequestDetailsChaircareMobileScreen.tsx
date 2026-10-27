@@ -814,6 +814,57 @@ export const JobRequestDetailsChaircareMobileScreen: React.FC<{
           <Text style={styles.payoutLegalNote}>
             This is the exact price on which the customer booked this service. Any additional replacement parts or scope changes require customer confirmation prior to installation.
           </Text>
+
+          {/* Collection Alert Banner */}
+          {ticket.isPaid ? (
+            <View style={{
+              backgroundColor: '#DCFCE7',
+              borderWidth: 1.5,
+              borderColor: '#22C55E',
+              borderRadius: 12,
+              padding: 12,
+              marginTop: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center' }}>
+                <AppIcon name="ShieldCheck" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#14532D', letterSpacing: 0.3 }}>
+                  PAID ONLINE • DO NOT COLLECT MONEY
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534', marginTop: 2, lineHeight: 15 }}>
+                  Customer prepaid ₹{ticket.totalAmount || 599} online. You do not need to collect any payment from the customer.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={{
+              backgroundColor: '#FEF3C7',
+              borderWidth: 1.5,
+              borderColor: '#F59E0B',
+              borderRadius: 12,
+              padding: 12,
+              marginTop: 12,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#D97706', alignItems: 'center', justifyContent: 'center' }}>
+                <AppIcon name="Banknote" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#78350F', letterSpacing: 0.3 }}>
+                  PAY ON DELIVERY • COLLECT ₹{ticket.totalAmount || 599}
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#92400E', marginTop: 2, lineHeight: 15 }}>
+                  Customer selected Pay on Delivery. Please collect ₹{ticket.totalAmount || 599} in cash or UPI upon finishing the service.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </ScrollView>
 

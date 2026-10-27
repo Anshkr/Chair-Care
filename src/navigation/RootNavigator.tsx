@@ -6,7 +6,6 @@ import { useTheme } from '../context/ThemeContext';
 import { CustomerNavigator } from './CustomerNavigator';
 import { TechnicianNavigator } from './TechnicianNavigator';
 import { AdminNavigator } from './AdminNavigator';
-import { DevRoleSwitcher } from '../components/dev/DevRoleSwitcher';
 import { Colors } from '../constants/theme';
 
 export const RootNavigator: React.FC = () => {
@@ -43,7 +42,6 @@ export const RootNavigator: React.FC = () => {
     <NavigationContainer theme={navTheme}>
       <View style={[styles.container, { backgroundColor: theme.surface }]}>
         {renderRoleNavigator()}
-        <DevRoleSwitcher />
       </View>
     </NavigationContainer>
   );

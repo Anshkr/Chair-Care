@@ -247,17 +247,19 @@ export const RequestAcceptedChaircareMobileScreen: React.FC<
               <Text style={styles.gridCellValue}>
                 ₹{ticket.totalAmount || (ticket as any).total || 599}
               </Text>
-              <Text style={styles.gridCellSub}>
-                {ticket.isPaid ? 'Prepaid Online' : 'Pay After Fix'}
+              <Text style={[styles.gridCellSub, ticket.isPaid && { color: '#15803D', fontWeight: '800' }]}>
+                {ticket.isPaid ? 'Prepaid Online • Do Not Collect' : 'Pay on Delivery • Collect Cash/UPI'}
               </Text>
             </View>
           </View>
 
           {/* Payout Footnote */}
-          <View style={styles.payoutFootnoteRow}>
-            <AppIcon name="ShieldCheck" size={18} />
-            <Text style={styles.footnoteText}>
-              Direct Bank / UPI wallet payout triggered upon sign-off
+          <View style={[styles.payoutFootnoteRow, ticket.isPaid && { backgroundColor: '#DCFCE7' }]}>
+            <AppIcon name="ShieldCheck" size={18} color={ticket.isPaid ? '#15803D' : undefined} />
+            <Text style={[styles.footnoteText, ticket.isPaid && { color: '#15803D', fontWeight: '700' }]}>
+              {ticket.isPaid
+                ? 'Payment completed online via Razorpay. Do NOT collect money from customer.'
+                : `Pay on Delivery: Please collect ₹${ticket.totalAmount || (ticket as any).total || 599} from customer upon completion.`}
             </Text>
           </View>
         </View>

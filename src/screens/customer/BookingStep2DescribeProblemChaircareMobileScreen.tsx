@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
 import { useBooking } from '../../context/BookingContext';
+import { PhotoCaptureModal, CapturedPhoto } from '../../components/common/PhotoCaptureModal';
 
 interface IssueChip {
   id: string;
@@ -93,24 +94,36 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
     );
   };
 
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
+
   const handleRemovePhoto = (photoId: string) => {
     setPhotos((prev) => prev.filter((p) => p.id !== photoId));
   };
 
   const handleAddPhoto = () => {
     if (photos.length >= 4) return;
-    const newId = `p${Date.now()}`;
+    setIsPhotoModalVisible(true);
+  };
+
+  const handlePhotoCaptured = (captured: CapturedPhoto) => {
+    if (photos.length >= 4) return;
     setPhotos((prev) => [
       ...prev,
       {
-        id: newId,
-        label: `Photo ${prev.length + 1}`,
-        uri: 'https://images.unsplash.com/photo-1589384267710-7a170981ca78?w=500&auto=format&fit=crop&q=60',
+        id: captured.id,
+        label: captured.label || `Photo ${prev.length + 1}`,
+        uri: captured.uri,
       },
     ]);
   };
 
+  const isStep2Valid = chairModel.trim().length > 0 && selectedIssues.length > 0 && description.trim().length > 0;
+
   const handleContinue = () => {
+    if (!isStep2Valid) {
+      return;
+    }
+
     const selectedLabels = ISSUE_OPTIONS.filter((opt) =>
       selectedIssues.includes(opt.id)
     ).map((opt) => opt.label);
@@ -118,7 +131,7 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
     updateDraft({
       chairType: chairModel.trim() || 'Office Ergonomic Chair',
       symptoms: selectedLabels,
-      problemDescription: description,
+      problemDescription: description.trim(),
       photoUris: photos.map((p) => p.uri),
     });
 
@@ -156,15 +169,20 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
           </View>
         </View>
 
-        {isAuthenticated && (
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('CustomerProfileTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('CustomerProfileTab');
+            } else {
+              navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep2' });
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
+        >
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -218,10 +236,10 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleWithDot}>
-              <Text style={styles.sectionTitle}>Chair Model & Brand</Text>
+              <Text style={styles.sectionTitle}>Chair Model & Brand <Text style={{ color: '#EF4444' }}>*</Text></Text>
               <View style={styles.titleBlueDot} />
             </View>
-            <Text style={styles.selectionCountLabel}>Customizable</Text>
+            <Text style={styles.selectionCountLabel}>Required</Text>
           </View>
 
           <View style={styles.chairInputBox}>
@@ -276,11 +294,11 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleWithDot}>
-              <Text style={styles.sectionTitle}>Common Issues</Text>
+              <Text style={styles.sectionTitle}>Common Issues <Text style={{ color: '#EF4444' }}>*</Text></Text>
               <View style={styles.titleBlueDot} />
             </View>
             <Text style={styles.selectionCountLabel}>
-              {selectedIssues.length} selected
+              {selectedIssues.length === 0 ? 'Select at least 1 *' : `${selectedIssues.length} selected`}
             </Text>
           </View>
 
@@ -319,7 +337,7 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
         {/* Section 2: Problem Description */}
         <View style={styles.sectionContainer}>
           <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Describe the issue in detail</Text>
+            <Text style={styles.sectionTitle}>Describe the issue in detail <Text style={{ color: '#EF4444' }}>*</Text></Text>
             <Text style={styles.charCounterText}>
               {description.length} / 500 characters
             </Text>
@@ -442,13 +460,30 @@ export const BookingStep2DescribeProblemChaircareMobileScreen: React.FC<{
         </View>
 
         <PrecisionButton
-          title="Continue to Location →"
+          title={!isStep2Valid ? "Fill Required Fields to Continue *" : "Continue to Location →"}
           size="lg"
           variant="primary"
           onPress={handleContinue}
+          disabled={!isStep2Valid}
           style={styles.continueBtn}
         />
       </View>
+
+      <PhotoCaptureModal
+        visible={isPhotoModalVisible}
+        onClose={() => setIsPhotoModalVisible(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        title="Add Chair Photo"
+        subtitle="Take photo with camera or choose from gallery."
+        tags={[
+          'Damage Detail',
+          'Chair Overview',
+          'Mechanism View',
+          'Underside Sticker',
+          'Armrest / Castors',
+        ]}
+        defaultTag="Damage Detail"
+      />
     </ScreenContainer>
   );
 };
@@ -493,10 +528,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   profileBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

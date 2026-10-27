@@ -100,6 +100,12 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
     requestDetails?.tracking_code ||
     (targetRequestId ? `CC-${targetRequestId.substring(0, 4)}` : 'CC-8492');
 
+  const isAlreadyPaid = Boolean(
+    requestDetails?.is_paid ||
+    requestDetails?.isPaid ||
+    route?.params?.isPaid
+  );
+
   const handleVerifyUpi = () => {
     if (!upiId.trim()) return;
     setIsVerifying(true);
@@ -115,21 +121,57 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
   };
 
   const handlePayNow = async () => {
+    // 1. One order, one payment constraint: stop if already paid
+    if (isAlreadyPaid) {
+      Alert.alert(
+        'Payment Completed',
+        'This order has already been paid online. Multiple payments are not permitted.',
+        [
+          {
+            text: 'Track Service',
+            onPress: () => navigation.navigate('ActiveService', { requestId: targetRequestId }),
+          },
+        ]
+      );
+      return;
+    }
+
     setIsProcessing(true);
 
     try {
-      // 1. Create order on backend (real Razorpay or sandbox simulator)
+      // 2. Create order on backend (real Razorpay or sandbox simulator)
       const orderRes = await paymentApi.createOrder(
         targetRequestId || 'demo-request-id',
         totalAmount
       );
 
-      if (orderRes.success && orderRes.data) {
+      // Check if backend rejected because order is already paid
+      if ((orderRes as any)?.alreadyPaid || (orderRes as any)?.error?.includes('already')) {
+        setIsProcessing(false);
+        setRequestDetails((prev: any) => ({ ...prev, is_paid: true }));
+        Alert.alert(
+          'Payment Already Completed',
+          'This service request has already been paid online. No further payment is required.',
+          [
+            {
+              text: 'View Request Status',
+              onPress: () => navigation.navigate('ActiveService', { requestId: targetRequestId }),
+            },
+          ]
+        );
+        return;
+      }
+
+      if (orderRes.success && orderRes.data?.orderId) {
         setCheckoutData({
           orderId: orderRes.data.orderId,
           amountInRupees: orderRes.data.amountInRupees || totalAmount,
           currency: orderRes.data.currency || 'INR',
-          keyId: orderRes.data.keyId || paymentConfig?.keyId || 'rzp_test_chaircare_mock_id',
+          keyId:
+            orderRes.data.keyId ||
+            paymentConfig?.keyId ||
+            process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ||
+            '',
           isTestMode: Boolean(orderRes.data.isTestMode),
           isSimulator: Boolean(orderRes.data.isSimulator),
           prefill: orderRes.data.prefill,
@@ -142,40 +184,18 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
         setIsProcessing(false);
         setIsCheckoutModalVisible(true);
       } else {
-        // Fallback to local checkout data if server returned error or offline preview
-        setCheckoutData({
-          orderId: `order_local_${Date.now().toString(36)}`,
-          amountInRupees: totalAmount,
-          currency: 'INR',
-          keyId: paymentConfig?.keyId || 'rzp_test_chaircare_mock_id',
-          isTestMode: true,
-          isSimulator: true,
-          serviceDetails: {
-            requestId: targetRequestId || 'CC-PREVIEW',
-            trackingCode: trackingNumber,
-            chairModel,
-          },
-        });
         setIsProcessing(false);
-        setIsCheckoutModalVisible(true);
+        Alert.alert(
+          'Payment Gateway Error',
+          orderRes.error || 'Could not initialize official Razorpay order. Please try again.'
+        );
       }
     } catch (err: any) {
-      console.warn('Payment order creation fallback:', err.message);
-      setCheckoutData({
-        orderId: `order_fallback_${Date.now().toString(36)}`,
-        amountInRupees: totalAmount,
-        currency: 'INR',
-        keyId: paymentConfig?.keyId || 'rzp_test_chaircare_mock_id',
-        isTestMode: true,
-        isSimulator: true,
-        serviceDetails: {
-          requestId: targetRequestId || 'CC-PREVIEW',
-          trackingCode: trackingNumber,
-          chairModel,
-        },
-      });
       setIsProcessing(false);
-      setIsCheckoutModalVisible(true);
+      Alert.alert(
+        'Connection Error',
+        err.message || 'Unable to connect to payment server. Please check your network and retry.'
+      );
     }
   };
 
@@ -233,8 +253,9 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
           style={styles.profileBtn}
           onPress={() => navigation.navigate('CustomerProfileTab')}
           activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
         >
-          <AppIcon name="User" size={18} />
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
@@ -267,10 +288,37 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
               Request #{trackingNumber} • {serviceTitle}
             </Text>
           </View>
-          <Text style={styles.briefingHeading}>Review your invoice</Text>
+
+          {isAlreadyPaid && (
+            <View style={styles.paymentCompletedBanner}>
+              <View style={styles.paymentCompletedHeader}>
+                <View style={styles.paymentCompletedIconCircle}>
+                  <AppIcon name="ShieldCheck" size={22} color="#15803D" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paymentCompletedTitle}>PAYMENT COMPLETED ONLINE</Text>
+                  <Text style={styles.paymentCompletedSubtitle}>
+                    ₹{totalAmount} paid & verified via Razorpay. One order, single payment confirmed.
+                  </Text>
+                </View>
+                <View style={styles.paymentCompletedBadge}>
+                  <Text style={styles.paymentCompletedBadgeText}>PAID</Text>
+                </View>
+              </View>
+              <View style={styles.paymentCompletedFooter}>
+                <Text style={styles.paymentCompletedMeta}>✓ Technician notified: ZERO cash to collect</Text>
+                <Text style={styles.paymentCompletedMeta}>Amount Due: ₹0</Text>
+              </View>
+            </View>
+          )}
+
+          <Text style={styles.briefingHeading}>
+            {isAlreadyPaid ? 'Invoice Settled' : 'Review your invoice'}
+          </Text>
           <Text style={styles.briefingSub}>
-            Please review the certified service charges before completing your
-            payment.
+            {isAlreadyPaid
+              ? 'Your payment is safely held in escrow and settled. No additional payment is due.'
+              : 'Please review the certified service charges before completing your payment.'}
           </Text>
         </View>
 
@@ -320,30 +368,32 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
 
           {/* Itemized Breakdown List */}
           <View style={styles.breakdownList}>
-            {/* Item 1 */}
+            {/* Item 1: Base Service */}
             <View style={styles.breakdownRow}>
               <View style={styles.itemTextGroup}>
                 <Text style={styles.itemMainTitle}>
-                  Base Diagnostic & Calibration
+                  {serviceTitle || 'Base Diagnostic & Precision Service'}
                 </Text>
                 <Text style={styles.itemSubDesc}>
-                  Class-4 cylinder safety inspection & base torque check
+                  Precision inspection, hardware assessment & calibration
                 </Text>
               </View>
-              <Text style={styles.itemPriceText}>₹499</Text>
+              <Text style={styles.itemPriceText}>₹{totalAmount > 0 ? Math.round(totalAmount / 1.1) : 499}</Text>
             </View>
 
-            {/* Item 2 */}
+            {/* Item 2: Platform Service Fee */}
             <View style={styles.breakdownRow}>
               <View style={styles.itemTextGroup}>
                 <Text style={styles.itemMainTitle}>
-                  OEM Gas Cylinder Ring & Shims
+                  Platform Service Fee (10%)
                 </Text>
                 <Text style={styles.itemSubDesc}>
-                  Authorized replacement spare part set
+                  Digital dispatch infrastructure & 90-day service warranty
                 </Text>
               </View>
-              <Text style={styles.itemPriceText}>₹250</Text>
+              <Text style={[styles.itemPriceText, { color: Colors.primary, fontWeight: '700' }]}>
+                ₹{totalAmount > 0 ? (totalAmount - Math.round(totalAmount / 1.1)) : 50}
+              </Text>
             </View>
 
             {/* Item 3 - Complimentary */}
@@ -365,19 +415,6 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
                 <Text style={styles.strikePrice}>₹120</Text>
                 <Text style={styles.freePrice}>₹0</Text>
               </View>
-            </View>
-
-            {/* Item 4 - Safety Fee Waived */}
-            <View style={styles.breakdownRow}>
-              <View style={styles.itemTextGroup}>
-                <Text style={styles.itemMainTitle}>
-                  Platform & Safety Assurance Fee
-                </Text>
-                <Text style={styles.itemSubDesc}>
-                  COVID sanitized gear & 30-day service warranty
-                </Text>
-              </View>
-              <Text style={styles.freePrice}>₹0</Text>
             </View>
           </View>
 
@@ -436,169 +473,189 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
         {/* Payment Method Selector Section */}
         <View style={styles.paymentMethodSection}>
           <View style={styles.paymentMethodHeader}>
-            <Text style={styles.paymentMethodTitle}>Payment method</Text>
-            <Text style={styles.encryptedTag}>ENCRYPTED 256-BIT</Text>
+            <Text style={styles.paymentMethodTitle}>
+              {isAlreadyPaid ? 'Payment Status' : 'Payment method'}
+            </Text>
+            <Text style={[styles.encryptedTag, isAlreadyPaid && { color: '#15803D' }]}>
+              {isAlreadyPaid ? 'SETTLED VIA RAZORPAY' : 'ENCRYPTED 256-BIT'}
+            </Text>
           </View>
 
-          <View style={styles.paymentOptionsList}>
-            {/* Option 1: UPI */}
-            <TouchableOpacity
-              style={[
-                styles.paymentOptionCard,
-                selectedMethod === 'upi' && styles.paymentOptionCardSelected,
-              ]}
-              onPress={() => setSelectedMethod('upi')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.optionTopRow}>
-                <View style={styles.optionLeftGroup}>
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      selectedMethod === 'upi' && styles.radioCircleSelected,
-                    ]}
-                  >
-                    {selectedMethod === 'upi' && (
-                      <View style={styles.radioInnerDot} />
-                    )}
-                  </View>
-                  <View style={styles.optionLabelGroup}>
-                    <Text style={styles.optionTitle}>UPI Instant Transfer</Text>
-                    <Text style={styles.optionSub}>
-                      Google Pay, PhonePe, Paytm, BHIM
-                    </Text>
-                  </View>
+          {isAlreadyPaid ? (
+            <View style={styles.paymentPaidSuccessCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={styles.paidCheckCircle}>
+                  <AppIcon name="ShieldCheck" size={20} color="#FFFFFF" />
                 </View>
-                <View style={styles.upiBadge}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Text style={styles.upiBadgeText}>UPI</Text><AppIcon name="Zap" size={12} color="#059669" /></View>
-                </View>
-              </View>
-
-              {/* UPI ID Input Section (Only if selected) */}
-              {selectedMethod === 'upi' && (
-                <View style={styles.upiInputBox}>
-                  <Text style={styles.upiInputLabel}>
-                    ENTER UPI ID OR NUMBER
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.paidMethodTitle}>Paid Online via Razorpay</Text>
+                  <Text style={styles.paidMethodSub}>
+                    Invoice settled in full. Technician notified not to collect any cash or UPI payment.
                   </Text>
-                  <View style={styles.upiInputRow}>
-                    <TextInput
-                      style={styles.upiTextInput}
-                      value={upiId}
-                      onChangeText={(text) => {
-                        setUpiId(text);
-                        setIsVerified(false);
-                      }}
-                      placeholder="e.g. mobile@upi"
-                      placeholderTextColor={Colors.outline}
-                      autoCapitalize="none"
-                    />
-                    <TouchableOpacity
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.paymentOptionsList}>
+              {/* Option 1: UPI */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedMethod === 'upi' && styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedMethod('upi')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.optionTopRow}>
+                  <View style={styles.optionLeftGroup}>
+                    <View
                       style={[
-                        styles.verifyBtn,
-                        isVerified && styles.verifyBtnSuccess,
+                        styles.radioCircle,
+                        selectedMethod === 'upi' && styles.radioCircleSelected,
                       ]}
-                      onPress={handleVerifyUpi}
-                      disabled={isVerifying}
                     >
-                      {isVerifying ? (
-                        <ActivityIndicator
-                          size="small"
-                          color={Colors.onSurface}
-                        />
-                      ) : (
-                        <Text style={styles.verifyBtnText}>
-                          {isVerified ? '✓ Verified' : 'Verify'}
-                        </Text>
+                      {selectedMethod === 'upi' && (
+                        <View style={styles.radioInnerDot} />
                       )}
-                    </TouchableOpacity>
+                    </View>
+                    <View style={styles.optionLabelGroup}>
+                      <Text style={styles.optionTitle}>UPI Instant Transfer</Text>
+                      <Text style={styles.optionSub}>
+                        Google Pay, PhonePe, Paytm, BHIM
+                      </Text>
+                    </View>
                   </View>
-
-                  {/* Suffix Quick Selector Chips */}
-                  <View style={styles.suffixChipsRow}>
-                    {['@okhdfcbank', '@ybl', '@paytm', '@okaxis'].map(
-                      (sfx, idx) => (
-                        <TouchableOpacity
-                          key={idx}
-                          style={styles.suffixChip}
-                          onPress={() => handleSelectSuffix(sfx)}
-                        >
-                          <Text style={styles.suffixChipText}>{sfx}</Text>
-                        </TouchableOpacity>
-                      )
-                    )}
+                  <View style={styles.upiBadge}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Text style={styles.upiBadgeText}>UPI</Text><AppIcon name="Zap" size={12} color="#059669" /></View>
                   </View>
                 </View>
-              )}
-            </TouchableOpacity>
 
-            {/* Option 2: Credit / Debit Card */}
-            <TouchableOpacity
-              style={[
-                styles.paymentOptionCard,
-                selectedMethod === 'card' && styles.paymentOptionCardSelected,
-              ]}
-              onPress={() => setSelectedMethod('card')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.optionTopRow}>
-                <View style={styles.optionLeftGroup}>
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      selectedMethod === 'card' && styles.radioCircleSelected,
-                    ]}
-                  >
-                    {selectedMethod === 'card' && (
-                      <View style={styles.radioInnerDot} />
-                    )}
-                  </View>
-                  <View style={styles.optionLabelGroup}>
-                    <Text style={styles.optionTitle}>Credit or Debit Card</Text>
-                    <Text style={styles.optionSub}>
-                      Visa, Mastercard, RuPay
+                {/* UPI ID Input Section (Only if selected) */}
+                {selectedMethod === 'upi' && (
+                  <View style={styles.upiInputBox}>
+                    <Text style={styles.upiInputLabel}>
+                      ENTER UPI ID OR NUMBER
                     </Text>
-                  </View>
-                </View>
-                <AppIcon name="CreditCard" size={18} />
-              </View>
-            </TouchableOpacity>
+                    <View style={styles.upiInputRow}>
+                      <TextInput
+                        style={styles.upiTextInput}
+                        value={upiId}
+                        onChangeText={(text) => {
+                          setUpiId(text);
+                          setIsVerified(false);
+                        }}
+                        placeholder="e.g. mobile@upi"
+                        placeholderTextColor={Colors.outline}
+                        autoCapitalize="none"
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.verifyBtn,
+                          isVerified && styles.verifyBtnSuccess,
+                        ]}
+                        onPress={handleVerifyUpi}
+                        disabled={isVerifying}
+                      >
+                        {isVerifying ? (
+                          <ActivityIndicator
+                            size="small"
+                            color={Colors.onSurface}
+                          />
+                        ) : (
+                          <Text style={styles.verifyBtnText}>
+                            {isVerified ? '✓ Verified' : 'Verify'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    </View>
 
-            {/* Option 3: Net Banking / Digital Wallet */}
-            <TouchableOpacity
-              style={[
-                styles.paymentOptionCard,
-                selectedMethod === 'netbanking' &&
-                  styles.paymentOptionCardSelected,
-              ]}
-              onPress={() => setSelectedMethod('netbanking')}
-              activeOpacity={0.85}
-            >
-              <View style={styles.optionTopRow}>
-                <View style={styles.optionLeftGroup}>
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      selectedMethod === 'netbanking' &&
-                        styles.radioCircleSelected,
-                    ]}
-                  >
-                    {selectedMethod === 'netbanking' && (
-                      <View style={styles.radioInnerDot} />
-                    )}
+                    {/* Suffix Quick Selector Chips */}
+                    <View style={styles.suffixChipsRow}>
+                      {['@okhdfcbank', '@ybl', '@paytm', '@okaxis'].map(
+                        (sfx, idx) => (
+                          <TouchableOpacity
+                            key={idx}
+                            style={styles.suffixChip}
+                            onPress={() => handleSelectSuffix(sfx)}
+                          >
+                            <Text style={styles.suffixChipText}>{sfx}</Text>
+                          </TouchableOpacity>
+                        )
+                      )}
+                    </View>
                   </View>
-                  <View style={styles.optionLabelGroup}>
-                    <Text style={styles.optionTitle}>
-                      Net Banking / Digital Wallet
-                    </Text>
-                    <Text style={styles.optionSub}>
-                      All major banks & Amazon Pay
-                    </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Option 2: Credit / Debit Card */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedMethod === 'card' && styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedMethod('card')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.optionTopRow}>
+                  <View style={styles.optionLeftGroup}>
+                    <View
+                      style={[
+                        styles.radioCircle,
+                        selectedMethod === 'card' && styles.radioCircleSelected,
+                      ]}
+                    >
+                      {selectedMethod === 'card' && (
+                        <View style={styles.radioInnerDot} />
+                      )}
+                    </View>
+                    <View style={styles.optionLabelGroup}>
+                      <Text style={styles.optionTitle}>Credit or Debit Card</Text>
+                      <Text style={styles.optionSub}>
+                        Visa, Mastercard, RuPay
+                      </Text>
+                    </View>
                   </View>
+                  <AppIcon name="CreditCard" size={18} />
                 </View>
-                <AppIcon name="Landmark" size={18} />
-              </View>
-            </TouchableOpacity>
-          </View>
+              </TouchableOpacity>
+
+              {/* Option 3: Net Banking / Digital Wallet */}
+              <TouchableOpacity
+                style={[
+                  styles.paymentOptionCard,
+                  selectedMethod === 'netbanking' &&
+                    styles.paymentOptionCardSelected,
+                ]}
+                onPress={() => setSelectedMethod('netbanking')}
+                activeOpacity={0.85}
+              >
+                <View style={styles.optionTopRow}>
+                  <View style={styles.optionLeftGroup}>
+                    <View
+                      style={[
+                        styles.radioCircle,
+                        selectedMethod === 'netbanking' &&
+                          styles.radioCircleSelected,
+                      ]}
+                    >
+                      {selectedMethod === 'netbanking' && (
+                        <View style={styles.radioInnerDot} />
+                      )}
+                    </View>
+                    <View style={styles.optionLabelGroup}>
+                      <Text style={styles.optionTitle}>
+                        Net Banking / Digital Wallet
+                      </Text>
+                      <Text style={styles.optionSub}>
+                        All major banks & Amazon Pay
+                      </Text>
+                    </View>
+                  </View>
+                  <AppIcon name="Landmark" size={18} />
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -611,33 +668,57 @@ export const PaymentInvoiceChaircareMobileScreen: React.FC<{
       >
         <View style={styles.dueAmountHeaderRow}>
           <View style={styles.dueAmountGroup}>
-            <Text style={styles.dueAmountLabel}>DUE AMOUNT</Text>
-            <Text style={styles.dueAmountValue}>₹{totalAmount}</Text>
+            <Text style={styles.dueAmountLabel}>
+              {isAlreadyPaid ? 'PAID AMOUNT' : 'DUE AMOUNT'}
+            </Text>
+            <Text style={[styles.dueAmountValue, isAlreadyPaid && { color: '#15803D' }]}>
+              {isAlreadyPaid ? `₹${totalAmount} (Settled)` : `₹${totalAmount}`}
+            </Text>
           </View>
-          <View style={styles.instantReceiptBadge}>
-            <AppIcon name="Lock" size={18} />
-            <Text style={styles.instantReceiptText}>Instant Receipt</Text>
+          <View style={[styles.instantReceiptBadge, isAlreadyPaid && { backgroundColor: '#DCFCE7' }]}>
+            <AppIcon
+              name={isAlreadyPaid ? 'ShieldCheck' : 'Lock'}
+              size={18}
+              color={isAlreadyPaid ? '#15803D' : undefined}
+            />
+            <Text style={[styles.instantReceiptText, isAlreadyPaid && { color: '#15803D' }]}>
+              {isAlreadyPaid ? 'Zero Due • Paid' : 'Instant Receipt'}
+            </Text>
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.payNowBtn, isProcessing && styles.payNowBtnProcessing]}
-          onPress={handlePayNow}
-          disabled={isProcessing}
-          activeOpacity={0.88}
-        >
-          {isProcessing ? (
-            <View style={styles.processingRow}>
-              <ActivityIndicator size="small" color={Colors.onPrimary} />
-              <Text style={styles.payNowBtnText}>Securing Session...</Text>
-            </View>
-          ) : (
+        {isAlreadyPaid ? (
+          <TouchableOpacity
+            style={styles.completedPaidBtn}
+            onPress={() => navigation.navigate('ActiveService', { requestId: targetRequestId })}
+            activeOpacity={0.88}
+          >
             <View style={styles.payNowContentRow}>
-              <Text style={styles.payNowBtnText}>Pay ₹{totalAmount}</Text>
+              <AppIcon name="ShieldCheck" size={18} color="#FFFFFF" />
+              <Text style={styles.payNowBtnText}>Payment Completed • Track Service</Text>
               <Text style={styles.payNowBtnArrow}>→</Text>
             </View>
-          )}
-        </TouchableOpacity>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.payNowBtn, isProcessing && styles.payNowBtnProcessing]}
+            onPress={handlePayNow}
+            disabled={isProcessing}
+            activeOpacity={0.88}
+          >
+            {isProcessing ? (
+              <View style={styles.processingRow}>
+                <ActivityIndicator size="small" color={Colors.onPrimary} />
+                <Text style={styles.payNowBtnText}>Securing Session...</Text>
+              </View>
+            ) : (
+              <View style={styles.payNowContentRow}>
+                <Text style={styles.payNowBtnText}>Pay ₹{totalAmount}</Text>
+                <Text style={styles.payNowBtnArrow}>→</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={styles.encryptionFootnote}>
           <AppIcon name="ShieldCheck" size={14} color="#059669" />
@@ -708,10 +789,12 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
   },
   profileBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1307,5 +1390,102 @@ const styles = StyleSheet.create({
     ...Typography.labelMono,
     fontSize: 9,
     color: Colors.onSurfaceVariant,
+  },
+  paymentCompletedBanner: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    borderRadius: BorderRadius.xl,
+    padding: 14,
+    marginBottom: 12,
+    ...Shadows.level1,
+  },
+  paymentCompletedHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  paymentCompletedIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentCompletedTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#15803D',
+    letterSpacing: 0.4,
+  },
+  paymentCompletedSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#166534',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  paymentCompletedBadge: {
+    backgroundColor: '#15803D',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  paymentCompletedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  paymentCompletedFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#BBF7D0',
+  },
+  paymentCompletedMeta: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  paymentPaidSuccessCard: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+    borderRadius: BorderRadius.xl,
+    padding: 16,
+    ...Shadows.level1,
+  },
+  paidCheckCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#15803D',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paidMethodTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  paidMethodSub: {
+    fontSize: 12,
+    color: '#166534',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  completedPaidBtn: {
+    width: '100%',
+    height: 48,
+    borderRadius: BorderRadius.xl,
+    backgroundColor: '#15803D',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.level2,
   },
 });

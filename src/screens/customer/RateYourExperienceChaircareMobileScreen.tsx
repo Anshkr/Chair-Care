@@ -20,6 +20,7 @@ import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
 import { PressableScale } from '../../animations/PressableScale';
 import { FadeIn } from '../../animations/FadeIn';
+import { PhotoCaptureModal, CapturedPhoto } from '../../components/common/PhotoCaptureModal';
 
 const FEEDBACK_CHIP_OPTIONS = [
   'Professional',
@@ -89,10 +90,16 @@ export const RateYourExperienceChaircareMobileScreen: React.FC<{
     }
   };
 
+  const [isPhotoModalVisible, setIsPhotoModalVisible] = useState(false);
+
   const handleAddPhoto = () => {
     if (photos.length >= 3) return;
-    const nextPhoto = SAMPLE_CHAIR_PHOTOS[photos.length % SAMPLE_CHAIR_PHOTOS.length];
-    setPhotos([...photos, nextPhoto]);
+    setIsPhotoModalVisible(true);
+  };
+
+  const handlePhotoCaptured = (captured: CapturedPhoto) => {
+    if (photos.length >= 3) return;
+    setPhotos((prev) => [...prev, captured.uri]);
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -159,8 +166,9 @@ export const RateYourExperienceChaircareMobileScreen: React.FC<{
           style={styles.profileBtn}
           onPress={() => navigation.navigate('CustomerProfileTab')}
           activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
         >
-          <AppIcon name="User" size={18} />
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
         </TouchableOpacity>
       </View>
 
@@ -414,6 +422,16 @@ export const RateYourExperienceChaircareMobileScreen: React.FC<{
           <Text style={styles.skipBtnText}>Skip for Now</Text>
         </TouchableOpacity>
       </View>
+
+      <PhotoCaptureModal
+        visible={isPhotoModalVisible}
+        onClose={() => setIsPhotoModalVisible(false)}
+        onPhotoCaptured={handlePhotoCaptured}
+        title="Add Review Photo"
+        subtitle="Take photo with camera or choose from gallery."
+        tags={['Repaired Chair', 'Replaced Part', 'Work Area']}
+        defaultTag="Repaired Chair"
+      />
     </ScreenContainer>
   );
 };
@@ -467,10 +485,12 @@ const styles = StyleSheet.create({
     color: Colors.onSurface,
   },
   profileBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

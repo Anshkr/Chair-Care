@@ -6,12 +6,15 @@ import {
   cancelRequest,
   submitReview,
   createDisputeOrTicket,
+  getPlatformConfigCustomer,
 } from '../controllers/customerController';
 import { authenticateToken, optionalAuthenticateToken, requireRole } from '../middleware/auth';
 import { validateBody } from '../middleware/validate';
 import { createRequestSchema, createReviewSchema, raiseDisputeSchema } from '../validators/schemas';
 
 const router = Router();
+
+router.get('/platform-config', getPlatformConfigCustomer);
 
 // Booking service requests strictly requires authenticated customer login
 router.post('/requests', authenticateToken, requireRole(['customer']), validateBody(createRequestSchema), createRequest);

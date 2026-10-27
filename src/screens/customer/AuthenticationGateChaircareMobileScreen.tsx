@@ -42,8 +42,15 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
   const serviceTitle = draft?.serviceTitle || 'Office Chair Repair';
   const servicePrice = draft?.estimatedTotal ? `From ₹${draft.estimatedTotal}` : 'From ₹599';
 
+  const isSignInValid = emailOrPhone.trim().length > 0 && password.trim().length > 0;
+
   const handleSignInSubmit = async () => {
     setErrorMessage(null);
+
+    if (!isSignInValid) {
+      setErrorMessage('Please enter both your phone/email and password.');
+      return;
+    }
 
     if (!emailOrPhone.trim()) {
       setErrorMessage('Please enter your registered email or phone number.');
@@ -252,16 +259,18 @@ export const AuthenticationGateChaircareMobileScreen: React.FC<{
               </View>
 
               <TouchableOpacity
-                style={styles.signInBtn}
+                style={[styles.signInBtn, (!isSignInValid || isAuthenticating) && { opacity: 0.5 }]}
                 onPress={handleSignInSubmit}
-                disabled={isAuthenticating}
+                disabled={isAuthenticating || !isSignInValid}
                 activeOpacity={0.88}
               >
                 {isAuthenticating ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
                   <>
-                    <Text style={styles.signInBtnText}>Sign In</Text>
+                    <Text style={styles.signInBtnText}>
+                      {!isSignInValid ? 'Fill Phone & Password *' : 'Sign In'}
+                    </Text>
                     <AppIcon name="ArrowRight" size={16} color="#FFFFFF" />
                   </>
                 )}

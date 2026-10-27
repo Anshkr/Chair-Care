@@ -47,7 +47,6 @@ interface ServiceItem {
 
 interface PlatformRules {
   commissionPercent: number;
-  emergencySurcharge: number;
   minimumFloorCharge: number;
 }
 
@@ -65,6 +64,26 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
   // Services Catalog State
   const [services, setServices] = useState<ServiceItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Platform Fee Rules State
+  const [platformRules, setPlatformRules] = useState<PlatformRules>({
+    commissionPercent: 10,
+    minimumFloorCharge: 299,
+  });
+
+  const loadPlatformRules = useCallback(async () => {
+    try {
+      const res = await adminApi.getPlatformConfig();
+      if (res.success && res.data) {
+        setPlatformRules({
+          commissionPercent: Number(res.data.platformFeePercent ?? 10),
+          minimumFloorCharge: Number(res.data.minFloorCharge ?? 299),
+        });
+      }
+    } catch (err) {
+      console.warn('Could not load platform rules:', err);
+    }
+  }, []);
 
   const loadServices = useCallback(async () => {
     try {
@@ -102,19 +121,17 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
     }
   }, []);
 
-  useEffect(() => {
+  const reloadAll = useCallback(() => {
     loadServices();
-  }, [loadServices]);
+    loadPlatformRules();
+  }, [loadServices, loadPlatformRules]);
+
+  useEffect(() => {
+    reloadAll();
+  }, [reloadAll]);
 
   // Real-time synchronization across all admin panels & tabs
-  useAdminSync(navigation, loadServices);
-
-  // Platform Fee Rules State
-  const [platformRules, setPlatformRules] = useState<PlatformRules>({
-    commissionPercent: 10,
-    emergencySurcharge: 100,
-    minimumFloorCharge: 299,
-  });
+  useAdminSync(navigation, reloadAll);
 
   // Edit Service Modal State
   const [editingService, setEditingService] = useState<ServiceItem | null>(null);
@@ -127,7 +144,6 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
   // Platform Rules Modal State
   const [isEditingRules, setIsEditingRules] = useState<boolean>(false);
   const [rulesCommissionInput, setRulesCommissionInput] = useState<string>('10');
-  const [rulesSurchargeInput, setRulesSurchargeInput] = useState<string>('100');
   const [rulesFloorInput, setRulesFloorInput] = useState<string>('299');
 
   // Floating Sticky Action Bar Button State
@@ -294,28 +310,37 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
 
   const openRulesEditModal = () => {
     setRulesCommissionInput(platformRules.commissionPercent.toString());
-    setRulesSurchargeInput(platformRules.emergencySurcharge.toString());
     setRulesFloorInput(platformRules.minimumFloorCharge.toString());
     setIsEditingRules(true);
   };
 
-  const handleSaveRules = () => {
+  const handleSaveRules = async () => {
     const comm = parseInt(rulesCommissionInput.trim(), 10);
-    const sur = parseInt(rulesSurchargeInput.trim(), 10);
     const floor = parseInt(rulesFloorInput.trim(), 10);
 
-    if (isNaN(comm) || isNaN(sur) || isNaN(floor)) {
-      displayToast('Please provide valid numbers for all platform fee fields.');
+    if (isNaN(comm) || isNaN(floor)) {
+      displayToast('Please provide valid numbers for platform fee fields.');
       return;
     }
 
-    setPlatformRules({
-      commissionPercent: comm,
-      emergencySurcharge: sur,
-      minimumFloorCharge: floor,
-    });
-    setIsEditingRules(false);
-    displayToast('Platform fee parameters updated successfully.');
+    try {
+      const res = await adminApi.updatePlatformConfig({
+        platformFeePercent: comm,
+        minFloorCharge: floor,
+      });
+      if (res.success) {
+        setPlatformRules({
+          commissionPercent: comm,
+          minimumFloorCharge: floor,
+        });
+        setIsEditingRules(false);
+        displayToast('Platform fee parameters updated & applied globally.');
+      } else {
+        displayToast(res.error || 'Failed to update platform rules.');
+      }
+    } catch (err: any) {
+      displayToast(err?.message || 'Error updating platform rules.');
+    }
   };
 
   const handleCommitSavePricing = async () => {
@@ -512,7 +537,7 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
               <View style={styles.ruleItemLeft}>
                 <Text style={styles.ruleItemTitle}>Platform Service Fee</Text>
                 <Text style={styles.ruleItemSubtitle}>
-                  Deducted from gross invoice
+                  Added to booking checkout ({platformRules.commissionPercent}%)
                 </Text>
               </View>
               <View style={styles.ruleItemRight}>
@@ -520,24 +545,6 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                   {platformRules.commissionPercent}%
                 </Text>
                 <Text style={styles.ruleItemSubHighlight}>STANDARD</Text>
-              </View>
-            </View>
-
-            {/* Emergency Surcharge */}
-            <View style={styles.ruleItem}>
-              <View style={styles.ruleItemLeft}>
-                <Text style={styles.ruleItemTitle}>
-                  Same-Day / Emergency Surcharge
-                </Text>
-                <Text style={styles.ruleItemSubtitle}>
-                  80% credited to technician
-                </Text>
-              </View>
-              <View style={styles.ruleItemRight}>
-                <Text style={styles.ruleItemValue}>
-                  ₹{platformRules.emergencySurcharge}
-                </Text>
-                <Text style={styles.ruleItemSubHighlight}>FLAT ADDON</Text>
               </View>
             </View>
 
@@ -841,20 +848,6 @@ export const ServicePricingConfigurationChaircareMobileScreen: React.FC<
                   onChangeText={setRulesCommissionInput}
                   keyboardType="number-pad"
                   placeholder="10"
-                  placeholderTextColor={Colors.onSurfaceVariant}
-                />
-              </View>
-
-              <View style={styles.modalFieldGroup}>
-                <Text style={styles.modalFieldLabel}>
-                  Emergency / Same-Day Surcharge (₹)
-                </Text>
-                <TextInput
-                  style={[styles.modalTextInput, styles.monoInputText]}
-                  value={rulesSurchargeInput}
-                  onChangeText={setRulesSurchargeInput}
-                  keyboardType="number-pad"
-                  placeholder="100"
                   placeholderTextColor={Colors.onSurfaceVariant}
                 />
               </View>

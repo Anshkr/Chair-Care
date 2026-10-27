@@ -254,8 +254,9 @@ export const ChatWithTechnicianChaircareMobileScreen: React.FC<{
             style={styles.profileBtn}
             onPress={() => navigation.navigate('CustomerProfileTab')}
             activeOpacity={0.7}
+            accessibilityLabel="Customer Profile"
           >
-            <AppIcon name="User" size={18} />
+            <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
           </TouchableOpacity>
         </View>
       </View>
@@ -581,10 +582,12 @@ const styles = StyleSheet.create({
     color: Colors.onSurfaceVariant,
   },
   profileBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

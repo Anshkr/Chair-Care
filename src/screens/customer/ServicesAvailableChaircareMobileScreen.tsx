@@ -832,7 +832,7 @@ export const ServicesAvailableChaircareMobileScreen: React.FC<{
                         {activeRequest.technician?.name || activeRequest.technician_name || 'Technician'} {activeRequest.status === 'in_progress' ? 'is repairing your chair' : 'has arrived!'}
                       </Text>
                       <Text style={styles.arrivedTechSub}>
-                        {activeRequest.technician?.rating ? `⭐ ${Number(activeRequest.technician.rating).toFixed(1)}` : '⭐ 4.9'} ({activeRequest.technician?.reviewsCount || '184'} Reviews) • {activeRequest.technician?.completedJobsCount || '184'}+ Repairs • {activeRequest.technician?.experienceYears || 8} Yrs Exp
+                        {activeRequest.technician?.rating ? `⭐ ${Number(activeRequest.technician.rating).toFixed(1)}` : '⭐ 4.9'} ({activeRequest.technician?.reviewsCount || '184'} Reviews) • {activeRequest.technician?.completedJobsCount || '184'}+ Repairs
                       </Text>
                     </View>
                   </View>

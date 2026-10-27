@@ -63,7 +63,8 @@ export const AdminProfileSystemStatusChaircareMobileScreen: React.FC<{
     lastAuth: 'Today • Authenticated',
     ip: '103.21.244.12 • Gurugram HQ',
     avatarUri:
-      'https://lh3.googleusercontent.com/aida-public/AB6AXuCaz7fCAhHquAdP7U2Nd5nhlrTjYJeRRKzNRg2Pnppo1q9k1c3N4dU45YgMuyOHGKOVDu9e2XznowoO_FnueVBZCPiucOeuZn8mpn1wMQWWMGWaBZGCUiu-TEbmQQxSItpq_BZbfFh3g8e3frG9ZsKosGkwJRiPN2roy44NhuTQACpqSjxFlUb2zQ8B8TspC1ksnBuqn_kmSSAAzTBjT47aoRBHue1e9Iy3gK1de1ICwiBiNKZ5JPQ',
+      currentUser?.avatarUrl ||
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
   };
 
   // Toast state

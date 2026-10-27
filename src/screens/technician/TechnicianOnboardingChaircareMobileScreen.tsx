@@ -213,39 +213,76 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
     setDocSize(null);
   };
 
+  const isStep1Valid =
+    fullName.trim().length > 0 &&
+    phone.replace(/[^0-9]/g, '').length >= 10 &&
+    email.trim().includes('@') &&
+    password.length >= 6;
+
+  const isStep2Valid = docNumber.trim().length > 0 && !!(docDataUrl || docUri);
+
+  const isContinueDisabled =
+    isSubmitting ||
+    (currentStep === 1 && !isStep1Valid) ||
+    (currentStep === 2 && !isStep2Valid);
+
   const handleNext = () => {
     if (currentStep === 1) {
       if (!fullName.trim()) {
-        Alert.alert('Required Field', 'Please enter your legal full name.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Required Field: Please enter your legal full name.');
+        } else {
+          Alert.alert('Required Field', 'Please enter your legal full name.');
+        }
         return;
       }
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       if (cleanPhone.length < 10) {
-        Alert.alert('Invalid Mobile', 'Please provide a valid 10-digit mobile number for dispatch alerts.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Invalid Mobile: Please provide a valid 10-digit mobile number for dispatch alerts.');
+        } else {
+          Alert.alert('Invalid Mobile', 'Please provide a valid 10-digit mobile number for dispatch alerts.');
+        }
         return;
       }
       if (!email.trim() || !email.includes('@')) {
-        Alert.alert('Invalid Email', 'Please provide a valid professional email address.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Invalid Email: Please provide a valid professional email address.');
+        } else {
+          Alert.alert('Invalid Email', 'Please provide a valid professional email address.');
+        }
         return;
       }
       if (!password || password.length < 6) {
-        Alert.alert('Password Requirement', 'Password must be at least 6 characters long.');
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Password Requirement: Password must be at least 6 characters long.');
+        } else {
+          Alert.alert('Password Requirement', 'Password must be at least 6 characters long.');
+        }
         return;
       }
       triggerBtnPress(() => setCurrentStep(2));
     } else if (currentStep === 2) {
       if (!docNumber.trim()) {
-        Alert.alert(
-          'Document Number Required',
-          `Please enter your official ${selectedDocType} number or reference.`
-        );
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert(`Document Number Required: Please enter your official ${selectedDocType} number or reference.`);
+        } else {
+          Alert.alert(
+            'Document Number Required',
+            `Please enter your official ${selectedDocType} number or reference.`
+          );
+        }
         return;
       }
       if (!docDataUrl && !docUri) {
-        Alert.alert(
-          'Document Image/PDF Required',
-          'Please attach an image or PDF of your valid ID (Aadhaar, PAN, DL, Electricity Bill, or Bank Statement).'
-        );
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.alert('Document Image/PDF Required: Please attach an image or PDF of your valid ID (Aadhaar, PAN, DL, Electricity Bill, or Bank Statement).');
+        } else {
+          Alert.alert(
+            'Document Image/PDF Required',
+            'Please attach an image or PDF of your valid ID (Aadhaar, PAN, DL, Electricity Bill, or Bank Statement).'
+          );
+        }
         return;
       }
       triggerBtnPress(() => setCurrentStep(3));
@@ -913,19 +950,23 @@ export const TechnicianOnboardingChaircareMobileScreen: React.FC<{
       >
         <Animated.View style={{ transform: [{ scale: btnScale }] }}>
           <TouchableOpacity
-            style={[styles.continueBtn, isSubmitting && { opacity: 0.7 }]}
+            style={[styles.continueBtn, isContinueDisabled && { opacity: 0.5 }]}
             onPress={handleNext}
             activeOpacity={0.85}
-            disabled={isSubmitting}
+            disabled={isContinueDisabled}
           >
             {isSubmitting ? (
               <ActivityIndicator color="#ffffff" style={{ marginRight: 8 }} />
             ) : null}
             <Text style={styles.continueBtnText}>
               {currentStep === 1
-                ? 'Continue to Document Verification (Step 2)'
+                ? !isStep1Valid
+                  ? 'Fill Required Information (Step 1) *'
+                  : 'Continue to Document Verification (Step 2)'
                 : currentStep === 2
-                ? 'Review Application (Step 3)'
+                ? !isStep2Valid
+                  ? 'Attach ID & Doc Number (Step 2) *'
+                  : 'Review Application (Step 3)'
                 : isSubmitting
                 ? 'Submitting to Admin Panel...'
                 : 'Submit Application for Admin Review'}

@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
@@ -25,6 +26,7 @@ import { customerApi } from '../../services/api/customerApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
 import { adminSyncEmitter } from '../../services/adminSync';
 import { ChangePasswordModal } from '../../components/common/ChangePasswordModal';
+import { downloadInvoice, generateInvoiceHtml, InvoiceDetails } from '../../services/invoiceService';
 
 import { SavedAddressItem } from './BookingStep3ServiceLocationChaircareMobileScreen';
 
@@ -32,13 +34,18 @@ const getAddressStorageKey = (userId?: string) => `chaircare_saved_addresses_${u
 
 const loadSavedAddressesFromStorage = (userId?: string, defaultAddr?: string): SavedAddressItem[] => {
   let list: SavedAddressItem[] = [];
+  let hasStoredValue = false;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const raw = window.localStorage.getItem(getAddressStorageKey(userId));
-      if (raw) {
+      if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed;
+        if (Array.isArray(parsed)) {
+          list = parsed.map((item: any, idx: number) => ({
+            ...item,
+            id: item.id || `addr_${Date.now()}_${idx}`,
+          }));
+          hasStoredValue = true;
         }
       }
     } catch {
@@ -46,19 +53,31 @@ const loadSavedAddressesFromStorage = (userId?: string, defaultAddr?: string): S
     }
   }
 
+  if (hasStoredValue) {
+    // If the list is empty (user removed all addresses), preserve empty list
+    if (list.length === 0) {
+      return [];
+    }
+    if (defaultAddr && defaultAddr.trim()) {
+      const trimmed = defaultAddr.trim();
+      const existingIndex = list.findIndex(
+        (a) => a.fullAddress.trim().toLowerCase() === trimmed.toLowerCase() || a.isDefault
+      );
+      if (existingIndex >= 0) {
+        list[existingIndex] = {
+          ...list[existingIndex],
+          fullAddress: trimmed,
+          isDefault: true,
+        };
+      }
+    }
+    return list;
+  }
+
   if (defaultAddr && defaultAddr.trim()) {
     const trimmed = defaultAddr.trim();
-    const existingIndex = list.findIndex(
-      (a) => a.fullAddress.trim().toLowerCase() === trimmed.toLowerCase() || a.isDefault
-    );
-    if (existingIndex >= 0) {
-      list[existingIndex] = {
-        ...list[existingIndex],
-        fullAddress: trimmed,
-        isDefault: true,
-      };
-    } else {
-      list.unshift({
+    list = [
+      {
         id: 'addr_default_profile',
         tag: 'Home',
         label: 'Primary Address',
@@ -70,8 +89,8 @@ const loadSavedAddressesFromStorage = (userId?: string, defaultAddr?: string): S
         pincode: '122002',
         fullAddress: trimmed,
         isDefault: true,
-      });
-    }
+      },
+    ];
   }
   return list;
 };
@@ -109,8 +128,17 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
 
   const [staffModalVisible, setStaffModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [helpModalVisible, setHelpModalVisible] = useState(false);
   const [infoModalTitle, setInfoModalTitle] = useState<string | null>(null);
   const [infoModalContent, setInfoModalContent] = useState<string | null>(null);
+
+  // Invoice Management States
+  const [invoicesModalVisible, setInvoicesModalVisible] = useState(false);
+  const [completedTickets, setCompletedTickets] = useState<any[]>([]);
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+  const [previewInvoiceHtml, setPreviewInvoiceHtml] = useState<string | null>(null);
+  const [previewInvoiceTitle, setPreviewInvoiceTitle] = useState<string>('Tax Invoice');
+  const [activePreviewDetails, setActivePreviewDetails] = useState<InvoiceDetails | null>(null);
 
   // Live Metrics derived from real customer requests
   const [completedServicesCount, setCompletedServicesCount] = useState<number>(0);
@@ -133,6 +161,8 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
   const [addressFormFullText, setAddressFormFullText] = useState('');
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [isGpsLocating, setIsGpsLocating] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState<SavedAddressItem | null>(null);
+  const [isDeletingAddress, setIsDeletingAddress] = useState(false);
 
   // Profile editing fields
   const [editName, setEditName] = useState(currentUser?.name || '');
@@ -199,10 +229,7 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     };
   }, [navigation, isAuthenticated, currentUser?.id]);
 
-  const savedAddressCount =
-    currentUser?.defaultAddress && currentUser.defaultAddress.trim()
-      ? Math.max(1, savedAddresses.length)
-      : savedAddresses.length;
+  const savedAddressCount = savedAddresses.length;
 
   // Address Modal Handlers
   const handleOpenAddressModal = () => {
@@ -286,6 +313,13 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     }
   };
 
+  const isAddressFormValid =
+    addressFormFullText.trim().length > 0 ||
+    (addressFormFlat.trim().length > 0 &&
+      (addressFormStreet.trim().length > 0 || addressFormBuilding.trim().length > 0) &&
+      addressFormCity.trim().length > 0 &&
+      addressFormPincode.trim().length >= 4);
+
   const handleSaveAddress = async () => {
     let finalAddress = addressFormFullText.trim();
     if (!finalAddress) {
@@ -299,8 +333,12 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
       finalAddress = parts.join(', ');
     }
 
-    if (!finalAddress) {
-      Alert.alert('Address Required', 'Please enter your street, building, or full address.');
+    if (!isAddressFormValid) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Address Required: Please fill all mandatory fields (Flat/House No, Street/Building, City, and Pincode).');
+      } else {
+        Alert.alert('Address Required', 'Please fill all mandatory fields (Flat/House No, Street/Building, City, and Pincode).');
+      }
       return;
     }
 
@@ -356,28 +394,57 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     }
   };
 
-  const handleDeleteAddress = (addrId: string) => {
-    Alert.alert(
-      'Remove Address',
-      'Are you sure you want to remove this saved address from your account?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const updatedList = savedAddresses.filter((a) => a.id !== addrId);
-            setSavedAddresses(updatedList);
-            persistSavedAddressesToStorage(updatedList, currentUser?.id);
+  const handleDeleteAddress = (addrOrId: SavedAddressItem | string) => {
+    const item =
+      typeof addrOrId === 'string'
+        ? savedAddresses.find((a) => a.id === addrOrId) || {
+            id: addrOrId,
+            tag: 'Home',
+            label: 'Saved Address',
+            fullAddress: '',
+            flatNo: '',
+            buildingName: '',
+            streetArea: '',
+            city: '',
+            state: '',
+            pincode: '',
+          }
+        : addrOrId;
 
-            // If primary address was removed, update backend
-            const nextDefault = updatedList.length > 0 ? updatedList[0].fullAddress : '';
-            await updateUserProfile({ defaultAddress: nextDefault });
-            Alert.alert('Address Removed', 'The address has been removed from your account.');
-          },
-        },
-      ]
-    );
+    setAddressToDelete(item);
+  };
+
+  const executeDeleteAddress = async (addrId: string, fullAddr?: string) => {
+    setIsDeletingAddress(true);
+    try {
+      const updatedList = savedAddresses.filter(
+        (a) => a.id !== addrId && (fullAddr ? a.fullAddress !== fullAddr : true)
+      );
+      if (updatedList.length > 0 && !updatedList.some((a) => a.isDefault)) {
+        updatedList[0] = { ...updatedList[0], isDefault: true };
+      }
+      setSavedAddresses(updatedList);
+      persistSavedAddressesToStorage(updatedList, currentUser?.id);
+
+      // If primary address was removed, update backend
+      const nextDefault =
+        updatedList.length > 0
+          ? updatedList.find((a) => a.isDefault)?.fullAddress || updatedList[0].fullAddress
+          : '';
+
+      if (currentUser) {
+        try {
+          await updateUserProfile({ defaultAddress: nextDefault });
+        } catch (e) {
+          console.warn('Could not sync removed address to backend:', e);
+        }
+      }
+    } catch (err) {
+      console.error('Error removing address:', err);
+    } finally {
+      setIsDeletingAddress(false);
+      setAddressToDelete(null);
+    }
   };
 
   const handleOpenEditModal = () => {
@@ -460,19 +527,86 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     logout();
   };
 
-  const handleDownloadInvoices = () => {
-    if (completedServicesCount === 0) {
+  const handleDownloadInvoices = async () => {
+    setInvoicesModalVisible(true);
+    setIsLoadingInvoices(true);
+    try {
+      const res = await customerApi.getMyRequests();
+      if (res.success && Array.isArray(res.data)) {
+        const completed = res.data.filter((r: any) => r.status === 'completed');
+        setCompletedTickets(completed);
+        setCompletedServicesCount(completed.length);
+      }
+    } catch (e) {
+      console.warn('Error fetching completed tickets for invoices:', e);
+    } finally {
+      setIsLoadingInvoices(false);
+    }
+  };
+
+  const handleDownloadSingleInvoice = async (ticket: any) => {
+    const rawAmount = ticket.totalAmount ?? ticket.total_amount ?? ticket.amount;
+    const amount = Number(rawAmount) > 0 ? Number(rawAmount) : 299;
+    const trackingCode = ticket.trackingCode || ticket.tracking_code || ticket.id || 'CC-3350';
+    const chairModel = ticket.chairModel || ticket.chair_model || 'Office Chair';
+    const serviceTitle = ticket.serviceTitle || ticket.service_title || 'Chair Repair Service';
+    const dateInfo = ticket.completedAt || ticket.completed_at || ticket.visitDate || ticket.visit_date || 'Recently Completed';
+
+    const details: InvoiceDetails = {
+      ticketNumber: `#${trackingCode}`,
+      serviceTitle,
+      chairModel,
+      amount,
+      isPaid: Boolean(ticket.isPaid ?? ticket.is_paid ?? true),
+      dateInfo,
+      customerName: currentUser?.name || 'Valued Customer',
+      customerPhone: currentUser?.phone || '',
+      customerEmail: currentUser?.email || '',
+      locationInfo: currentUser?.defaultAddress || ticket.address || 'Service Location',
+      technicianName: ticket.technicianName || ticket.technician_name || 'ChairCare Specialist',
+    };
+
+    const res = await downloadInvoice(details);
+    if (res.success) {
       Alert.alert(
-        'No Invoices Available',
-        'You do not have any completed services with generated tax invoices or certificates yet.',
-        [{ text: 'OK' }]
+        'Invoice Downloaded',
+        `Tax Invoice ${res.invoiceNumber} (₹${res.amount}) has been generated and saved.`
       );
-    } else {
-      Alert.alert(
-        'Invoices Downloaded',
-        `All historical invoices (${completedServicesCount} file${completedServicesCount > 1 ? 's' : ''}) have been archived to your downloads.`,
-        [{ text: 'OK' }]
-      );
+    }
+  };
+
+  const handlePreviewInvoice = (ticket: any) => {
+    const rawAmount = ticket.totalAmount ?? ticket.total_amount ?? ticket.amount;
+    const amount = Number(rawAmount) > 0 ? Number(rawAmount) : 299;
+    const trackingCode = ticket.trackingCode || ticket.tracking_code || ticket.id || 'CC-3350';
+    const chairModel = ticket.chairModel || ticket.chair_model || 'Office Chair';
+    const serviceTitle = ticket.serviceTitle || ticket.service_title || 'Chair Repair Service';
+    const dateInfo = ticket.completedAt || ticket.completed_at || ticket.visitDate || ticket.visit_date || 'Recently Completed';
+
+    const details: InvoiceDetails = {
+      ticketNumber: `#${trackingCode}`,
+      serviceTitle,
+      chairModel,
+      amount,
+      isPaid: Boolean(ticket.isPaid ?? ticket.is_paid ?? true),
+      dateInfo,
+      customerName: currentUser?.name || 'Valued Customer',
+      customerPhone: currentUser?.phone || '',
+      customerEmail: currentUser?.email || '',
+      locationInfo: currentUser?.defaultAddress || ticket.address || 'Service Location',
+      technicianName: ticket.technicianName || ticket.technician_name || 'ChairCare Specialist',
+    };
+
+    setActivePreviewDetails(details);
+    const html = generateInvoiceHtml(details);
+    setPreviewInvoiceTitle(`Invoice #${trackingCode.replace('#', '')}`);
+    setPreviewInvoiceHtml(html);
+  };
+
+  const handleDownloadAllInvoices = async () => {
+    if (completedTickets.length === 0) return;
+    for (const t of completedTickets) {
+      await handleDownloadSingleInvoice(t);
     }
   };
 
@@ -551,17 +685,6 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* Partner & Staff Access Entry Point */}
-          <TouchableOpacity
-            style={styles.staffAccessBtn}
-            onPress={() => setStaffModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="ShieldCheck" size={18} color={Colors.primary} />
-            <Text style={styles.staffAccessText}>Partner & Staff Access</Text>
-            <Text style={styles.staffAccessArrow}>→</Text>
-          </TouchableOpacity>
         </ScrollView>
 
         {/* Staff Access Selection Modal */}
@@ -922,7 +1045,12 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
                 <View style={styles.menuIconCircle}>
                   <AppIcon name="Receipt" size={18} color={Colors.onSurfaceVariant} />
                 </View>
-                <Text style={styles.menuItemTitle}>Download Completed Invoices</Text>
+                <View>
+                  <Text style={styles.menuItemTitle}>Download Completed Invoices</Text>
+                  <Text style={{ fontSize: 11, color: Colors.onSurfaceVariant, marginTop: 2 }}>
+                    {completedServicesCount > 0 ? `${completedServicesCount} invoice${completedServicesCount > 1 ? 's' : ''} available` : 'Official GST tax invoices & warranties'}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.downloadIcon}>⬇</Text>
             </TouchableOpacity>
@@ -936,19 +1064,19 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
             {/* Help & Support */}
             <TouchableOpacity
               style={styles.menuRow}
-              onPress={() =>
-                openInfoModal(
-                  '24/7 Help & Support Desk',
-                  'Priority Support Hotline: +91 800 555 0199\nEmail: support@chaircare.app\nCentral Dispatch Telemetry Desk\nAverage response time: < 3 mins'
-                )
-              }
+              onPress={() => setHelpModalVisible(true)}
               activeOpacity={0.7}
             >
               <View style={styles.menuRowLeft}>
                 <View style={styles.menuIconCircle}>
                   <AppIcon name="Headphones" size={18} color={Colors.onSurfaceVariant} />
                 </View>
-                <Text style={styles.menuItemTitle}>Help & Support</Text>
+                <View>
+                  <Text style={styles.menuItemTitle}>Help & Support</Text>
+                  <Text style={{ fontSize: 11, color: Colors.onSurfaceVariant, marginTop: 2 }}>
+                    +91 92174 60742 • enquiry@offheman.in
+                  </Text>
+                </View>
               </View>
               <View style={styles.menuRowRightBadge}>
                 <View style={styles.pillBadgeNeutral}>
@@ -1003,17 +1131,6 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Staff / Partner Access Entry Point */}
-        <TouchableOpacity
-          style={styles.staffAccessBtn}
-          onPress={() => setStaffModalVisible(true)}
-          activeOpacity={0.7}
-        >
-          <AppIcon name="ShieldCheck" size={18} color={Colors.primary} />
-          <Text style={styles.staffAccessText}>Partner & Staff Access</Text>
-          <Text style={styles.staffAccessArrow}>→</Text>
-        </TouchableOpacity>
 
         {/* Log Out Button */}
         <TouchableOpacity
@@ -1204,15 +1321,17 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
                 </View>
 
                 <TouchableOpacity
-                  style={styles.saveProfileBtn}
+                  style={[styles.saveProfileBtn, (!editName.trim() || isSavingProfile) && { opacity: 0.5 }]}
                   onPress={handleSaveProfile}
                   activeOpacity={0.88}
-                  disabled={isSavingProfile}
+                  disabled={!editName.trim() || isSavingProfile}
                 >
                   {isSavingProfile ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.saveProfileBtnText}>Save Changes</Text>
+                    <Text style={styles.saveProfileBtnText}>
+                      {!editName.trim() ? 'Name Required *' : 'Save Changes'}
+                    </Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -1407,17 +1526,19 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.addressSaveBtn}
+                      style={[styles.addressSaveBtn, (!isAddressFormValid || isSavingAddress) && { opacity: 0.5 }]}
                       onPress={handleSaveAddress}
                       activeOpacity={0.88}
-                      disabled={isSavingAddress}
+                      disabled={!isAddressFormValid || isSavingAddress}
                     >
                       {isSavingAddress ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
                         <>
                           <AppIcon name="Check" size={15} color="#FFFFFF" />
-                          <Text style={styles.addressSaveBtnText}>Save & Sync</Text>
+                          <Text style={styles.addressSaveBtnText}>
+                            {!isAddressFormValid ? 'Fill Required Fields *' : 'Save & Sync'}
+                          </Text>
                         </>
                       )}
                     </TouchableOpacity>
@@ -1480,7 +1601,7 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
 
                             <TouchableOpacity
                               style={styles.cardDeleteActionBtn}
-                              onPress={() => handleDeleteAddress(addr.id)}
+                              onPress={() => handleDeleteAddress(addr)}
                               activeOpacity={0.8}
                             >
                               <AppIcon name="Trash2" size={13} color="#EF4444" />
@@ -1523,6 +1644,70 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
               )}
             </ScrollView>
           </View>
+
+          {/* In-App Confirmation Dialog for Address Removal */}
+          {addressToDelete && (
+            <View style={styles.confirmDeleteBackdrop}>
+              <View style={styles.confirmDeleteCard}>
+                <View style={styles.confirmDeleteIconCircle}>
+                  <AppIcon name="Trash2" size={24} color="#EF4444" />
+                </View>
+                <Text style={styles.confirmDeleteTitle}>Remove Address?</Text>
+                <Text style={styles.confirmDeleteSubtitle}>
+                  Are you sure you want to remove this saved address from your account?
+                </Text>
+
+                <View style={styles.confirmDeletePreviewBox}>
+                  <View style={styles.confirmDeleteTagBadge}>
+                    <AppIcon
+                      name={
+                        addressToDelete.tag === 'Office'
+                          ? 'Briefcase'
+                          : addressToDelete.tag === 'Other'
+                          ? 'MapPin'
+                          : 'Home'
+                      }
+                      size={12}
+                      color={Colors.primary}
+                    />
+                    <Text style={styles.confirmDeleteTagText}>
+                      {addressToDelete.label || addressToDelete.tag || 'Address'}
+                    </Text>
+                  </View>
+                  <Text style={styles.confirmDeleteAddressText} numberOfLines={2}>
+                    {addressToDelete.fullAddress}
+                  </Text>
+                </View>
+
+                <View style={styles.confirmDeleteActionsRow}>
+                  <TouchableOpacity
+                    style={styles.confirmDeleteCancelBtn}
+                    onPress={() => setAddressToDelete(null)}
+                    disabled={isDeletingAddress}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.confirmDeleteCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.confirmDeleteSubmitBtn}
+                    onPress={() => executeDeleteAddress(addressToDelete.id, addressToDelete.fullAddress)}
+                    disabled={isDeletingAddress}
+                    activeOpacity={0.85}
+                  >
+                    {isDeletingAddress ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <AppIcon name="Trash2" size={14} color="#FFFFFF" />
+                        <Text style={styles.confirmDeleteSubmitText}>Remove</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
         </View>
       </Modal>
 
@@ -1563,6 +1748,326 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
           </View>
         </Modal>
       )}
+
+      {/* Help & Support Interactive Contact Sheet */}
+      <Modal
+        visible={helpModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setHelpModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            onPress={() => setHelpModalVisible(false)}
+            activeOpacity={1}
+          />
+          <View style={styles.sheetModalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalHeaderTitle}>Help & Support</Text>
+                <Text style={{ ...Typography.caption, color: Colors.onSurfaceVariant, marginTop: 2 }}>
+                  Direct assistance for service bookings, repairs & inquiries
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setHelpModalVisible(false)}
+              >
+                <AppIcon name="X" size={18} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 12, marginVertical: 14 }}>
+              {/* Phone Channel */}
+              <TouchableOpacity
+                style={styles.supportChannelBtn}
+                onPress={() => {
+                  setHelpModalVisible(false);
+                  Linking.openURL('tel:+919217460742').catch(() => {
+                    Alert.alert('Phone Call', 'Please call +91 92174 60742');
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.supportIconBox, { backgroundColor: '#EFF6FF' }]}>
+                  <AppIcon name="PhoneCall" size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.supportTitle}>Call Support</Text>
+                  <Text style={styles.supportSub}>+91 92174 60742 (Direct Call)</Text>
+                </View>
+                <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {/* Email Channel */}
+              <TouchableOpacity
+                style={styles.supportChannelBtn}
+                onPress={() => {
+                  setHelpModalVisible(false);
+                  Linking.openURL('mailto:enquiry@offheman.in?subject=ChairCare%20Support%20Enquiry').catch(() => {
+                    Alert.alert('Email Support', 'Please email enquiry@offheman.in');
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.supportIconBox, { backgroundColor: '#F0FDF4' }]}>
+                  <AppIcon name="Mail" size={20} color="#16A34A" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.supportTitle}>Email Support</Text>
+                  <Text style={styles.supportSub}>enquiry@offheman.in</Text>
+                </View>
+                <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {/* WhatsApp Channel */}
+              <TouchableOpacity
+                style={styles.supportChannelBtn}
+                onPress={() => {
+                  setHelpModalVisible(false);
+                  Linking.openURL('https://wa.me/919217460742?text=Hello%20ChairCare%20Support%2C%20I%20have%20an%20enquiry').catch(() => {
+                    Alert.alert('WhatsApp', 'Please message +91 92174 60742');
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.supportIconBox, { backgroundColor: '#ECFDF5' }]}>
+                  <AppIcon name="MessageSquare" size={20} color="#059669" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.supportTitle}>WhatsApp Chat</Text>
+                  <Text style={styles.supportSub}>Instant response on WhatsApp (+91 92174 60742)</Text>
+                </View>
+                <AppIcon name="ChevronRight" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.infoDoneBtn}
+              onPress={() => setHelpModalVisible(false)}
+            >
+              <Text style={styles.infoDoneBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Completed Invoices Modal Sheet */}
+      <Modal
+        visible={invoicesModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setInvoicesModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <TouchableOpacity
+            style={styles.modalDismissArea}
+            onPress={() => setInvoicesModalVisible(false)}
+            activeOpacity={1}
+          />
+          <View style={[styles.sheetModalCard, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalHeaderTitle}>Completed Invoices</Text>
+                <Text style={{ ...Typography.caption, color: Colors.onSurfaceVariant, marginTop: 2 }}>
+                  Official GST Tax Invoices & Service Certificates
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setInvoicesModalVisible(false)}
+              >
+                <AppIcon name="X" size={18} />
+              </TouchableOpacity>
+            </View>
+
+            {isLoadingInvoices ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center', justifyContent: 'center' }}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+                <Text style={{ ...Typography.bodyMedium, color: Colors.onSurfaceVariant, marginTop: 12 }}>
+                  Loading your service invoices...
+                </Text>
+              </View>
+            ) : completedTickets.length > 0 ? (
+              <ScrollView style={{ marginTop: 8 }} showsVerticalScrollIndicator={false}>
+                {completedTickets.length > 1 && (
+                  <TouchableOpacity
+                    style={[styles.primaryAuthBtn, { marginBottom: 14, height: 44 }]}
+                    onPress={handleDownloadAllInvoices}
+                    activeOpacity={0.8}
+                  >
+                    <AppIcon name="Download" size={16} color="#FFFFFF" />
+                    <Text style={styles.primaryAuthBtnText}>Download All Invoices ({completedTickets.length})</Text>
+                  </TouchableOpacity>
+                )}
+
+                {completedTickets.map((t, idx) => {
+                  const trackingCode = t.trackingCode || t.tracking_code || t.id || `CC-${idx + 1000}`;
+                  const rawAmount = t.totalAmount ?? t.total_amount ?? t.amount;
+                  const amount = Number(rawAmount) > 0 ? Number(rawAmount) : 299;
+                  const chairModel = t.chairModel || t.chair_model || 'Office Chair';
+                  const serviceTitle = t.serviceTitle || t.service_title || 'General Repair & Tune-up';
+                  const dateInfo = t.completedAt || t.completed_at || t.visitDate || t.visit_date || 'Recently Completed';
+
+                  return (
+                    <View key={t.id || idx} style={styles.invoiceCardItem}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Text style={styles.invoiceItemNumber}>INV-{String(trackingCode).replace('#', '')}</Text>
+                            <View style={styles.pillBadgeEmerald}>
+                              <Text style={styles.pillBadgeEmeraldText}>Verified</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.invoiceItemTitle} numberOfLines={1}>{serviceTitle}</Text>
+                          <Text style={styles.invoiceItemSub}>{chairModel} • {dateInfo}</Text>
+                        </View>
+                        <Text style={styles.invoiceItemAmount}>₹{amount}</Text>
+                      </View>
+
+                      <View style={styles.invoiceCardActions}>
+                        <TouchableOpacity
+                          style={styles.invoicePreviewBtn}
+                          onPress={() => handlePreviewInvoice(t)}
+                          activeOpacity={0.7}
+                        >
+                          <AppIcon name="Eye" size={15} color={Colors.primary} />
+                          <Text style={styles.invoicePreviewBtnText}>Preview</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.invoiceDownloadActionBtn}
+                          onPress={() => handleDownloadSingleInvoice(t)}
+                          activeOpacity={0.7}
+                        >
+                          <AppIcon name="Download" size={15} color="#FFFFFF" />
+                          <Text style={styles.invoiceDownloadActionText}>Download</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            ) : (
+              <View style={{ paddingVertical: 28, alignItems: 'center', justifyContent: 'center' }}>
+                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', marginBottom: 14 }}>
+                  <AppIcon name="Receipt" size={28} color={Colors.primary} />
+                </View>
+                <Text style={{ ...Typography.h3, fontSize: 16, textAlign: 'center', color: Colors.onSurface }}>
+                  No Completed Invoices Yet
+                </Text>
+                <Text style={{ ...Typography.bodyMedium, fontSize: 13, textAlign: 'center', color: Colors.onSurfaceVariant, marginTop: 6, paddingHorizontal: 20 }}>
+                  Tax invoices and warranty certificates are generated automatically when a technician finishes a chair repair.
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.primaryAuthBtn, { marginTop: 18, height: 44, width: '100%' }]}
+                  onPress={() => {
+                    handlePreviewInvoice({
+                      trackingCode: 'CC-SAMPLE',
+                      totalAmount: 299,
+                      serviceTitle: 'Full Inspection & Hydraulic Repair',
+                      chairModel: 'Ergonomic Executive Chair',
+                      isPaid: true,
+                    });
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <AppIcon name="Eye" size={16} color="#FFFFFF" />
+                  <Text style={styles.primaryAuthBtnText}>View Sample Tax Invoice</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.secondaryAuthBtn, { marginTop: 10, height: 44, width: '100%' }]}
+                  onPress={() => {
+                    setInvoicesModalVisible(false);
+                    navigation.navigate('MyRequestsTab');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.secondaryAuthBtnText}>Check Active Requests</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <TouchableOpacity
+              style={[styles.infoDoneBtn, { marginTop: 12 }]}
+              onPress={() => setInvoicesModalVisible(false)}
+            >
+              <Text style={styles.infoDoneBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Invoice Full HTML Preview Modal */}
+      <Modal
+        visible={!!previewInvoiceHtml}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setPreviewInvoiceHtml(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#FFFFFF', paddingTop: Math.max(insets.top, 16) }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', backgroundColor: '#0F172A' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <TouchableOpacity onPress={() => setPreviewInvoiceHtml(null)} style={{ padding: 4 }}>
+                <AppIcon name="ArrowLeft" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={{ ...Typography.h3, fontSize: 16, color: '#FFFFFF' }}>{previewInvoiceTitle}</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2563EB', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}
+                onPress={() => {
+                  if (activePreviewDetails) {
+                    downloadInvoice(activePreviewDetails);
+                  }
+                }}
+              >
+                <AppIcon name="Download" size={15} color="#FFFFFF" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFFFFF' }}>Save / Share</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setPreviewInvoiceHtml(null)} style={{ padding: 6 }}>
+                <AppIcon name="X" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {previewInvoiceHtml ? (
+            Platform.OS === 'web' ? (
+              <iframe
+                srcDoc={previewInvoiceHtml}
+                style={{ flex: 1, width: '100%', height: '100%', border: 'none' }}
+                title="Tax Invoice Preview"
+              />
+            ) : (
+              (() => {
+                try {
+                  const { WebView } = require('react-native-webview');
+                  return (
+                    <WebView
+                      source={{ html: previewInvoiceHtml }}
+                      style={{ flex: 1 }}
+                      originWhitelist={['*']}
+                    />
+                  );
+                } catch {
+                  return (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                      <Text style={{ color: '#0F172A', fontSize: 16, fontWeight: '700' }}>Invoice Generated</Text>
+                      <Text style={{ color: '#64748B', marginTop: 8, textAlign: 'center' }}>
+                        Tap Save / Share above to view or print the official tax invoice.
+                      </Text>
+                    </View>
+                  );
+                }
+              })()
+            )
+          ) : null}
+        </View>
+      </Modal>
 
       {/* Staff Access Selection Modal Sheet */}
       <Modal
@@ -2734,6 +3239,225 @@ const styles = StyleSheet.create({
   },
   addFirstAddressBtnText: {
     ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  confirmDeleteBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    zIndex: 999,
+  },
+  confirmDeleteCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.large,
+    padding: 24,
+    width: '100%',
+    maxWidth: 380,
+    alignItems: 'center',
+    ...Shadows.large,
+  },
+  confirmDeleteIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmDeleteTitle: {
+    ...Typography.h3,
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  confirmDeleteSubtitle: {
+    ...Typography.bodySmall,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+    paddingHorizontal: 8,
+  },
+  confirmDeletePreviewBox: {
+    width: '100%',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: BorderRadius.medium,
+    padding: 12,
+    marginBottom: 20,
+    gap: 6,
+  },
+  confirmDeleteTagBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.small,
+    alignSelf: 'flex-start',
+  },
+  confirmDeleteTagText: {
+    ...Typography.caption,
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  confirmDeleteAddressText: {
+    ...Typography.caption,
+    fontSize: 12,
+    color: '#334155',
+    lineHeight: 16,
+  },
+  confirmDeleteActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  confirmDeleteCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmDeleteCancelText: {
+    ...Typography.bodyMedium,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  confirmDeleteSubmitBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: '#EF4444',
+  },
+  confirmDeleteSubmitText: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  sheetModalCard: {
+    backgroundColor: Colors.surfaceContainerLowest,
+    borderTopLeftRadius: BorderRadius.large,
+    borderTopRightRadius: BorderRadius.large,
+    padding: 20,
+    width: '100%',
+    ...Shadows.large,
+  },
+  supportChannelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  supportIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supportTitle: {
+    ...Typography.bodyMedium,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  supportSub: {
+    ...Typography.caption,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  invoiceCardItem: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: BorderRadius.medium,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 10,
+  },
+  invoiceItemNumber: {
+    ...Typography.caption,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 0.5,
+  },
+  invoiceItemTitle: {
+    ...Typography.bodyMedium,
+    fontWeight: '700',
+    color: '#1E293B',
+    fontSize: 14,
+  },
+  invoiceItemSub: {
+    ...Typography.caption,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  invoiceItemAmount: {
+    ...Typography.titleMedium,
+    fontWeight: '800',
+    color: '#0F172A',
+    fontSize: 16,
+  },
+  invoiceCardActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+  invoicePreviewBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  invoicePreviewBtnText: {
+    ...Typography.caption,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  invoiceDownloadActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.medium,
+    backgroundColor: '#2563EB',
+  },
+  invoiceDownloadActionText: {
+    ...Typography.caption,
     fontWeight: '700',
     color: '#FFFFFF',
   },

@@ -244,7 +244,7 @@ export const TechnicianAssignedChaircareMobileScreen: React.FC<{
                   </Text>
                 </View>
 
-                <Text style={styles.expTag}>{technician.experienceYears} YRS EXP • BIFMA MASTER</Text>
+                <Text style={styles.expTag}>BIFMA CERTIFIED MASTER</Text>
               </View>
             </View>
 

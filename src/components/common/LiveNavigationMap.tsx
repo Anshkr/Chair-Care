@@ -237,20 +237,27 @@ export const LiveNavigationMap: React.FC<LiveNavigationMapProps> = ({
           var techMarker = L.marker([techLat, techLng], { icon: techIcon }).addTo(map);
           var custMarker = L.marker([custLat, custLng], { icon: custIcon }).addTo(map);
 
-          // Glowing Route Polyline
+          // Cased Road Navigation Polylines (matches Google/Apple Maps turn-by-turn road routes)
           var routeLineGlow = L.polyline([[techLat, techLng], [custLat, custLng]], {
-            color: '#3B82F6',
-            weight: 7,
+            color: '#38BDF8',
+            weight: 8,
             opacity: 0.35,
             lineCap: 'round',
             lineJoin: 'round'
           }).addTo(map);
 
+          var routeLineCasing = L.polyline([[techLat, techLng], [custLat, custLng]], {
+            color: '#1D4ED8',
+            weight: 6,
+            opacity: 0.9,
+            lineCap: 'round',
+            lineJoin: 'round'
+          }).addTo(map);
+
           var routeLine = L.polyline([[techLat, techLng], [custLat, custLng]], {
-            color: '#2563EB',
-            weight: 4,
-            opacity: 0.95,
-            dashArray: '8, 8',
+            color: '#3B82F6',
+            weight: 3.5,
+            opacity: 1.0,
             lineCap: 'round',
             lineJoin: 'round'
           }).addTo(map);
@@ -265,6 +272,94 @@ export const LiveNavigationMap: React.FC<LiveNavigationMapProps> = ({
           }
           fitRoute();
 
+          var currentRoadCoords = null;
+          var lastFetchTime = 0;
+          var lastFetchLat = techLat;
+          var lastFetchLng = techLng;
+
+          function fetchWithTimeout(url, timeoutMs) {
+            return new Promise(function(resolve, reject) {
+              var didTimeout = false;
+              var timer = setTimeout(function() {
+                didTimeout = true;
+                reject(new Error('Routing request timeout'));
+              }, timeoutMs || 6000);
+
+              fetch(url)
+                .then(function(res) {
+                  clearTimeout(timer);
+                  if (!didTimeout) resolve(res);
+                })
+                .catch(function(err) {
+                  clearTimeout(timer);
+                  if (!didTimeout) reject(err);
+                });
+            });
+          }
+
+          function applyRoadRoute(latLngs, roadDistKm, roadEtaMin) {
+            currentRoadCoords = latLngs;
+            routeLineGlow.setLatLngs(latLngs);
+            routeLineCasing.setLatLngs(latLngs);
+            routeLine.setLatLngs(latLngs);
+
+            var bounds = L.latLngBounds(latLngs);
+            map.fitBounds(bounds, { padding: [55, 55], maxZoom: 16 });
+
+            var pill = document.getElementById('techPill');
+            if (pill && roadDistKm !== undefined && roadEtaMin !== undefined) {
+              pill.innerText = roadEtaMin > 0 ? (roadEtaMin + 'm • ' + roadDistKm.toFixed(1) + 'km') : 'Arrived';
+            }
+          }
+
+          function queryRouteService(url) {
+            return fetchWithTimeout(url, 5000)
+              .then(function(res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+              })
+              .then(function(data) {
+                if (data && data.routes && data.routes.length > 0 && data.routes[0].geometry) {
+                  var rawCoords = data.routes[0].geometry.coordinates;
+                  if (Array.isArray(rawCoords) && rawCoords.length > 0) {
+                    var latLngs = rawCoords.map(function(c) {
+                      return [c[1], c[0]];
+                    });
+                    var distKm = data.routes[0].distance ? (data.routes[0].distance / 1000) : undefined;
+                    var etaMin = data.routes[0].duration ? Math.ceil(data.routes[0].duration / 60) : undefined;
+                    return { latLngs: latLngs, distKm: distKm, etaMin: etaMin };
+                  }
+                }
+                throw new Error('No route geometry found');
+              });
+          }
+
+          function fetchRoadRoute(sLat, sLng, eLat, eLng) {
+            var primaryUrl = 'https://router.project-osrm.org/route/v1/driving/' + 
+                             sLng + ',' + sLat + ';' + eLng + ',' + eLat + 
+                             '?overview=full&geometries=geojson';
+            var backupUrl = 'https://routing.openstreetmap.de/routed-car/route/v1/driving/' + 
+                            sLng + ',' + sLat + ';' + eLng + ',' + eLat + 
+                            '?overview=full&geometries=geojson';
+
+            queryRouteService(primaryUrl)
+              .catch(function() {
+                return queryRouteService(backupUrl);
+              })
+              .then(function(res) {
+                applyRoadRoute(res.latLngs, res.distKm, res.etaMin);
+              })
+              .catch(function(err) {
+                var fallbackPts = [[sLat, sLng], [eLat, eLng]];
+                routeLineGlow.setLatLngs(fallbackPts);
+                routeLineCasing.setLatLngs(fallbackPts);
+                routeLine.setLatLngs(fallbackPts);
+              });
+          }
+
+          // Initial road route fetch following real street network
+          fetchRoadRoute(techLat, techLng, custLat, custLng);
+
           // Listen for live updates
           function handleMessage(e) {
             try {
@@ -277,13 +372,24 @@ export const LiveNavigationMap: React.FC<LiveNavigationMapProps> = ({
 
                 if (!isNaN(newTechLat) && !isNaN(newTechLng)) {
                   techMarker.setLatLng([newTechLat, newTechLng]);
-                  var pts = [[newTechLat, newTechLng], [custMarker.getLatLng().lat, custMarker.getLatLng().lng]];
-                  routeLineGlow.setLatLngs(pts);
-                  routeLine.setLatLngs(pts);
 
                   var pill = document.getElementById('techPill');
                   if (pill) {
                     pill.innerText = newEta > 0 ? (newEta + 'm • ' + newDist.toFixed(1) + 'km') : 'Arrived';
+                  }
+
+                  var now = Date.now();
+                  var moved = Math.hypot(newTechLat - lastFetchLat, newTechLng - lastFetchLng);
+                  if (moved > 0.0004 && (now - lastFetchTime > 4000)) {
+                    lastFetchTime = now;
+                    lastFetchLat = newTechLat;
+                    lastFetchLng = newTechLng;
+                    fetchRoadRoute(newTechLat, newTechLng, custMarker.getLatLng().lat, custMarker.getLatLng().lng);
+                  } else if (currentRoadCoords && currentRoadCoords.length > 0) {
+                    currentRoadCoords[0] = [newTechLat, newTechLng];
+                    routeLineGlow.setLatLngs(currentRoadCoords);
+                    routeLineCasing.setLatLngs(currentRoadCoords);
+                    routeLine.setLatLngs(currentRoadCoords);
                   }
                 }
               }

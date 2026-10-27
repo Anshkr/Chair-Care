@@ -115,6 +115,7 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
   const [isCapturingPhoto, setIsCapturingPhoto] = useState(false);
   const [selectedTag, setSelectedTag] = useState('Pre-Repair Inspection');
   const [zoomedPhoto, setZoomedPhoto] = useState<DiagnosticPhoto | null>(null);
+  const [liveJobDetails, setLiveJobDetails] = useState<any>(null);
 
   // Initialize and persist service start timestamp
   useEffect(() => {
@@ -134,11 +135,12 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
     }
   }, [serviceStartTime, targetJobId]);
 
-  // Sync latest authoritative startedAt from server
+  // Sync latest authoritative details (including payment status) from server
   useEffect(() => {
     if (targetJobId) {
       technicianApi.getJobDetails(targetJobId).then((res) => {
         if (res.success && res.data) {
+          setLiveJobDetails(res.data);
           const serverStart = res.data.startedAt || res.data.started_at;
           if (serverStart) {
             setServiceStartTime(serverStart);
@@ -161,6 +163,22 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
       }).catch(() => {});
     }
   }, [targetJobId]);
+
+  const isPaid = Boolean(
+    liveJobDetails?.is_paid ??
+    liveJobDetails?.isPaid ??
+    ticket?.isPaid ??
+    ticket?.is_paid ??
+    acceptedRequest?.isPaid ??
+    acceptedRequest?.is_paid
+  );
+
+  const displayAmount =
+    liveJobDetails?.total_amount ??
+    liveJobDetails?.totalAmount ??
+    ticket?.totalAmount ??
+    (ticket as any)?.total ??
+    599;
 
   // Live Timer: runs every second calculating actual elapsed time against serviceStartTime
   useEffect(() => {
@@ -322,6 +340,9 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
         status: 'completed',
         completedAt: new Date().toISOString(),
         durationSeconds: elapsedSeconds,
+        isPaid,
+        is_paid: isPaid,
+        totalAmount: displayAmount,
       };
 
       setAcceptedRequest(updated);
@@ -523,14 +544,65 @@ export const ActiveJobChaircareMobileScreen: React.FC<ActiveJobProps> = ({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <AppIcon name="Tag" size={15} color="#15803D" />
               <Text style={styles.bookedPriceLabel}>BOOKED SERVICE PRICE:</Text>
-              <Text style={styles.bookedPriceValue}>₹{ticket.totalAmount || (ticket as any).total || 599}</Text>
+              <Text style={styles.bookedPriceValue}>₹{displayAmount}</Text>
             </View>
-            <View style={styles.paymentMethodPill}>
-              <Text style={styles.paymentMethodText}>
-                {ticket.isPaid ? 'Prepaid Online' : 'Pay After Fix'}
+            <View style={[styles.paymentMethodPill, isPaid && { backgroundColor: '#DCFCE7' }]}>
+              <Text style={[styles.paymentMethodText, isPaid && { color: '#15803D', fontWeight: '800' }]}>
+                {isPaid ? 'Prepaid Online' : 'Pay After Fix'}
               </Text>
             </View>
           </View>
+
+          {/* High-visibility Technician Payment Collection Instruction Banner */}
+          {isPaid ? (
+            <View style={{
+              backgroundColor: '#DCFCE7',
+              borderWidth: 1.5,
+              borderColor: '#22C55E',
+              borderRadius: 12,
+              padding: 12,
+              marginTop: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#15803D', alignItems: 'center', justifyContent: 'center' }}>
+                <AppIcon name="ShieldCheck" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#14532D', letterSpacing: 0.4 }}>
+                  PAID ONLINE • DO NOT COLLECT MONEY
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#166534', marginTop: 2, lineHeight: 15 }}>
+                  Customer has already paid ₹{displayAmount} online via Razorpay. Zero cash or UPI to be collected from customer.
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={{
+              backgroundColor: '#FEF3C7',
+              borderWidth: 1.5,
+              borderColor: '#F59E0B',
+              borderRadius: 12,
+              padding: 12,
+              marginTop: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: '#D97706', alignItems: 'center', justifyContent: 'center' }}>
+                <AppIcon name="Banknote" size={20} color="#FFFFFF" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#78350F', letterSpacing: 0.4 }}>
+                  PAY ON DELIVERY • COLLECT ₹{displayAmount}
+                </Text>
+                <Text style={{ fontSize: 11, fontWeight: '600', color: '#92400E', marginTop: 2, lineHeight: 15 }}>
+                  Please ask customer to pay ₹{displayAmount} via Cash or UPI upon service completion.
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Live Service Timer Card (Digital Precision) */}

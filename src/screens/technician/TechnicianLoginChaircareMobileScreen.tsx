@@ -8,6 +8,7 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { BrandLogo } from '../../components/common/BrandLogo';
@@ -29,16 +30,18 @@ export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }>
   const [rememberDevice, setRememberDevice] = useState(true);
   const [loading, setLoading] = useState(false);
 
+  const isFormValid = identity.trim().length > 0 && password.trim().length > 0;
+
   const handleSignIn = async () => {
     const cleanIdentity = identity.trim();
     const cleanPassword = password.trim();
 
-    if (!cleanIdentity) {
-      Alert.alert('Required', 'Please enter your partner phone number or email.');
-      return;
-    }
-    if (!cleanPassword) {
-      Alert.alert('Required', 'Please enter your partner password.');
+    if (!cleanIdentity || !cleanPassword) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Required: Please enter your partner phone/email and password.');
+      } else {
+        Alert.alert('Required', 'Please enter your partner phone/email and password.');
+      }
       return;
     }
 
@@ -224,11 +227,11 @@ export const TechnicianLoginChaircareMobileScreen: React.FC<{ navigation: any }>
 
           {/* Sign In CTA */}
           <PrecisionButton
-            title={loading ? 'Authenticating...' : 'Sign In →'}
+            title={loading ? 'Authenticating...' : !isFormValid ? 'Fill Credentials to Sign In *' : 'Sign In →'}
             size="lg"
             variant="primary"
             onPress={handleSignIn}
-            disabled={loading}
+            disabled={loading || !isFormValid}
             style={styles.signInBtn}
           />
 

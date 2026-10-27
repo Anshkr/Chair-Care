@@ -256,15 +256,20 @@ export const BookingStep1SelectServiceChaircareMobileScreen: React.FC<{
           </View>
         </View>
 
-        {isAuthenticated && (
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('CustomerProfileTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('CustomerProfileTab');
+            } else {
+              navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep1' });
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
+        >
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -454,10 +459,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   profileBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

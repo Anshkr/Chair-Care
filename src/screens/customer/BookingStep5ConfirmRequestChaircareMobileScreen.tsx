@@ -20,6 +20,12 @@ import { useBooking } from '../../context/BookingContext';
 
 import { customerApi } from '../../services/api/customerApi';
 import { sanitizeUserErrorMessage } from '../../services/api/apiClient';
+import {
+  RazorpayCheckoutModal,
+  RazorpayCheckoutData,
+  RazorpaySuccessResult,
+} from '../../components/customer/RazorpayCheckoutModal';
+import { paymentApi } from '../../services/api/paymentApi';
 
 /**
  * Screen ID: C08
@@ -30,13 +36,38 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
   navigation: any;
 }> = ({ navigation }) => {
   const insets = useSafeAreaInsets();
-  const { isAuthenticated, isCustomerAuthorized, setPendingReturnRoute } = useAuth();
+  const { isAuthenticated, isCustomerAuthorized, setPendingReturnRoute, currentUser } = useAuth();
   const { draft } = useBooking();
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isCheckoutModalVisible, setIsCheckoutModalVisible] = useState<boolean>(false);
+  const [checkoutData, setCheckoutData] = useState<RazorpayCheckoutData | null>(null);
+  const [platformFeePercent, setPlatformFeePercent] = useState<number>(10);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    const fetchPlatformRules = async () => {
+      try {
+        const res = await customerApi.getPlatformConfig();
+        if (res.success && res.data?.platformFeePercent !== undefined && isMounted) {
+          setPlatformFeePercent(Number(res.data.platformFeePercent));
+        }
+      } catch {
+        // Fallback to default 10%
+      }
+    };
+    fetchPlatformRules();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Read dynamically from BookingContext draft with clean empty fallbacks
   const serviceTitle = draft?.serviceTitle || 'Office Chair Repair';
-  const estimatedCost = draft?.estimatedTotal ? `₹${draft.estimatedTotal}` : '₹599';
+  const baseServiceFee = Number(draft?.estimatedTotal) || 599;
+  const platformFeeAmount = Math.round((baseServiceFee * platformFeePercent) / 100);
+  const grandTotalAmount = baseServiceFee + platformFeeAmount;
+  const estimatedCost = `₹${grandTotalAmount}`;
+
   const symptoms = draft?.symptoms || [];
   const problemDescription =
     draft?.problemDescription || 'No description provided';
@@ -50,14 +81,111 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
     (draft as any)?.paymentMethod || 'pay_on_delivery'
   );
 
+  const isBookingReady = !!(
+    draft?.serviceAddress &&
+    draft.serviceAddress.trim() &&
+    draft.serviceAddress !== 'No address specified'
+  );
+
   const handleConfirmRequest = async () => {
+    if (!isBookingReady) {
+      return;
+    }
+
     if (!isCustomerAuthorized) {
       setPendingReturnRoute('BookingStep5');
       navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep5' });
       return;
     }
 
+    // Option 1: Pay on Delivery -> Simply place the booking request directly
+    if (chosenPaymentMethod === 'pay_on_delivery') {
+      setIsSubmitting(true);
+      try {
+        const res = await customerApi.createBooking({
+          serviceId: draft?.serviceId,
+          chairModel: draft?.chairType || 'Office Ergonomic Chair',
+          issueDescription: problemDescription,
+          address: serviceAddress,
+          unitFloor: unitFloor,
+          timeSlot: timeSlot,
+          visitDate: visitDate,
+          totalAmount: grandTotalAmount,
+          paymentMethod: 'pay_on_delivery',
+          latitude: draft?.latitude,
+          longitude: draft?.longitude,
+        });
+
+        setIsSubmitting(false);
+        if (res.success && res.data) {
+          navigation.navigate('FindingTechnician', {
+            requestId: res.data.id,
+            trackingCode: res.data.trackingCode,
+          });
+        } else {
+          if (res.error?.includes('sign in') || res.error?.includes('login') || res.error?.includes('Authentication')) {
+            setPendingReturnRoute('BookingStep5');
+            navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep5' });
+          } else {
+            Alert.alert('Booking Error', sanitizeUserErrorMessage(res.error) || 'Could not place service booking. Please check your information and try again.');
+          }
+        }
+      } catch (err: any) {
+        setIsSubmitting(false);
+        Alert.alert('Booking Error', sanitizeUserErrorMessage(err) || 'An unexpected error occurred while placing your booking. Please try again.');
+      }
+      return;
+    }
+
+    // Option 2: Razorpay Online -> Show Razorpay payment gateway
     setIsSubmitting(true);
+    try {
+      const totalNum = grandTotalAmount;
+      const orderRes = await paymentApi.createOrder('NEW_BOOKING', totalNum);
+
+      if (orderRes.success && orderRes.data?.orderId) {
+        const preparedCheckout: RazorpayCheckoutData = {
+          orderId: orderRes.data.orderId,
+          amountInRupees: orderRes.data.amountInRupees || totalNum,
+          currency: orderRes.data.currency || 'INR',
+          keyId:
+            orderRes.data.keyId ||
+            process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ||
+            '',
+          isTestMode: Boolean(orderRes.data.isTestMode),
+          isSimulator: Boolean(orderRes.data.isSimulator),
+          prefill: {
+            name: currentUser?.name || orderRes.data.prefill?.name || 'Valued Customer',
+            email: currentUser?.email || orderRes.data.prefill?.email || '',
+            contact: currentUser?.phone || orderRes.data.prefill?.contact || '',
+          },
+          serviceDetails: {
+            requestId: 'NEW_BOOKING',
+            trackingCode: orderRes.data.serviceDetails?.trackingCode || 'CC-ONLINE',
+            chairModel: draft?.chairType || 'Office Ergonomic Chair',
+            address: serviceAddress,
+          },
+        };
+
+        setCheckoutData(preparedCheckout);
+        setIsSubmitting(false);
+        setIsCheckoutModalVisible(true);
+      } else {
+        throw new Error(orderRes.error || 'Failed to create payment order.');
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      Alert.alert(
+        'Payment Gateway Error',
+        err.message || 'Could not initialize Razorpay payment gateway. Please try again or select Pay on Delivery.'
+      );
+    }
+  };
+
+  const handlePaymentSuccess = async (result: RazorpaySuccessResult) => {
+    setIsCheckoutModalVisible(false);
+    setIsSubmitting(true);
+
     try {
       const res = await customerApi.createBooking({
         serviceId: draft?.serviceId,
@@ -68,9 +196,12 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
         timeSlot: timeSlot,
         visitDate: visitDate,
         totalAmount: draft?.estimatedTotal || 599,
-        paymentMethod: chosenPaymentMethod,
+        paymentMethod: 'razorpay',
         latitude: draft?.latitude,
         longitude: draft?.longitude,
+        razorpayOrderId: result.razorpay_order_id,
+        razorpayPaymentId: result.razorpay_payment_id,
+        razorpaySignature: result.razorpay_signature,
       });
 
       setIsSubmitting(false);
@@ -80,17 +211,39 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
           trackingCode: res.data.trackingCode,
         });
       } else {
-        if (res.error?.includes('sign in') || res.error?.includes('login') || res.error?.includes('Authentication')) {
-          setPendingReturnRoute('BookingStep5');
-          navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep5' });
-        } else {
-          Alert.alert('Booking Error', sanitizeUserErrorMessage(res.error) || 'Could not place service booking. Please check your information and try again.');
-        }
+        Alert.alert(
+          'Booking Confirmation',
+          `Payment authorized (${result.razorpay_payment_id}). ${sanitizeUserErrorMessage(res.error) || 'We are dispatching your technician.'}`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                if (res.data?.id) {
+                  navigation.navigate('FindingTechnician', {
+                    requestId: res.data.id,
+                    trackingCode: res.data.trackingCode,
+                  });
+                }
+              },
+            },
+          ]
+        );
       }
     } catch (err: any) {
       setIsSubmitting(false);
-      Alert.alert('Booking Error', sanitizeUserErrorMessage(err) || 'An unexpected error occurred while placing your booking. Please try again.');
+      Alert.alert(
+        'Booking Confirmation Error',
+        `Payment was successful (${result.razorpay_payment_id}), but booking confirmation encountered a network issue. Please check your bookings tab.`
+      );
     }
+  };
+
+  const handlePaymentError = (errorMsg: string) => {
+    setIsCheckoutModalVisible(false);
+    Alert.alert(
+      'Payment Incomplete',
+      errorMsg || 'Online payment was not completed. You can try again or select Pay on Delivery.'
+    );
   };
 
   return (
@@ -111,15 +264,20 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
           </View>
         </View>
 
-        {isAuthenticated && (
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('CustomerProfileTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('CustomerProfileTab');
+            } else {
+              navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep5' });
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
+        >
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -171,7 +329,7 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
 
             <View style={styles.feeStrip}>
               <Text style={styles.feeStripLabel}>Base Service Fee</Text>
-              <Text style={styles.feeStripValue}>Starts at {estimatedCost}</Text>
+              <Text style={styles.feeStripValue}>Starts at ₹{baseServiceFee}</Text>
             </View>
           </View>
 
@@ -402,7 +560,22 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
               <Text style={styles.costRowLabel}>
                 Callout & Mechanical Diagnostic
               </Text>
-              <Text style={styles.costRowValue}>{estimatedCost}</Text>
+              <Text style={styles.costRowValue}>₹{baseServiceFee}</Text>
+            </View>
+
+            {/* Platform Service Fee Row */}
+            <View style={styles.costRow}>
+              <View>
+                <Text style={styles.costRowLabel}>
+                  Platform Fee ({platformFeePercent}%)
+                </Text>
+                <Text style={styles.costAssessedItalic}>
+                  Platform operations & verified dispatch fee
+                </Text>
+              </View>
+              <Text style={[styles.costRowValue, { color: Colors.primary, fontWeight: '700' }]}>
+                ₹{platformFeeAmount}
+              </Text>
             </View>
 
             <View style={styles.costRow}>
@@ -421,13 +594,13 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
 
             {/* Total Highlight Row */}
             <View style={styles.totalBox}>
-              <View>
-                <Text style={styles.totalTitle}>Estimated Total</Text>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.totalTitle}>Estimated Grand Total</Text>
                 <Text style={styles.totalSubtitle}>
-                  Pay only after service completion
+                  Includes ₹{baseServiceFee} base fee + ₹{platformFeeAmount} ({platformFeePercent}%) platform fee
                 </Text>
               </View>
-              <Text style={styles.totalAmount}>{estimatedCost}</Text>
+              <Text style={styles.totalAmount}>₹{grandTotalAmount}</Text>
             </View>
           </View>
 
@@ -436,10 +609,13 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
             <AppIcon name="ShieldCheck" size={18} />
             <Text style={styles.trustStripText}>
               <Text style={styles.trustStripBold}>
-                Zero advance payment required.{' '}
+                {chosenPaymentMethod === 'razorpay'
+                  ? 'Protected by Razorpay & 90-Day Warranty. '
+                  : 'Zero advance payment required. '}
               </Text>
-              Inspect the chair, test tilt resistance, and pay safely via UPI or
-              card only when completely satisfied.
+              {chosenPaymentMethod === 'razorpay'
+                ? 'Your payment is safely held in escrow until technician completes the inspection.'
+                : 'Inspect the chair, test tilt resistance, and pay safely via UPI or card only when completely satisfied.'}
             </Text>
           </View>
         </View>
@@ -474,19 +650,21 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
         {/* Bottom Confirm Action Section */}
         <View style={styles.bottomActionSection}>
           <TouchableOpacity
-            style={styles.confirmBtn}
+            style={[styles.confirmBtn, (!isBookingReady || isSubmitting) && { opacity: 0.5 }]}
             onPress={handleConfirmRequest}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !isBookingReady}
             activeOpacity={0.85}
           >
             {isSubmitting ? (
               <ActivityIndicator color={Colors.onPrimary} size="small" />
+            ) : !isBookingReady ? (
+              <Text style={styles.confirmBtnText}>Complete Required Booking Steps *</Text>
             ) : (
               <>
                 <Text style={styles.confirmBtnText}>
                   {chosenPaymentMethod === 'razorpay'
-                    ? 'Confirm & Pay Online'
-                    : 'Confirm Request (Pay on Delivery)'}
+                    ? `Confirm & Pay ₹${grandTotalAmount} Online`
+                    : `Confirm Request • ₹${grandTotalAmount} (Pay on Delivery)`}
                 </Text>
                 <Text style={styles.confirmBtnArrow}>→</Text>
               </>
@@ -499,6 +677,15 @@ export const BookingStep5ConfirmRequestChaircareMobileScreen: React.FC<{
           </Text>
         </View>
       </ScrollView>
+
+      {/* Razorpay Gateway Modal */}
+      <RazorpayCheckoutModal
+        visible={isCheckoutModalVisible}
+        checkoutData={checkoutData}
+        onClose={() => setIsCheckoutModalVisible(false)}
+        onSuccess={handlePaymentSuccess}
+        onError={handlePaymentError}
+      />
     </ScreenContainer>
   );
 };
@@ -546,10 +733,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   profileBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -2196,6 +2196,8 @@ export const getPlatformConfig = async (
         allowSameDayBooking: Boolean(config.allow_same_day_booking),
         minDispatchNotice: Number(config.min_dispatch_notice_minutes),
         advanceDays: Number(config.advance_booking_days),
+        platformFeePercent: Number(config.platform_fee_percent ?? 10),
+        minFloorCharge: Number(config.min_floor_charge ?? 299),
         operatingSchedule: config.operating_schedule || {},
         activeFieldRequestsCount: activeCount,
         updatedAt: config.updated_at,
@@ -2229,6 +2231,8 @@ export const updatePlatformConfig = async (
       minDispatchNotice,
       advanceDays,
       operatingSchedule,
+      platformFeePercent,
+      minFloorCharge,
     } = req.body;
 
     const currentRes = await query('SELECT * FROM platform_configurations WHERE id = 1 LIMIT 1;');
@@ -2245,15 +2249,17 @@ export const updatePlatformConfig = async (
     const updatedMinDispatchNotice = minDispatchNotice !== undefined ? Number(minDispatchNotice) : current.min_dispatch_notice_minutes ?? 30;
     const updatedAdvanceDays = advanceDays !== undefined ? Number(advanceDays) : current.advance_booking_days ?? 30;
     const updatedOperatingSchedule = operatingSchedule !== undefined ? operatingSchedule : current.operating_schedule ?? {};
+    const updatedPlatformFeePercent = platformFeePercent !== undefined ? Number(platformFeePercent) : Number(current.platform_fee_percent ?? 10);
+    const updatedMinFloorCharge = minFloorCharge !== undefined ? Number(minFloorCharge) : Number(current.min_floor_charge ?? 299);
 
     const updateRes = await query(
       `INSERT INTO platform_configurations (
         id, master_switch, platform_name, support_email, support_phone,
         settlement_currency, time_zone, enable_customer_bookings,
         allow_same_day_booking, min_dispatch_notice_minutes, advance_booking_days,
-        operating_schedule, updated_at, updated_by
+        operating_schedule, platform_fee_percent, min_floor_charge, updated_at, updated_by
       ) VALUES (
-        1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, CURRENT_TIMESTAMP, $12
+        1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, $14
       )
       ON CONFLICT (id) DO UPDATE SET
         master_switch = EXCLUDED.master_switch,
@@ -2267,6 +2273,8 @@ export const updatePlatformConfig = async (
         min_dispatch_notice_minutes = EXCLUDED.min_dispatch_notice_minutes,
         advance_booking_days = EXCLUDED.advance_booking_days,
         operating_schedule = EXCLUDED.operating_schedule,
+        platform_fee_percent = EXCLUDED.platform_fee_percent,
+        min_floor_charge = EXCLUDED.min_floor_charge,
         updated_at = CURRENT_TIMESTAMP,
         updated_by = EXCLUDED.updated_by
       RETURNING *;`,
@@ -2282,6 +2290,8 @@ export const updatePlatformConfig = async (
         updatedMinDispatchNotice,
         updatedAdvanceDays,
         JSON.stringify(updatedOperatingSchedule),
+        updatedPlatformFeePercent,
+        updatedMinFloorCharge,
         adminId || null,
       ]
     );
@@ -2308,6 +2318,8 @@ export const updatePlatformConfig = async (
         allowSameDayBooking: Boolean(saved.allow_same_day_booking),
         minDispatchNotice: Number(saved.min_dispatch_notice_minutes),
         advanceDays: Number(saved.advance_booking_days),
+        platformFeePercent: Number(saved.platform_fee_percent ?? 10),
+        minFloorCharge: Number(saved.min_floor_charge ?? 299),
         operatingSchedule: saved.operating_schedule || {},
         activeFieldRequestsCount: activeCount,
         updatedAt: saved.updated_at,

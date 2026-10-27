@@ -17,6 +17,19 @@ export interface BlockedTimeSlot {
   reason: string;
 }
 
+export interface QrCollectionRecord {
+  id: string;
+  trackingCode: string;
+  customerName: string;
+  chairModel: string;
+  serviceTitle: string;
+  amount: number;
+  completedAt: string;
+  upiId: string;
+  upiPhone: string;
+  paymentMethod: 'direct_upi_qr';
+}
+
 interface TechnicianContextType {
   isOnline: boolean;
   setIsOnline: (online: boolean) => void;
@@ -36,6 +49,19 @@ interface TechnicianContextType {
   setAcceptedRequest: (req: any | null) => void;
   acceptRequest: (req: any) => void;
   refreshProfile: () => Promise<void>;
+  upiId: string;
+  setUpiId: (id: string) => void;
+  upiPhone: string;
+  setUpiPhone: (phone: string) => void;
+  updateUpiSettings: (newUpiId: string, newUpiPhone: string) => Promise<boolean>;
+  qrCollections: QrCollectionRecord[];
+  recordQrPayment: (payment: {
+    trackingCode: string;
+    customerName: string;
+    chairModel: string;
+    serviceTitle: string;
+    amount: number;
+  }) => void;
 }
 
 const INITIAL_SCHEDULES: DaySchedule[] = [
@@ -71,6 +97,40 @@ export const TechnicianProvider: React.FC<{ children: ReactNode }> = ({ children
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [acceptedRequest, setAcceptedRequest] = useState<any | null>(null);
 
+  // Dynamic Direct UPI State
+  const initialUpiId = (() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('chaircare_technician_upi_id');
+        if (saved) return saved;
+      } catch {}
+    }
+    const rawDigits = (currentUser?.phone || '').replace(/[^0-9]/g, '');
+    return rawDigits.length >= 10 ? `${rawDigits.slice(-10)}@paytm` : '9217460742@paytm';
+  })();
+
+  const initialUpiPhone = (() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('chaircare_technician_upi_phone');
+        if (saved) return saved;
+      } catch {}
+    }
+    return currentUser?.phone || '+91 92174 60742';
+  })();
+
+  const [upiId, setUpiId] = useState<string>(initialUpiId);
+  const [upiPhone, setUpiPhone] = useState<string>(initialUpiPhone);
+  const [qrCollections, setQrCollections] = useState<QrCollectionRecord[]>(() => {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const saved = window.localStorage.getItem('chaircare_technician_qr_collections');
+        if (saved) return JSON.parse(saved);
+      } catch {}
+    }
+    return [];
+  });
+
   const refreshProfile = useCallback(async () => {
     if (!isTechnician) {
       return;
@@ -84,6 +144,18 @@ export const TechnicianProvider: React.FC<{ children: ReactNode }> = ({ children
         if (res.data.currentZone) {
           setActiveZone(res.data.currentZone);
         }
+        if (res.data.upiId && res.data.upiId.trim()) {
+          setUpiId(res.data.upiId.trim());
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try { window.localStorage.setItem('chaircare_technician_upi_id', res.data.upiId.trim()); } catch {}
+          }
+        }
+        if (res.data.upiPhone && res.data.upiPhone.trim()) {
+          setUpiPhone(res.data.upiPhone.trim());
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try { window.localStorage.setItem('chaircare_technician_upi_phone', res.data.upiPhone.trim()); } catch {}
+          }
+        }
       }
     } catch {
       // Retain optimistic local state if offline or unauthenticated
@@ -95,6 +167,73 @@ export const TechnicianProvider: React.FC<{ children: ReactNode }> = ({ children
       refreshProfile();
     }
   }, [isTechnician, refreshProfile]);
+
+  const updateUpiSettings = async (newUpiId: string, newUpiPhone: string): Promise<boolean> => {
+    const cleanUpi = (newUpiId || '').trim();
+    const cleanPhone = (newUpiPhone || '').trim();
+    if (!cleanUpi && !cleanPhone) return false;
+
+    if (cleanUpi) setUpiId(cleanUpi);
+    if (cleanPhone) setUpiPhone(cleanPhone);
+
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        if (cleanUpi) window.localStorage.setItem('chaircare_technician_upi_id', cleanUpi);
+        if (cleanPhone) window.localStorage.setItem('chaircare_technician_upi_phone', cleanPhone);
+      } catch {}
+    }
+
+    try {
+      await technicianApi.updateProfile({
+        upiId: cleanUpi,
+        upiPhone: cleanPhone,
+      });
+      return true;
+    } catch (err) {
+      console.warn('⚠️ [technicianApi.updateProfile upi sync error]:', err);
+      return true; // local state updated
+    }
+  };
+
+  const recordQrPayment = (payment: {
+    trackingCode: string;
+    customerName: string;
+    chairModel: string;
+    serviceTitle: string;
+    amount: number;
+  }) => {
+    const newRecord: QrCollectionRecord = {
+      id: `qr-col-${Date.now()}`,
+      trackingCode: payment.trackingCode,
+      customerName: payment.customerName,
+      chairModel: payment.chairModel,
+      serviceTitle: payment.serviceTitle,
+      amount: payment.amount,
+      completedAt: 'Just Now',
+      upiId,
+      upiPhone,
+      paymentMethod: 'direct_upi_qr',
+    };
+
+    setQrCollections((prev) => {
+      const updated = [newRecord, ...prev];
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem('chaircare_technician_qr_collections', JSON.stringify(updated.slice(0, 50)));
+        } catch {}
+      }
+      return updated;
+    });
+
+    if (acceptedRequest) {
+      setAcceptedRequest({
+        ...acceptedRequest,
+        isPaid: true,
+        is_paid: true,
+        paymentMethod: 'direct_upi_qr',
+      });
+    }
+  };
 
   const acceptRequest = (req: any) => {
     const updatedReq = {
@@ -177,6 +316,13 @@ export const TechnicianProvider: React.FC<{ children: ReactNode }> = ({ children
         setAcceptedRequest,
         acceptRequest,
         refreshProfile,
+        upiId,
+        setUpiId,
+        upiPhone,
+        setUpiPhone,
+        updateUpiSettings,
+        qrCollections,
+        recordQrPayment,
       }}
     >
       {children}

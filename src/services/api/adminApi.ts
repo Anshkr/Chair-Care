@@ -295,6 +295,8 @@ export interface PlatformConfigData {
   allowSameDayBooking: boolean;
   minDispatchNotice: number;
   advanceDays: number;
+  platformFeePercent?: number;
+  minFloorCharge?: number;
   operatingSchedule?: {
     mon_fri?: string;
     saturday?: string;

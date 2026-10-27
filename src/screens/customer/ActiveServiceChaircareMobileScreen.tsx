@@ -16,6 +16,7 @@ import { Colors, BorderRadius, Shadows } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useBooking } from '../../context/BookingContext';
 import { phoneCallService } from '../../services/phone/phoneCallService';
+import { customerApi } from '../../services/api/customerApi';
 
 /**
  * Screen ID: C13
@@ -24,23 +25,50 @@ import { phoneCallService } from '../../services/phone/phoneCallService';
  */
 export const ActiveServiceChaircareMobileScreen: React.FC<{
   navigation: any;
-}> = ({ navigation }) => {
+  route?: any;
+}> = ({ navigation, route }) => {
   const insets = useSafeAreaInsets();
   const { draft } = useBooking();
 
+  const targetRequestId =
+    route?.params?.requestId || (draft as any)?.serviceRequestId || (draft as any)?.id;
+
+  const [requestData, setRequestData] = useState<any>(null);
   const [elapsedMinutes, setElapsedMinutes] = useState<number>(19);
   const [isSpecModalVisible, setIsSpecModalVisible] = useState<boolean>(false);
   const [isContactPopoverVisible, setIsContactPopoverVisible] = useState<boolean>(false);
 
+  useEffect(() => {
+    let isMounted = true;
+    if (targetRequestId) {
+      customerApi.getRequestDetails(targetRequestId).then((res) => {
+        if (isMounted && res.success && res.data) {
+          setRequestData(res.data);
+        }
+      }).catch(() => {});
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [targetRequestId]);
+
+  const isPaid = Boolean(
+    requestData?.is_paid ||
+    requestData?.isPaid ||
+    route?.params?.isPaid ||
+    (draft as any)?.isPaid
+  );
+
   const technician = {
-    name: 'Certified Partner Specialist',
-    rating: 4.95,
+    name: requestData?.technician_name || 'Certified Partner Specialist',
+    rating: Number(requestData?.technician_rating || 4.95),
     completedJobsCount: 140,
-    phone: '+91 800 555 0199',
+    phone: requestData?.technician_phone || '+91 800 555 0199',
   };
 
-  const serviceTitle = draft?.serviceTitle || 'Office Chair Repair & Overhaul';
-  const servicePrice = draft?.estimatedTotal ? `₹${draft.estimatedTotal}` : '₹599';
+  const serviceTitle = requestData?.chair_model || draft?.serviceTitle || 'Office Chair Repair & Overhaul';
+  const rawPrice = requestData?.total_amount || draft?.estimatedTotal || 599;
+  const servicePrice = `₹${rawPrice}`;
   const serviceLocation =
     draft?.unitOrFloor && draft?.serviceAddress
       ? `${draft.unitOrFloor}, ${draft.serviceAddress}`
@@ -97,8 +125,9 @@ export const ActiveServiceChaircareMobileScreen: React.FC<{
             style={styles.profileBtn}
             onPress={() => navigation.navigate('CustomerProfileTab')}
             activeOpacity={0.7}
+            accessibilityLabel="Customer Profile"
           >
-            <AppIcon name="User" size={18} />
+            <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
           </TouchableOpacity>
         </View>
       </View>
@@ -147,6 +176,33 @@ export const ActiveServiceChaircareMobileScreen: React.FC<{
                 <Text style={styles.estDurationText}>Est: 35–45 mins</Text>
               </View>
             </View>
+
+            {/* Payment Status Notification Banner */}
+            {isPaid ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#86EFAC', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12, gap: 10 }}>
+                <AppIcon name="ShieldCheck" size={18} color="#15803D" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#15803D', letterSpacing: 0.3 }}>
+                    PAID ONLINE • DO NOT PAY TECHNICIAN
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#166534', marginTop: 1, lineHeight: 15 }}>
+                    {servicePrice} has been paid and verified via Razorpay. Zero cash collection required.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginTop: 12, gap: 10 }}>
+                <AppIcon name="Banknote" size={18} color="#B45309" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#B45309', letterSpacing: 0.3 }}>
+                    PAY ON DELIVERY • DUE UPON COMPLETION
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#92400E', marginTop: 1, lineHeight: 15 }}>
+                    Please pay {servicePrice} to technician in cash or UPI after service completion.
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
 
@@ -710,10 +766,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   profileBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primary,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

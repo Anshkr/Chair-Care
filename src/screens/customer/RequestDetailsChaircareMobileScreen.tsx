@@ -72,6 +72,7 @@ interface TicketDetailData {
   gateCode?: string;
   pricingItems: PricingLineItem[];
   totalAmount: number;
+  isPaid: boolean;
   bottomDistanceText: string;
   bottomStatusText: string;
   primaryActionTitle: string;
@@ -235,6 +236,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
           },
         ],
         totalAmount: Number(serverTicket.totalAmount) || activeTotal,
+        isPaid: Boolean(serverTicket.is_paid || serverTicket.isPaid),
         bottomDistanceText: isCompleted
           ? 'Completed & Signed Off'
           : 'Specialist en route',
@@ -298,6 +300,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
         },
       ],
       totalAmount: activeTotal || 599,
+      isPaid: Boolean((draft as any)?.isPaid),
       bottomDistanceText: 'Specialist dispatched',
       bottomStatusText: 'Active service ticket',
       primaryActionTitle: 'Track Technician',
@@ -775,20 +778,32 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
             {/* Total Row */}
             <View style={styles.pricingTotalRow}>
               <View style={styles.pricingTotalLabelCol}>
-                <Text style={styles.pricingTotalTitle}>Estimated Cost</Text>
-                <Text style={styles.pricingTaxesNote}>Taxes included</Text>
+                <Text style={styles.pricingTotalTitle}>
+                  {ticketData.isPaid ? 'Total Paid (Online)' : 'Estimated Cost'}
+                </Text>
+                <Text style={[styles.pricingTaxesNote, ticketData.isPaid && { color: '#15803D', fontWeight: '700' }]}>
+                  {ticketData.isPaid ? 'Paid via Razorpay • ₹0 Due' : 'Taxes included • Due upon completion'}
+                </Text>
               </View>
-              <Text style={styles.pricingTotalAmount}>₹{ticketData.totalAmount}</Text>
+              <Text style={[styles.pricingTotalAmount, ticketData.isPaid && { color: '#15803D' }]}>
+                ₹{ticketData.totalAmount}
+              </Text>
             </View>
           </View>
 
-          {/* Guarantee Box */}
-          <View style={styles.guaranteeBox}>
-            <AppIcon name="ShieldCheck" size={18} />
-            <Text style={styles.guaranteeText}>
-              <Text style={styles.guaranteeStrong}>Zero upfront charge.</Text> Final
-              amount confirmed before any replacement parts are installed. 90-day
-              comprehensive mechanical warranty included.
+          {/* Guarantee Box & Payment Instructions */}
+          <View style={[styles.guaranteeBox, ticketData.isPaid && { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
+            <AppIcon name="ShieldCheck" size={18} color={ticketData.isPaid ? '#15803D' : undefined} />
+            <Text style={[styles.guaranteeText, ticketData.isPaid && { color: '#166534' }]}>
+              {ticketData.isPaid ? (
+                <>
+                  <Text style={{ fontWeight: '800', color: '#15803D' }}>PAID IN FULL ONLINE.</Text> Technician has been notified that payment is completed. Zero cash collection required. 90-day comprehensive warranty active.
+                </>
+              ) : (
+                <>
+                  <Text style={styles.guaranteeStrong}>Pay on Delivery.</Text> Please pay ₹{ticketData.totalAmount} to your technician in cash or UPI upon completing the service. 90-day warranty included.
+                </>
+              )}
             </Text>
           </View>
         </View>

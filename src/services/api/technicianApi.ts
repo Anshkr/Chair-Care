@@ -115,6 +115,8 @@ export const technicianApi = {
     idProofType?: string;
     idProofNumber?: string;
     idProofDocumentUrl?: string;
+    upiId?: string;
+    upiPhone?: string;
   }): Promise<ApiResponse<any>> => {
     const res = await apiRequest('/technician/profile', {
       method: 'PUT',

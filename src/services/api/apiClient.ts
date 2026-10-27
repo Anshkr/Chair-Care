@@ -4,13 +4,21 @@
 import { Platform } from 'react-native';
 
 const getDefaultApiBaseUrl = (): string => {
-  // 1. Explicit environment variable configured by developer/deployment
+  // 1. Explicit environment variable configured by deployment
   if (process.env.EXPO_PUBLIC_API_URL) {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // 2. Default to permanent Render Cloud API
-  return 'https://chair-care.onrender.com/api/v1';
+  // 2. Localhost resolution when running in web browser
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `http://${hostname}:5000/api/v1`;
+    }
+  }
+
+  // 3. Default fallback for local and self-hosted deployments
+  return 'http://localhost:5000/api/v1';
 };
 
 const getInitialToken = (): string | null => {

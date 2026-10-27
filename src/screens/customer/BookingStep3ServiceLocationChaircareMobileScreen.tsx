@@ -84,9 +84,9 @@ const loadSavedAddressesFromStorage = (userId?: string): SavedAddressItem[] => {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const raw = window.localStorage.getItem(getStorageKey(userId));
-      if (raw) {
+      if (raw !== null) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed;
         }
       }
@@ -328,27 +328,54 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     return full;
   };
 
+  const isLocationFormValid =
+    flatNo.trim().length > 0 &&
+    (locationSource === 'map' || buildingName.trim().length > 0 || streetArea.trim().length > 0) &&
+    city.trim().length > 0 &&
+    pincode.trim().length >= 4;
+
   const handleContinue = async () => {
     // 1. Validation: House / Flat No is required first
     if (!flatNo.trim()) {
-      Alert.alert(
-        'House / Door No. Required',
-        'Please enter your House, Flat, Floor, or Door number before continuing.'
-      );
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('House / Door No. Required: Please enter your House, Flat, Floor, or Door number before continuing.');
+      } else {
+        Alert.alert(
+          'House / Door No. Required',
+          'Please enter your House, Flat, Floor, or Door number before continuing.'
+        );
+      }
       return;
     }
 
     // When location is selected from map, apartment/building name is NOT required
     if (locationSource !== 'map' && !streetArea.trim() && !buildingName.trim()) {
-      Alert.alert(
-        'Location Details Required',
-        'Please enter your Building, Society, or Street/Area details.'
-      );
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Location Details Required: Please enter your Building, Society, or Street/Area details.');
+      } else {
+        Alert.alert(
+          'Location Details Required',
+          'Please enter your Building, Society, or Street/Area details.'
+        );
+      }
       return;
     }
 
     if (!city.trim() && locationSource !== 'map') {
-      Alert.alert('City Required', 'Please enter your city.');
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('City Required: Please enter your city.');
+      } else {
+        Alert.alert('City Required', 'Please enter your city.');
+      }
+      return;
+    }
+
+    if (!pincode.trim() || pincode.trim().length < 4) {
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert('Pincode Required: Please enter a valid pincode.');
+      } else {
+        Alert.alert('Pincode Required', 'Please enter a valid pincode.');
+      }
       return;
     }
 
@@ -458,15 +485,20 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </View>
         </View>
 
-        {isAuthenticated && (
-          <TouchableOpacity
-            style={styles.profileBtn}
-            onPress={() => navigation.navigate('CustomerProfileTab')}
-            activeOpacity={0.7}
-          >
-            <AppIcon name="User" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={styles.profileBtn}
+          onPress={() => {
+            if (isAuthenticated) {
+              navigation.navigate('CustomerProfileTab');
+            } else {
+              navigation.navigate('AuthenticationGate', { returnTo: 'BookingStep3' });
+            }
+          }}
+          activeOpacity={0.7}
+          accessibilityLabel="Customer Profile"
+        >
+          <AppIcon name="User" size={18} color="#FFFFFF" strokeWidth={2.2} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -942,10 +974,17 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
         </View>
 
         <PrecisionButton
-          title={isConvertingAddress ? 'Verifying Doorstep Coordinates...' : 'Continue to Schedule →'}
+          title={
+            isConvertingAddress
+              ? 'Verifying Doorstep Coordinates...'
+              : !isLocationFormValid
+              ? 'Enter Required Address Fields *'
+              : 'Continue to Schedule →'
+          }
           size="lg"
           variant="primary"
           onPress={handleContinue}
+          disabled={!isLocationFormValid || isConvertingAddress}
           style={styles.continueBtn}
         />
       </View>
@@ -1006,7 +1045,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.primary,
+    backgroundColor: '#0F172A',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
     alignItems: 'center',
     justifyContent: 'center',
   },

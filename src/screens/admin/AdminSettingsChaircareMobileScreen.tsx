@@ -17,6 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../../constants/theme';
 import { Typography } from '../../constants/typography';
 import { useAuth } from '../../context/AuthContext';
+import { BrandLogo } from '../../components/common/BrandLogo';
+import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
 
 /**
  * Screen ID: A59
@@ -169,32 +171,13 @@ const CONFIG_GROUPS: ConfigGroup[] = [
         iconBgType: 'secondary',
         targetScreen: 'PaymentsTab',
       },
-      {
-        id: 'tax_tariff',
-        title: 'Platform Fees & Taxes',
-        description: 'GST invoice breakdown and platform commission percentage',
-        badge: 'GST 18%',
-        badgeType: 'neutral',
-        icon: 'percent',
-        iconBgType: 'surface',
-      },
     ],
   },
   {
     id: 'system_security',
     headerTitle: 'System & Security',
-    headerTag: 'Platform Health',
+    headerTag: 'Security & Logs',
     items: [
-      {
-        id: 'sys_health',
-        title: 'System Health & Status',
-        description: 'Check database status, server response & live uptime',
-        badge: 'All Systems Normal',
-        badgeType: 'success',
-        icon: 'favorite',
-        iconBgType: 'tertiary',
-        targetScreen: 'AdminProfileSystemStatus',
-      },
       {
         id: 'auth_bounds',
         title: 'Security & Login Protections',
@@ -325,9 +308,7 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
       {/* Fixed Top Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <View style={styles.headerIconBox}>
-            <MaterialIcons name="precision-manufacturing" size={20} color="#FFFFFF" />
-          </View>
+          <BrandLogo size={36} containerStyle={{ marginRight: 10 }} />
           <View style={styles.headerTitleCol}>
             <Text style={styles.headerSub}>SUPER ADMIN</Text>
             <Text style={styles.headerTitle}>System Settings</Text>
@@ -350,23 +331,14 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
             <MaterialIcons name="notifications" size={22} color={Colors.onSurfaceVariant} />
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.profileAvatarWrap}
+          <AdminHeaderAvatar
+            size={36}
             onPress={() => {
               if (navigation?.navigate) {
                 navigation.navigate('AdminProfileSystemStatus');
               }
             }}
-            activeOpacity={0.7}
-          >
-            <Image
-              source={{
-                uri: 'https://lh3.googleusercontent.com/aida/AEtjO1XnL0Olf_QjUlVIuI224cZqVkVbgpMxdyNh_agAPsJZ_tMQVQHmwLNtuDqxy9X8vtifDZc0Ytn7VN5m9nUntw5O-N0sEGA3GagjWUqCFWmnYYKM_HHPI6Os2DmnFUPG7dYjvEHIYkA2p1psN1p4fiuZepz_tTanBfHdzUEVlF-l8V6xiFblG3C9mUeoD9t22r04-EEzLw1DtP5jg7_TGwnRjm_IZ6qVwmNSwKYg7ar07MVZgk30ZDFV',
-              }}
-              style={styles.headerAvatarImg}
-            />
-            <View style={styles.headerAvatarActiveDot} />
-          </TouchableOpacity>
+          />
         </View>
       </View>
 
@@ -404,7 +376,7 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
                 <View style={styles.rootAvatarWrap}>
                   <Image
                     source={{
-                      uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuACDJSYDAnjybQo_YgsRfGG3dv_EDVke6LPo_AEQWe7TFLfqBXkTlRWoWL3XWPMoao4hyd1ourH5BE1mRafYtTIuaabcCv51UC2TygzfvMIK13ySgJwhDJ6PyjwBXhmZOWaxp7CPV9xLOHoV-UThLsyBTXm9EE-LzFTXm4QyU_ACQcN1PFTiu5dVGBNkdDQV2rIw1E7hg_SEDl-sRpPtVn2CPn0Jw_SEXByZIGbl2LPzY_2TwImKKU',
+                      uri: currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
                     }}
                     style={styles.rootAvatarImg}
                   />
@@ -452,7 +424,7 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
               activeOpacity={0.7}
             >
               <Text style={styles.manageRootLinkText}>
-                View Admin Profile &amp; System Health
+                View Admin Profile
               </Text>
               <MaterialIcons name="chevron-right" size={18} color="#7C839B" />
             </TouchableOpacity>
