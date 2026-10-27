@@ -764,26 +764,12 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Context & Quick Settings */}
+        {/* Top Context */}
         <View style={styles.topTelemetryRow}>
           <View style={styles.telemetryTagLeft}>
             <View style={styles.pulseDotEmerald} />
             <Text style={styles.telemetryTagText}>Live Account Telemetry</Text>
           </View>
-
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() =>
-              openInfoModal(
-                'Account Settings',
-                'Telemetry sync is active. Diagnostic data, van dispatch tracking, and push notifications are configured for high-priority delivery.'
-              )
-            }
-            activeOpacity={0.7}
-            accessibilityLabel="Account Settings"
-          >
-            <AppIcon name="Settings" size={18} />
-          </TouchableOpacity>
         </View>
 
         {/* Customer Identity Hero Card */}
