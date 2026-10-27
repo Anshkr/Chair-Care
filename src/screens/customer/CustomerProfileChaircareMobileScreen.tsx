@@ -522,9 +522,22 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
       Alert.alert('Required Field', 'Please enter your name.');
       return;
     }
+    const cleanEmail = editEmail.trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+    const cleanPhone = editPhone.trim();
+    if (!cleanPhone || cleanPhone.length < 8) {
+      Alert.alert('Invalid Phone', 'Please enter a valid phone number (at least 8 digits).');
+      return;
+    }
+
     setIsSavingProfile(true);
     const result = await updateUserProfile({
       name: editName.trim(),
+      email: cleanEmail,
+      phone: cleanPhone,
       defaultAddress: editAddress.trim(),
       avatarUrl: tempAvatarUrl !== undefined ? (tempAvatarUrl === '' ? '__REMOVE__' : tempAvatarUrl) : undefined,
     });
@@ -1282,49 +1295,29 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
                   />
                 </View>
 
-                {/* Permanent Verified Credentials - Read Only */}
-                <View style={styles.lockedCredentialsBox}>
-                  <View style={styles.lockedHeaderRow}>
-                    <View style={styles.lockedBadge}>
-                      <AppIcon name="Lock" size={12} color="#64748B" />
-                      <Text style={styles.lockedBadgeText}>PERMANENT ACCOUNT CREDENTIALS</Text>
-                    </View>
-                    <Text style={styles.lockedNotice}>Cannot be changed</Text>
-                  </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>EMAIL ADDRESS *</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={editEmail}
+                    onChangeText={setEditEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    placeholder="e.g. name@domain.com"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                  />
+                </View>
 
-                  <View style={styles.lockedFieldRow}>
-                    <View style={styles.lockedFieldIconBox}>
-                      <AppIcon name="Mail" size={14} color="#64748B" />
-                    </View>
-                    <View style={styles.lockedFieldCol}>
-                      <Text style={styles.lockedFieldLabel}>EMAIL ADDRESS</Text>
-                      <Text style={styles.lockedFieldValue} numberOfLines={1}>
-                        {currentUser?.email || 'No email attached'}
-                      </Text>
-                    </View>
-                    <View style={styles.verifiedCheckPill}>
-                      <AppIcon name="Check" size={10} color="#16A34A" />
-                      <Text style={styles.verifiedCheckText}>Verified</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.lockedDivider} />
-
-                  <View style={styles.lockedFieldRow}>
-                    <View style={styles.lockedFieldIconBox}>
-                      <AppIcon name="Phone" size={14} color="#64748B" />
-                    </View>
-                    <View style={styles.lockedFieldCol}>
-                      <Text style={styles.lockedFieldLabel}>PHONE NUMBER</Text>
-                      <Text style={styles.lockedFieldValue} numberOfLines={1}>
-                        {currentUser?.phone || 'No phone attached'}
-                      </Text>
-                    </View>
-                    <View style={styles.verifiedCheckPill}>
-                      <AppIcon name="Check" size={10} color="#16A34A" />
-                      <Text style={styles.verifiedCheckText}>Verified</Text>
-                    </View>
-                  </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>PHONE NUMBER *</Text>
+                  <TextInput
+                    style={styles.textInput}
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    keyboardType="phone-pad"
+                    placeholder="e.g. 9876543210"
+                    placeholderTextColor={Colors.onSurfaceVariant}
+                  />
                 </View>
 
                 <View style={styles.inputGroup}>

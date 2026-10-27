@@ -697,6 +697,8 @@ export const updateTechnicianProfile = async (
 
   const {
     name,
+    email,
+    phone,
     currentZone,
     vehicleInfo,
     specializations,
@@ -709,15 +711,69 @@ export const updateTechnicianProfile = async (
     upiPhone,
   } = req.body;
 
-  if (name !== undefined || avatarUrl !== undefined) {
+  // Validate email uniqueness if technician updated email
+  let newEmail: string | null = null;
+  if (email !== undefined) {
+    const trimmedEmail = String(email).trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+      return;
+    }
+    const currentRes = await query(`SELECT email FROM users WHERE id = $1;`, [technicianId]);
+    if (trimmedEmail !== (currentRes.rows[0]?.email || '').toLowerCase()) {
+      const emailCheck = await query(
+        `SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND id != $2 LIMIT 1;`,
+        [trimmedEmail, technicianId]
+      );
+      if (emailCheck.rows.length > 0) {
+        res.status(409).json({
+          success: false,
+          error: 'This email address is already registered to another account.',
+        });
+        return;
+      }
+      newEmail = trimmedEmail;
+    }
+  }
+
+  // Validate phone uniqueness if technician updated phone
+  let newPhone: string | null = null;
+  if (phone !== undefined) {
+    const trimmedPhone = String(phone).trim();
+    if (trimmedPhone && trimmedPhone.length < 8) {
+      res.status(400).json({ success: false, error: 'Please enter a valid phone number (at least 8 digits).' });
+      return;
+    }
+    const currentRes = await query(`SELECT phone FROM users WHERE id = $1;`, [technicianId]);
+    if (trimmedPhone !== (currentRes.rows[0]?.phone || '').trim()) {
+      const phoneCheck = await query(
+        `SELECT id FROM users WHERE TRIM(phone) = $1 AND id != $2 LIMIT 1;`,
+        [trimmedPhone, technicianId]
+      );
+      if (phoneCheck.rows.length > 0) {
+        res.status(409).json({
+          success: false,
+          error: 'This phone number is already registered to another account.',
+        });
+        return;
+      }
+      newPhone = trimmedPhone;
+    }
+  }
+
+  if (name !== undefined || avatarUrl !== undefined || newEmail !== null || newPhone !== null) {
     await query(
       `UPDATE users
        SET name = COALESCE($1, name),
-           avatar_url = CASE WHEN $2::text = '__REMOVE__' THEN NULL WHEN $2::text IS NOT NULL THEN $2::text ELSE avatar_url END,
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           avatar_url = CASE WHEN $4::text = '__REMOVE__' THEN NULL WHEN $4::text IS NOT NULL THEN $4::text ELSE avatar_url END,
            updated_at = NOW()
-       WHERE id = $3;`,
+       WHERE id = $5;`,
       [
         name !== undefined ? name.trim() : null,
+        newEmail,
+        newPhone,
         avatarUrl !== undefined ? (avatarUrl.trim() === '' ? '__REMOVE__' : avatarUrl.trim()) : null,
         technicianId,
       ]

@@ -298,18 +298,79 @@ export const updateProfile = async (req: AuthenticatedRequest, res: Response): P
     return;
   }
 
-  const { name, defaultAddress, avatarUrl } = req.body;
+  const { name, email, phone, defaultAddress, avatarUrl } = req.body;
   const userId = req.user.userId;
 
-  if (name !== undefined || avatarUrl !== undefined) {
+  // 1. Fetch current user record
+  const currentRes = await query(`SELECT id, email, phone FROM users WHERE id = $1;`, [userId]);
+  if (currentRes.rows.length === 0) {
+    res.status(404).json({ success: false, error: 'User account not found.' });
+    return;
+  }
+  const currentUser = currentRes.rows[0];
+
+  // 2. Validate email uniqueness if changed
+  let newEmail: string | null = null;
+  if (email !== undefined) {
+    const trimmedEmail = String(email).trim().toLowerCase();
+    if (!trimmedEmail || !trimmedEmail.includes('@') || !trimmedEmail.includes('.')) {
+      res.status(400).json({ success: false, error: 'Please enter a valid email address.' });
+      return;
+    }
+    if (trimmedEmail !== (currentUser.email || '').toLowerCase()) {
+      const emailCheck = await query(
+        `SELECT id FROM users WHERE LOWER(TRIM(email)) = $1 AND id != $2 LIMIT 1;`,
+        [trimmedEmail, userId]
+      );
+      if (emailCheck.rows.length > 0) {
+        res.status(409).json({
+          success: false,
+          error: 'This email address is already registered to another account.',
+        });
+        return;
+      }
+      newEmail = trimmedEmail;
+    }
+  }
+
+  // 3. Validate phone uniqueness if changed
+  let newPhone: string | null = null;
+  if (phone !== undefined) {
+    const trimmedPhone = String(phone).trim();
+    if (trimmedPhone && trimmedPhone.length < 8) {
+      res.status(400).json({ success: false, error: 'Please enter a valid phone number (at least 8 digits).' });
+      return;
+    }
+    if (trimmedPhone !== (currentUser.phone || '').trim()) {
+      const phoneCheck = await query(
+        `SELECT id FROM users WHERE TRIM(phone) = $1 AND id != $2 LIMIT 1;`,
+        [trimmedPhone, userId]
+      );
+      if (phoneCheck.rows.length > 0) {
+        res.status(409).json({
+          success: false,
+          error: 'This phone number is already registered to another account.',
+        });
+        return;
+      }
+      newPhone = trimmedPhone;
+    }
+  }
+
+  // 4. Update users table with validated credentials
+  if (name !== undefined || avatarUrl !== undefined || newEmail !== null || newPhone !== null) {
     await query(
       `UPDATE users 
        SET name = COALESCE($1, name),
-           avatar_url = CASE WHEN $2::text = '__REMOVE__' THEN NULL WHEN $2::text IS NOT NULL THEN $2::text ELSE avatar_url END,
+           email = COALESCE($2, email),
+           phone = COALESCE($3, phone),
+           avatar_url = CASE WHEN $4::text = '__REMOVE__' THEN NULL WHEN $4::text IS NOT NULL THEN $4::text ELSE avatar_url END,
            updated_at = NOW()
-       WHERE id = $3;`,
+       WHERE id = $5;`,
       [
         name !== undefined ? name.trim() : null,
+        newEmail,
+        newPhone,
         avatarUrl !== undefined ? (avatarUrl.trim() === '' ? '__REMOVE__' : avatarUrl.trim()) : null,
         userId,
       ]

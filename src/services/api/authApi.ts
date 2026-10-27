@@ -72,6 +72,8 @@ export const authApi = {
 
   updateProfile: async (payload: {
     name?: string;
+    email?: string;
+    phone?: string;
     defaultAddress?: string;
     avatarUrl?: string;
   }): Promise<ApiResponse<any>> => {

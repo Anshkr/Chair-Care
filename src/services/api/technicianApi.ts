@@ -107,6 +107,8 @@ export const technicianApi = {
 
   updateProfile: async (payload: {
     name?: string;
+    email?: string;
+    phone?: string;
     currentZone?: string;
     vehicleInfo?: string;
     specializations?: string[];

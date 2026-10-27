@@ -33,11 +33,15 @@ interface AuthContextType {
   register: (payload: RegisterPayload) => Promise<AuthActionResult>;
   updateUserProfile: (data: {
     name?: string;
+    email?: string;
+    phone?: string;
     defaultAddress?: string;
     avatarUrl?: string;
   }) => Promise<AuthActionResult>;
   updateTechnicianProfile: (data: {
     name?: string;
+    email?: string;
+    phone?: string;
     currentZone?: string;
     vehicleInfo?: string;
     specializations?: string[];
@@ -191,6 +195,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateUserProfile = async (data: {
     name?: string;
+    email?: string;
+    phone?: string;
     defaultAddress?: string;
     avatarUrl?: string;
   }): Promise<AuthActionResult> => {
@@ -212,8 +218,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const updated: UserProfile = {
           id: res.data.user.id,
           name: res.data.user.name || data.name || currentUser?.name || '',
-          email: res.data.user.email || currentUser?.email || '',
-          phone: res.data.user.phone || currentUser?.phone || '',
+          email: res.data.user.email || data.email || currentUser?.email || '',
+          phone: res.data.user.phone || data.phone || currentUser?.phone || '',
           role: res.data.user.role || currentUser?.role || 'customer',
           avatarUrl: normalizedAvatar !== undefined ? normalizedAvatar : currentUser?.avatarUrl,
           defaultAddress:
@@ -235,6 +241,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const updateTechnicianProfile = async (data: {
     name?: string;
+    email?: string;
+    phone?: string;
     currentZone?: string;
     vehicleInfo?: string;
     specializations?: string[];
@@ -255,9 +263,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const updated: UserProfile = {
           id: res.data.id || currentUser?.id || '',
-          name: res.data.name || currentUser?.name || '',
-          email: res.data.email || currentUser?.email || '',
-          phone: res.data.phone || currentUser?.phone || '',
+          name: res.data.name || data.name || currentUser?.name || '',
+          email: res.data.email || data.email || currentUser?.email || '',
+          phone: res.data.phone || data.phone || currentUser?.phone || '',
           role: 'technician',
           avatarUrl: normalizedAvatar,
         };
