@@ -1,158 +1,130 @@
-# ChairCare Platform — Client Self-Hosted Server Setup & Deployment Guide 🪑⚡
+# ChairCare Mobile App & Backend Setup Guide 🪑⚡
+> **Self-Hosted Backend, Database Setup & Mobile App (Android/iOS) Installation Guide**
 
-Welcome to the **ChairCare Platform** deployment guide. This document provides step-by-step instructions for your technical team or systems administrator to install, configure, and host the entire ChairCare platform (backend API, PostgreSQL database, and frontend web/mobile client) completely from scratch on your own dedicated or cloud server (e.g. AWS EC2, DigitalOcean, Hetzner, Linode, or on-premise Linux server).
+This guide provides instructions for setting up the **ChairCare Backend API**, provisioning the **PostgreSQL Database**, and configuring & building the **Mobile App** (React Native / Expo) to connect directly to your server.
 
 ---
 
 ## 📋 Table of Contents
 1. [Architecture Overview](#1-architecture-overview)
-2. [What & Where Changes Need to Be Made](#2-what--where-changes-need-to-be-made)
-3. [Credentials & Security Configuration](#3-credentials--security-configuration)
-4. [Server Prerequisites & Hardware Sizing](#4-server-prerequisites--hardware-sizing)
-5. [Step-by-Step Installation From Scratch](#5-step-by-step-installation-from-scratch)
-   - [Step 5.1: Operating System & Dependency Setup](#step-51-operating-system--dependency-setup)
-   - [Step 5.2: PostgreSQL Database Setup & Migrations](#step-52-postgresql-database-setup--migrations)
-   - [Step 5.3: Backend API Setup & PM2 Process Management](#step-53-backend-api-setup--pm2-process-management)
-   - [Step 5.4: Frontend Client Web Build](#step-54-frontend-client-web-build)
-   - [Step 5.5: Nginx Reverse Proxy & SSL Setup](#step-55-nginx-reverse-proxy--ssl-setup)
-   - [Step 5.6: Native Mobile Android APK Build](#step-56-native-mobile-android-apk-build)
-6. [Default Pre-Configured Seed Accounts](#6-default-pre-configured-seed-accounts)
-7. [System Maintenance & Backups](#7-system-maintenance--backups)
+2. [Where to Change Code to Connect Database & App](#2-where-to-change-code-to-connect-database--app)
+3. [How to Create & Migrate the Database (Which Files to Run)](#3-how-to-create--migrate-the-database-which-files-to-run)
+4. [Backend Server Setup & Running in Production](#4-backend-server-setup--running-in-production)
+5. [Mobile App Setup & Building Standalone Android APK](#5-mobile-app-setup--building-standalone-android-apk)
+6. [Default Pre-Seeded Accounts for Testing](#6-default-pre-seeded-accounts-for-testing)
+7. [Troubleshooting & Verification](#7-troubleshooting--verification)
 
 ---
 
 ## 1. Architecture Overview
 
-The ChairCare platform consists of three decoupled components:
-- **Backend REST API**: Node.js 20, Express, TypeScript, and JSON Web Token (JWT) role-based authentication.
-- **Relational Database**: PostgreSQL (version 14+) with automatic sequential migrations (`001` to `018`) and seed catalogs.
-- **Client Application**: Cross-platform React Native / Expo application built for Web (desktop/mobile browsers) and native Android/iOS.
+The system consists of two parts:
+- **Backend API & Database (Hosted on your Server)**: Node.js + Express + TypeScript connecting to a PostgreSQL database on port `5432`. Serves REST API endpoints on port `5000` (e.g. `http://YOUR_SERVER_IP:5000/api/v1`).
+- **Mobile Application (Installed on Mobile Phones)**: Cross-platform React Native / Expo application installed on Android or iOS devices. Communicates with your server over HTTP/HTTPS.
 
 ```
-                    ┌─────────────────────────┐
-                    │    End Users & Fleet    │
-                    │ (Web, Android, iOS App) │
-                    └────────────┬────────────┘
-                                 │ HTTPS (Port 443)
-                                 ▼
-                    ┌─────────────────────────┐
-                    │      Nginx Proxy        │
-                    │   (SSL via Let's Encrypt)│
-                    └─────┬─────────────┬─────┘
-                          │             │
-        Static Web Bundle │             │ Reverse Proxy /api/v1
-    (/var/www/chaircare)  │             │ (http://127.0.0.1:5000)
-                          ▼             ▼
-                   [ Web Assets ]   ┌──────────────────────────┐
-                                    │ ChairCare Backend API    │
-                                    │ (Node.js / PM2 Process)  │
-                                    └────────────┬─────────────┘
-                                                 │ Pooled Connection (Port 5432)
-                                                 ▼
-                                    ┌──────────────────────────┐
-                                    │ PostgreSQL Relational DB │
-                                    │ (Self-Hosted / Managed)  │
-                                    └──────────────────────────┘
+┌────────────────────────────────┐         REST API Calls (JSON)
+│   Mobile App (Android / iOS)   │ ────────────────────────────────────────┐
+│  Installed on Technician /     │                                         │
+│  Customer Mobile Devices       │                                         │
+└────────────────────────────────┘                                         ▼
+                                                         ┌──────────────────────────────────┐
+                                                         │   Backend Server (Node.js API)   │
+                                                         │   Port 5000                      │
+                                                         │   File: backend/src/server.ts    │
+                                                         └────────────────┬─────────────────┘
+                                                                          │ Pooled SQL Queries
+                                                                          │ (backend/src/config/database.ts)
+                                                                          ▼
+                                                         ┌──────────────────────────────────┐
+                                                         │   PostgreSQL Relational DB       │
+                                                         │   Port 5432                      │
+                                                         │   Migrations 001 through 018     │
+                                                         └──────────────────────────────────┘
 ```
 
 ---
 
-## 2. What & Where Changes Need to Be Made
+## 2. Where to Change Code to Connect Database & App
 
-Before launching on your own server, review the configuration files below and adjust them to your domain, database, and payment keys:
+There are only **two configuration files** where you need to input your server's connection details:
 
-| Component | Target File | What Needs to Be Changed | Description |
-| :--- | :--- | :--- | :--- |
-| **Backend** | `backend/.env` | `DATABASE_URL` | Set your PostgreSQL username, password, host, and database name. |
-| **Backend** | `backend/.env` | `JWT_SECRET` | Generate a strong, private 32+ character random string for token signing. |
-| **Backend** | `backend/.env` | `PORT` | HTTP port for Node.js API (Default: `5000`). |
-| **Backend** | `backend/.env` | `CORS_ORIGIN` | Set your client domain(s) (e.g. `https://yourdomain.com`). Set `*` during initial testing. |
-| **Backend** | `backend/.env` | `RAZORPAY_KEY_ID` & `RAZORPAY_KEY_SECRET` | Insert your own Razorpay Merchant API keys (Leave blank to run in sandbox simulation mode). |
-| **Frontend** | `.env` | `EXPO_PUBLIC_API_URL` | Point to your backend endpoint (e.g. `https://api.yourdomain.com/api/v1` or `http://YOUR_SERVER_IP:5000/api/v1`). |
-| **Frontend** | `.env` | `EXPO_PUBLIC_RAZORPAY_KEY_ID` | Your public Razorpay Key ID (Client-side, e.g. `rzp_live_...` or `rzp_test_...`). |
-| **Branding/Helpdesk** | `src/screens/customer/BookingStep5...` & `TechnicianProfile...` | Support phone & email | Currently set to `+91 92174 60742` and `enquiry@offheman.in`. Change if you have your own support desk. |
-| **Web Server** | `/etc/nginx/sites-available/chaircare` | Domain names & paths | Bind your domain name and SSL certificates in Nginx. |
+### A. Connecting Database to Backend Code
+- **Configuration File**: `backend/.env`
+- **Underlying Code Files**:
+  - [`backend/src/config/env.ts`](backend/src/config/env.ts) reads `process.env.DATABASE_URL`.
+  - [`backend/src/config/database.ts`](backend/src/config/database.ts) creates the `pg.Pool` connection pool using this string.
 
----
+#### Where & What to Change:
+Open `backend/.env` (or copy from `backend/.env.example`):
+```env
+# 1. Set your PostgreSQL connection URL
+# Format: postgresql://<DB_USER>:<DB_PASSWORD>@<DB_HOST>:<DB_PORT>/<DB_NAME>?sslmode=<prefer|require|disable>
 
-## 3. Credentials & Security Configuration
+# Example for Local PostgreSQL running on the same server:
+DATABASE_URL="postgresql://chaircare_user:YourStrongPassword123!@localhost:5432/chaircare?sslmode=disable"
 
-> [!IMPORTANT]
-> **All developer credentials have been completely decoupled from the source code.**
-> - Previous hardcoded test/live Razorpay keys have been purged from the client components.
-> - The application now resolves all secrets strictly from runtime environment variables (`.env`).
-> - If Razorpay keys are omitted, the platform automatically boots in a safe **Sandbox Simulator Mode** allowing you to test bookings, payments, and settlements without charging real cards or UPI accounts.
+# Example for Cloud PostgreSQL (e.g. Neon, Supabase, or AWS RDS):
+# DATABASE_URL="postgresql://username:password@ep-your-project.region.aws.neon.tech/neondb?sslmode=require"
 
-### How to Generate Your Production Secrets:
-1. **JWT Secret**: Generate a secure 64-character secret by running:
-   ```bash
-   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-   ```
-2. **Database Password**: Create a strong password for your PostgreSQL `chaircare_user`.
-3. **Razorpay Keys**: Obtain your live or test keys from [Razorpay Dashboard](https://dashboard.razorpay.com/) > **Settings** > **API Keys**.
+# 2. JWT Secret for token signing (Enter any random 32+ character string)
+JWT_SECRET=your_super_secret_jwt_random_key_at_least_32_characters_long
+JWT_EXPIRES_IN=7d
 
----
+# 3. Server Port
+PORT=5000
+NODE_ENV=production
+CORS_ORIGIN=*
 
-## 4. Server Prerequisites & Hardware Sizing
-
-### Minimum Recommended Server Specs:
-- **Operating System**: Ubuntu 22.04 LTS or 24.04 LTS (x86_64 or ARM64)
-- **RAM**: 2 GB minimum (4 GB recommended if building frontend on server)
-- **CPU**: 2 vCPUs
-- **Storage**: 25 GB SSD or NVMe
-- **Network**: Static public IPv4 address with ports `80`, `443`, and `22` open.
+# 4. Payment Gateway (Optional - if left blank, app runs in safe Simulator Mode)
+PAYMENT_GATEWAY_ENV=sandbox
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+```
 
 ---
 
-## 5. Step-by-Step Installation From Scratch
+### B. Connecting Mobile App to Backend API
+- **Configuration File**: `ChairCare/.env` (Root directory of frontend)
+- **Underlying Code File**:
+  - [`src/services/api/apiClient.ts`](src/services/api/apiClient.ts) reads `process.env.EXPO_PUBLIC_API_URL` to route all requests from customer and technician phones to your server.
 
-### Step 5.1: Operating System & Dependency Setup
+#### Where & What to Change:
+Open `.env` in the root `ChairCare/` folder (or copy from `.env.example`):
+```env
+# Point this to your backend server IP address or domain:
+EXPO_PUBLIC_API_URL=http://YOUR_SERVER_IP:5000/api/v1
 
-Connect to your server via SSH as `root` or a `sudo` user:
+# Or if you have configured a domain with SSL:
+# EXPO_PUBLIC_API_URL=https://api.yourdomain.com/api/v1
+
+# Razorpay Client Public Key (Optional - leave blank for Simulator Mode)
+EXPO_PUBLIC_RAZORPAY_KEY_ID=
+```
+
+---
+
+## 3. How to Create & Migrate the Database (Which Files to Run)
+
+The database schema, tables, and seed catalogs are created automatically by running the backend migration and seed scripts.
+
+### Step 3.1: Create the Empty Database in PostgreSQL
+On your server or local machine running PostgreSQL:
 
 ```bash
-# 1. Update system packages
-sudo apt update && sudo apt upgrade -y
-
-# 2. Install essential build tools & Git
-sudo apt install -y curl wget git build-essential ufw nginx certbot python3-certbot-nginx
-
-# 3. Install Node.js 20 LTS (NodeSource)
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-
-# 4. Verify Node & NPM versions
-node -v   # Should be v20.x.x
-npm -v    # Should be v10.x.x
-
-# 5. Install PM2 (Process Manager for production Node.js)
-sudo npm install -g pm2
-```
-
----
-
-### Step 5.2: PostgreSQL Database Setup & Migrations
-
-You can use either a **local PostgreSQL instance** on the same server or a **cloud managed database** (like Neon, Supabase, or AWS RDS).
-
-#### Option A: Installing Local PostgreSQL on Server
-```bash
-# 1. Install PostgreSQL and contrib package
-sudo apt install -y postgresql postgresql-contrib
-
-# 2. Switch to postgres user and open PostgreSQL shell
+# 1. Open PostgreSQL shell
 sudo -u postgres psql
 ```
 
-Inside the PostgreSQL prompt (`psql`), execute:
+Execute these SQL commands:
 ```sql
--- Create database
+-- Create the database
 CREATE DATABASE chaircare;
 
--- Create dedicated user with strong password
-CREATE USER chaircare_user WITH ENCRYPTED PASSWORD 'YourStrongPasswordHere123!';
+-- Create dedicated database user
+CREATE USER chaircare_user WITH ENCRYPTED PASSWORD 'YourStrongPassword123!';
 
--- Grant privileges
+-- Grant permissions
 GRANT ALL PRIVILEGES ON DATABASE chaircare TO chaircare_user;
 ALTER DATABASE chaircare OWNER TO chaircare_user;
 
@@ -160,268 +132,179 @@ ALTER DATABASE chaircare OWNER TO chaircare_user;
 \q
 ```
 
-*Your database connection URL will be:*
-`postgresql://chaircare_user:YourStrongPasswordHere123!@localhost:5432/chaircare?sslmode=disable`
-
 ---
 
-#### Option B: Cloning the Codebase & Running Migrations
-```bash
-# 1. Clone repository to your web application directory
-cd /var/www
-git clone <YOUR_REPOSITORY_URL> chaircare-platform
-cd chaircare-platform/ChairCare
-```
+### Step 3.2: Which Files Run to Create Tables (Migrations)
+- **Script Executed**: `npm run migrate`
+- **Runner File**: [`backend/src/migrations/runMigrations.ts`](backend/src/migrations/runMigrations.ts)
+- **SQL Files Applied**: All files inside `backend/src/migrations/` sequentially:
+  - `001_initial_schema.sql` (Creates `users`, `services`, `service_requests`, `payments`, `reviews`)
+  - `002_notification_system.sql` (Notification delivery preferences)
+  - `003_chat_system.sql` (In-app customer/technician chat messages)
+  - `004` to `016` (Security OTP PIN, photo logs, repair timers, dispatch rules)
+  - `017_platform_fee_rules.sql` (10% dynamic platform fee & rate card configuration)
+  - `018_technician_upi_qr.sql` (Technician direct UPI ID `upi_id` and linked `upi_phone` for on-site QR payments)
 
-Now configure the backend `.env`:
+Run this command inside the `backend/` directory:
 ```bash
 cd backend
-cp .env.example .env
-nano .env
-```
-
-Paste your configuration:
-```env
-PORT=5000
-NODE_ENV=production
-DATABASE_URL="postgresql://chaircare_user:YourStrongPasswordHere123!@localhost:5432/chaircare?sslmode=disable"
-JWT_SECRET=your_generated_jwt_secret_at_least_32_chars_long
-JWT_EXPIRES_IN=7d
-CORS_ORIGIN=*
-
-# Rate Limiting
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX_REQUESTS=100
-AUTH_RATE_LIMIT_MAX=15
-
-# Razorpay (Leave blank for Simulator Mode or add your credentials)
-PAYMENT_GATEWAY_ENV=production
-RAZORPAY_KEY_ID=
-RAZORPAY_KEY_SECRET=
-RAZORPAY_WEBHOOK_SECRET=
-```
-
-Install backend dependencies and run database migrations:
-```bash
-# Install dependencies
 npm install
-
-# Run database schema migrations (Applies migrations 001 through 018)
 npm run migrate
+```
+**Expected Terminal Output:**
+```
+🚀 [Migrations] Starting database schema migrations...
+  ▶ Executing migration: 001_initial_schema.sql ... ✅ [OK]
+  ▶ Executing migration: 002_notification_system.sql ... ✅ [OK]
+  ...
+  ▶ Executing migration: 017_platform_fee_rules.sql ... ✅ [OK]
+  ▶ Executing migration: 018_technician_upi_qr.sql ... ✅ [OK]
+✨ [Migrations] All database migrations applied successfully!
+```
 
-# Seed initial services, pricing rate cards, and demo accounts
+---
+
+### Step 3.3: Which File Runs to Populate Initial Data (Seeds)
+- **Script Executed**: `npm run seed`
+- **Seed File**: [`backend/src/seeds/seedDevData.ts`](backend/src/seeds/seedDevData.ts)
+- **What it Populates**:
+  - The **8 core chair repair services** (Hydraulic Gas Lift Fix, Tilt Mechanism Overhaul, Wheel Castor Fix, 3D Armrest Pads, Ergonomic Sanitization, etc.).
+  - Default rate card prices and durations.
+  - Initial testing accounts for **SuperAdmin**, **Technician**, and **Customer**.
+
+Run this command inside the `backend/` directory:
+```bash
 npm run seed
 ```
-
-> **Note**: `npm run migrate` will sequentially create all platform tables including user accounts, service catalogs, orders, payments, technician KYC, and dynamic UPI columns (`upi_id`, `upi_phone`).
-
----
-
-### Step 5.3: Backend API Setup & PM2 Process Management
-
-Compile TypeScript and start the backend service using PM2 for automated restarts, error recovery, and zero-downtime execution:
-
-```bash
-# Build TypeScript to production JavaScript (dist/)
-npm run build
-
-# Start backend application with PM2
-pm2 start dist/server.js --name "chaircare-backend"
-
-# Configure PM2 to start automatically on server reboot
-pm2 save
-pm2 startup
-# (Run the sudo env command outputted by the terminal if prompted)
-
-# Verify backend health
-curl http://localhost:5000/api/v1/health
-# Expected Output: {"status":"healthy",...}
+**Expected Terminal Output:**
+```
+🌱 [Seed]: Seeding initial catalog and demo accounts...
+  ✅ Seeded 8 core ergonomic repair services
+  ✅ Seeded SuperAdmin: admin@chaircare.com
+  ✅ Seeded Technician: technician@chaircare.com
+  ✅ Seeded Customer: customer@chaircare.com
+✨ [Seed]: Database initialized successfully!
 ```
 
 ---
 
-### Step 5.4: Frontend Client Web Build
+## 4. Backend Server Setup & Running in Production
 
-Now configure and build the production frontend web bundle:
+To keep your backend API running 24/7 on your server with automated restarts, use **PM2**:
 
 ```bash
-cd /var/www/chaircare-platform/ChairCare
+cd /path/to/ChairCare/backend
 
-# 1. Create client .env file
-cp .env.example .env
-nano .env
-```
-
-Set your backend endpoint:
-```env
-# If using a domain:
-EXPO_PUBLIC_API_URL=https://api.yourdomain.com/api/v1
-
-# Or if using direct Server IP:
-# EXPO_PUBLIC_API_URL=http://YOUR_SERVER_IP:5000/api/v1
-
-# Razorpay Client Key ID (Optional - leave blank for Simulator)
-EXPO_PUBLIC_RAZORPAY_KEY_ID=
-```
-
-Now install client dependencies and export the optimized static bundle:
-```bash
-# Install frontend dependencies
+# 1. Install production dependencies
 npm install
 
-# Build static web distribution
-npm run build:web
+# 2. Compile TypeScript to JavaScript (dist/ folder)
+npm run build
+
+# 3. Install PM2 globally if not installed
+sudo npm install -g pm2
+
+# 4. Start backend API service
+pm2 start dist/server.js --name "chaircare-backend"
+
+# 5. Enable auto-restart on system reboot
+pm2 save
+pm2 startup
+
+# 6. Verify server health
+curl http://localhost:5000/api/v1/health
 ```
-*This command exports the production static assets to `/var/www/chaircare-platform/ChairCare/dist`.*
 
 ---
 
-### Step 5.5: Nginx Reverse Proxy & SSL Setup
+## 5. Mobile App Setup & Building Standalone Android APK
 
-Create an Nginx server block to serve the frontend web application and securely route API calls to the Node.js backend:
+You do not need any web build. You can run the mobile application directly on mobile phones in two ways:
 
-```bash
-sudo nano /etc/nginx/sites-available/chaircare
-```
-
-Paste the following production Nginx configuration (replace `yourdomain.com` with your actual domain or server IP):
-
-```nginx
-server {
-    listen 80;
-    server_name yourdomain.com www.yourdomain.com api.yourdomain.com;
-
-    # 1. Backend REST API Route
-    location /api/v1/ {
-        proxy_pass http://127.0.0.1:5000/api/v1/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-
-        # Maximum payload size for photo uploads (15MB)
-        client_max_body_size 15M;
-    }
-
-    # 2. Frontend Web Client (Single Page Application)
-    location / {
-        root /var/www/chaircare-platform/ChairCare/dist;
-        index index.html index.htm;
-        try_files $uri $uri/ /index.html;
-
-        # Cache static assets
-        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-            expires 30d;
-            add_header Cache-Control "public, no-transform";
-        }
-    }
-}
-```
-
-Enable the configuration and reload Nginx:
-```bash
-sudo ln -s /etc/nginx/sites-available/chaircare /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-#### Install Free HTTPS SSL Certificate via Let's Encrypt:
-```bash
-sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com -d api.yourdomain.com
-```
-*Certbot will automatically configure HTTPS, rewrite rules, and setup auto-renewal.*
+### Method A: Immediate Testing on Phones via Expo Go (Fastest)
+1. Install the free **Expo Go** app from the Google Play Store or Apple App Store on your phone.
+2. In the root `ChairCare/` folder on your computer:
+   ```bash
+   cd ChairCare
+   npm install
+   npx expo start
+   ```
+3. A large QR code will appear in your terminal.
+4. Open the camera or **Expo Go** app on your phone and scan the QR code.
+5. The full ChairCare app will load and run natively on your phone, connecting to your server!
 
 ---
 
-### Step 5.6: Native Mobile Android APK Build
-
-If you want to generate a standalone Android `.apk` or iOS build for field technicians and customers:
+### Method B: Building a Standalone Installable Android APK (`.apk`)
+To create a standalone `.apk` file that your team or technicians can install directly onto Android devices without Expo Go:
 
 1. Create a free account at [expo.dev](https://expo.dev).
-2. Install EAS CLI:
+2. Install EAS CLI globally:
    ```bash
    npm install -g eas-cli
    ```
-3. Log in inside the `ChairCare` directory:
+3. Log in inside the `ChairCare/` root directory:
    ```bash
    eas login
    ```
-4. Build the Android APK:
+4. Configure EAS build (already configured in `eas.json`):
+   ```bash
+   eas build:configure
+   ```
+5. Trigger the standalone Android APK build:
    ```bash
    eas build -p android --profile preview
    ```
-*EAS will compile the native Android bundle in the cloud and provide a direct download link for the `.apk` file.*
+6. EAS will build the APK in the cloud. Once complete, it outputs a direct download link (e.g. `https://expo.dev/artifacts/eas/...apk`).
+7. Download and install the `.apk` on any Android device.
 
 ---
 
-## 6. Default Pre-Configured Seed Accounts
+## 6. Default Pre-Seeded Accounts for Testing
 
-When you execute `npm run seed`, the platform initializes with demo accounts for each role:
+After executing `npm run seed`, you can log in to the mobile app immediately using any of these roles:
 
-| Role | Email Login | Default Password | Features Accessible |
+| Role | Email Login | Default Password | Features Accessible in App |
 | :--- | :--- | :--- | :--- |
-| **Super Admin** | `admin@chaircare.com` | `Password@123` | Operations Command, Live Fleet Tracking, Escrow Arbitration, Rate Card & Platform Fee Config |
-| **Field Technician** | `technician@chaircare.com` | `Password@123` | Job Queue, Active Telemetry, OTP Verification, Direct UPI QR Payments, Earnings Ledger |
-| **Customer** | `customer@chaircare.com` | `Password@123` | 5-Step Ergonomic Booking, Live Technician GPS Map, Digital Invoices, Dispute Filing |
+| **Super Admin** | `admin@chaircare.com` | `Password@123` | Operations Command, Live Dispatch Control, KYC Verification, Rate Cards & Platform Fee Rules |
+| **Field Technician** | `technician@chaircare.com` | `Password@123` | Real-time Job Queue, On-site Repair Timer, OTP Verification, Direct Customer UPI QR Codes, Earnings Ledger |
+| **Customer** | `customer@chaircare.com` | `Password@123` | 5-Step Ergonomic Repair Booking, Live GPS Technician Tracking, Digital Tax Invoices, Dispute Filing |
 
-> [!TIP]
-> After logging in as Super Admin, you can change passwords or create new administrators from the **Admin Settings** tab.
+> **Dev Tip**: You can also switch between roles instantly inside the mobile app using the floating **Dev Role Switcher** button.
 
 ---
 
-## 7. System Maintenance & Backups
+## 7. Troubleshooting & Verification
 
-### Checking Service Logs:
+### 1. Database Connection Check
+To verify your server connects to PostgreSQL:
 ```bash
-# View backend live logs
+cd backend
+node -e "require('dotenv').config(); const { Pool } = require('pg'); const p = new Pool({ connectionString: process.env.DATABASE_URL }); p.query('SELECT NOW()').then(r => { console.log('Connected to DB at:', r.rows[0].now); p.end(); }).catch(e => console.error('Connection failed:', e.message));"
+```
+
+### 2. Firewall Port Access
+If your mobile phone cannot reach the backend API, ensure port `5000` is open on your server firewall:
+```bash
+sudo ufw allow 5000/tcp
+sudo ufw reload
+```
+
+### 3. Checking Server Logs
+```bash
+# View live backend logs
 pm2 logs chaircare-backend
 
-# Restart backend service
-pm2 restart chaircare-backend
-
-# View Nginx access & error logs
-sudo tail -f /var/log/nginx/error.log
-sudo tail -f /var/log/nginx/access.log
-```
-
-### Automated PostgreSQL Daily Backup Script:
-Create a backup directory and automated backup cron job:
-```bash
-sudo mkdir -p /var/backups/chaircare_db
-sudo nano /usr/local/bin/backup_chaircare_db.sh
-```
-
-Paste:
-```bash
-#!/bin/bash
-BACKUP_DIR="/var/backups/chaircare_db"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-pg_dump -U chaircare_user -h localhost chaircare | gzip > "$BACKUP_DIR/chaircare_$TIMESTAMP.sql.gz"
-# Keep only last 14 days of backups
-find $BACKUP_DIR -type f -name "*.sql.gz" -mtime +14 -exec rm {} \;
-```
-
-Make executable and add to crontab:
-```bash
-sudo chmod +x /usr/local/bin/backup_chaircare_db.sh
-sudo crontab -e
-# Run daily at 02:00 AM:
-# 0 2 * * * /usr/local/bin/backup_chaircare_db.sh
+# Check service status
+pm2 status
 ```
 
 ---
 
-## 📞 Support & Handover Inquiries
+## 📞 Support & Contacts
+- **Helpline Phone**: `+91 92174 60742`
+- **Email**: `enquiry@offheman.in`
+- **Technical Reference**: See [`ChairCare_Developer_Codebase_Reference.pdf`](ChairCare_Developer_Codebase_Reference.pdf) for complete file-by-file code architecture.
 
-For technical assistance, architecture walkthroughs, or deployment support:
-- **Primary Support Line**: `+91 92174 60742`
-- **Email Contact**: `enquiry@offheman.in`
-- **Reference Documentation**: See [ChairCare_Developer_Codebase_Reference.pdf](ChairCare_Developer_Codebase_Reference.pdf) in the project root for file-by-file technical architecture.
-
-## 💻 Developers 
-
--- **Ansh & smruthi**
+## 💻 Developers
+- **Ansh & Smruthi**
