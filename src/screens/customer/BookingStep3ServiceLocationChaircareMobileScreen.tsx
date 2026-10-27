@@ -546,12 +546,12 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </Text>
         </View>
 
-        {/* Section 1: Executive Dispatch Hub (Map & Live GPS Quick Action) */}
+        {/* Section 1: Executive Dispatch Hub (Map Quick Action) */}
         <View style={styles.dispatchHubCard}>
           <View style={styles.hubHeaderRow}>
             <View style={styles.hubStatusBadge}>
               <View style={styles.pulseDot} />
-              <Text style={styles.hubStatusText}>DELHI NCR LIVE DISPATCH</Text>
+              <Text style={styles.hubStatusText}>LIVE DISPATCH</Text>
             </View>
             <Text style={styles.hubEtaText}>15–30 min arrival</Text>
           </View>
@@ -572,50 +572,6 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
                   <AppIcon name="ChevronRight" size={13} color="#94a3b8" />
                 </View>
                 <Text style={styles.hubTileSub}>Pinpoint exact doorstep</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Tile 2: Live Device GPS */}
-            <TouchableOpacity
-              style={[
-                styles.hubActionTile,
-                gpsStatus === 'locked' && styles.hubActionTileLocked,
-              ]}
-              onPress={handleGpsLocate}
-              activeOpacity={0.82}
-              disabled={gpsStatus === 'locating'}
-            >
-              <View
-                style={[
-                  styles.hubTileIconBg,
-                  {
-                    backgroundColor:
-                      gpsStatus === 'locked'
-                        ? 'rgba(16, 185, 129, 0.22)'
-                        : 'rgba(56, 189, 248, 0.12)',
-                  },
-                ]}
-              >
-                {gpsStatus === 'locating' ? (
-                  <ActivityIndicator size="small" color="#38bdf8" />
-                ) : (
-                  <AppIcon
-                    name={gpsStatus === 'locked' ? 'Check' : 'Crosshair'}
-                    size={18}
-                    color={gpsStatus === 'locked' ? '#34d399' : '#38bdf8'}
-                  />
-                )}
-              </View>
-              <View style={styles.hubTileContent}>
-                <View style={styles.hubTileTitleRow}>
-                  <Text style={styles.hubTileTitle}>
-                    {gpsStatus === 'locked' ? 'GPS Locked' : 'Current GPS'}
-                  </Text>
-                  <AppIcon name="ChevronRight" size={13} color="#94a3b8" />
-                </View>
-                <Text style={styles.hubTileSub}>
-                  {gpsStatus === 'locating' ? 'Locating...' : 'Auto-detect doorstep'}
-                </Text>
               </View>
             </TouchableOpacity>
           </View>
