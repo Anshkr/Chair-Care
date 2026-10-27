@@ -39,7 +39,7 @@ interface TicketDetailData {
   ticketNumber: string;
   categoryTag: string;
   statusText: string;
-  statusType: 'active' | 'completed' | 'upcoming';
+  statusType: 'active' | 'completed' | 'upcoming' | 'cancelled';
   etaText: string;
   timeline: TimelineStep[];
   serviceTitle: string;
@@ -140,48 +140,107 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
   // Master ticket store
   const ticketData: TicketDetailData = useMemo(() => {
     if (serverTicket) {
-      const isCompleted = serverTicket.status === 'completed';
+      const rawStatus = (serverTicket.status || '').toLowerCase().trim();
+      const isCancelled = rawStatus === 'cancelled' || rawStatus === 'canceled';
+      const isCompleted = rawStatus === 'completed';
       const isAssigned =
-        serverTicket.status === 'technician_assigned' ||
-        serverTicket.status === 'in_progress';
+        rawStatus === 'technician_assigned' ||
+        rawStatus === 'assigned' ||
+        rawStatus === 'in_progress' ||
+        rawStatus === 'in_route' ||
+        rawStatus === 'arrived';
+      const isPending =
+        rawStatus === 'finding_technician' ||
+        rawStatus === 'pending' ||
+        (!isCancelled && !isCompleted && !isAssigned);
 
-      const techName = serverTicket.technicianName || fallbackTech.name;
+      const techName = serverTicket.technicianName || (isAssigned ? fallbackTech.name : 'Finding Specialist...');
       const techPhone = serverTicket.technicianPhone || fallbackTech.phone;
       const techRating = Number(serverTicket.technicianRating || 4.9);
 
-      const timeline: TimelineStep[] = [
-        {
-          title: 'Request Submitted',
-          time: serverTicket.createdAt
-            ? new Date(serverTicket.createdAt).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : 'Confirmed',
-          description: 'Service request created and queued',
-          status: 'completed',
-        },
-        {
-          title: 'Technician Assigned',
-          time: isAssigned || isCompleted ? 'Assigned' : 'Pending',
-          description:
-            isAssigned || isCompleted
-              ? `Specialist ${techName} assigned`
-              : 'Locating nearest certified specialist',
-          status: isAssigned || isCompleted ? 'completed' : 'pending',
-        },
-        {
-          title: isCompleted ? 'Service Completed' : 'Service Visit',
-          time: isCompleted
-            ? 'Completed'
-            : (serverTicket.timeSlot || 'Scheduled'),
-          description: isCompleted
-            ? 'Diagnostics and repairs signed off'
-            : 'On-site ergonomic calibration',
-          status: isCompleted ? 'completed' : isAssigned ? 'active' : 'pending',
-          badge: isAssigned && !isCompleted ? 'LIVE' : undefined,
-        },
-      ];
+      let statusText = 'Finding Technician';
+      let statusType: 'active' | 'completed' | 'upcoming' | 'cancelled' = 'active';
+      let etaText = 'ETA: 20 MINS';
+      let bottomDistanceText = 'Specialist en route';
+      let bottomStatusText = 'Live tracking active';
+      let primaryActionTitle = 'Track Technician';
+
+      if (isCancelled) {
+        statusText = 'Cancelled';
+        statusType = 'cancelled';
+        etaText = 'CANCELLED';
+        bottomDistanceText = 'Request Cancelled';
+        bottomStatusText = serverTicket.cancellationReason || serverTicket.cancellation_reason || 'Cancelled by customer';
+        primaryActionTitle = 'Back to Requests';
+      } else if (isCompleted) {
+        statusText = 'Service Completed';
+        statusType = 'completed';
+        etaText = 'COMPLETED';
+        bottomDistanceText = 'Completed & Signed Off';
+        bottomStatusText = '90-day warranty active';
+        primaryActionTitle = 'Download Invoice';
+      } else if (isPending) {
+        statusText = 'Finding Technician';
+        statusType = 'active';
+        etaText = 'DISPATCHING';
+        bottomDistanceText = 'Awaiting Specialist';
+        bottomStatusText = 'Searching certified technicians nearby';
+        primaryActionTitle = 'Cancel Request';
+      }
+
+      const timeline: TimelineStep[] = isCancelled
+        ? [
+            {
+              title: 'Request Submitted',
+              time: serverTicket.createdAt
+                ? new Date(serverTicket.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : 'Confirmed',
+              description: 'Service request created and queued',
+              status: 'completed',
+            },
+            {
+              title: 'Service Cancelled',
+              time: 'Cancelled',
+              description: serverTicket.cancellationReason || serverTicket.cancellation_reason || 'Request cancelled by user',
+              status: 'completed',
+            },
+          ]
+        : [
+            {
+              title: 'Request Submitted',
+              time: serverTicket.createdAt
+                ? new Date(serverTicket.createdAt).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })
+                : 'Confirmed',
+              description: 'Service request created and queued',
+              status: 'completed',
+            },
+            {
+              title: 'Technician Assigned',
+              time: isAssigned || isCompleted ? 'Assigned' : 'Pending',
+              description:
+                isAssigned || isCompleted
+                  ? `Specialist ${techName} assigned`
+                  : 'Locating nearest certified specialist',
+              status: isAssigned || isCompleted ? 'completed' : 'pending',
+            },
+            {
+              title: isCompleted ? 'Service Completed' : 'Service Visit',
+              time: isCompleted
+                ? 'Completed'
+                : (serverTicket.timeSlot || 'Scheduled'),
+              description: isCompleted
+                ? 'Diagnostics and repairs signed off'
+                : 'On-site ergonomic calibration',
+              status: isCompleted ? 'completed' : isAssigned ? 'active' : 'pending',
+              badge: isAssigned && !isCompleted ? 'LIVE' : undefined,
+            },
+          ];
 
       return {
         id: String(serverTicket.id),
@@ -189,13 +248,9 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
           ? `#${serverTicket.trackingCode}`
           : `#REQ-${String(serverTicket.id).slice(0, 4).toUpperCase()}`,
         categoryTag: 'BIFMA-CAT: ERGO-1',
-        statusText: isCompleted
-          ? 'Service Completed'
-          : isAssigned
-          ? 'Technician Assigned'
-          : 'Finding Technician',
-        statusType: isCompleted ? 'completed' : 'active',
-        etaText: isCompleted ? 'COMPLETED' : 'ETA: 20 MINS',
+        statusText,
+        statusType,
+        etaText,
         timeline,
         serviceTitle: serverTicket.serviceTitle || activeServiceTitle,
         serviceCategory: 'Ergonomic Calibration',
@@ -208,7 +263,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
         photos: [],
         technician: {
           name: techName,
-          role: 'Fleet Specialist',
+          role: isAssigned ? 'Fleet Specialist' : 'Pending Assignment',
           rating: techRating,
           reviewCount: 180,
           jobCount: 220,
@@ -237,15 +292,9 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
         ],
         totalAmount: Number(serverTicket.totalAmount) || activeTotal,
         isPaid: Boolean(serverTicket.is_paid || serverTicket.isPaid),
-        bottomDistanceText: isCompleted
-          ? 'Completed & Signed Off'
-          : 'Specialist en route',
-        bottomStatusText: isCompleted
-          ? '90-day warranty active'
-          : 'Live tracking active',
-        primaryActionTitle: isCompleted
-          ? 'Download Invoice'
-          : 'Track Technician',
+        bottomDistanceText,
+        bottomStatusText,
+        primaryActionTitle,
       };
     }
     return {
@@ -332,13 +381,56 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
           text: 'Download Service PDF',
           onPress: () => Alert.alert('Export', `Service summary for ${ticketData.ticketNumber} saved.`),
         },
-        { text: 'Cancel', style: 'cancel' },
+        ...(ticketData.statusType !== 'completed' && ticketData.statusType !== 'cancelled'
+          ? [
+              {
+                text: 'Cancel Service Request',
+                style: 'destructive' as const,
+                onPress: () => handleCancelCurrentRequest(),
+              },
+            ]
+          : []),
+        { text: 'Close', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleCancelCurrentRequest = () => {
+    Alert.alert(
+      'Cancel Service Request?',
+      `Are you sure you want to cancel ticket ${ticketData.ticketNumber}? This will terminate technician dispatch for this request.`,
+      [
+        { text: 'Keep Request', style: 'cancel' },
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await customerApi.cancelRequest(ticketData.id, 'Cancelled by customer');
+              if (res.success) {
+                setServerTicket((prev: any) => ({
+                  ...prev,
+                  status: 'cancelled',
+                  cancellation_reason: 'Cancelled by customer',
+                  cancellationReason: 'Cancelled by customer',
+                }));
+                Alert.alert('Request Cancelled', `Ticket ${ticketData.ticketNumber} has been cancelled.`);
+              } else {
+                Alert.alert('Unable to Cancel', res.error || 'Failed to cancel request.');
+              }
+            } catch (err: any) {
+              Alert.alert('Unable to Cancel', err.message || 'Failed to cancel request.');
+            }
+          },
+        },
       ]
     );
   };
 
   const handlePrimaryBottomAction = () => {
-    if (ticketData.statusType === 'completed') {
+    if (ticketData.statusType === 'cancelled') {
+      navigation.navigate('MyRequestsTab');
+    } else if (ticketData.statusType === 'completed') {
       Alert.alert(
         'Download Invoice',
         `Official tax invoice INV-${ticketData.ticketNumber.replace('#', '')}-2026 has been saved.`,
@@ -356,6 +448,8 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
           },
         ]
       );
+    } else if (ticketData.primaryActionTitle === 'Cancel Request') {
+      handleCancelCurrentRequest();
     } else {
       navigation.navigate('LiveTechnicianTracking', { requestId: ticketData.id });
     }
@@ -427,6 +521,7 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
               styles.liveStatusBadge,
               ticketData.statusType === 'completed' && styles.completedStatusBadge,
               ticketData.statusType === 'upcoming' && styles.upcomingStatusBadge,
+              ticketData.statusType === 'cancelled' && styles.cancelledStatusBadge,
             ]}
           >
             {ticketData.statusType === 'active' && (
@@ -437,11 +532,13 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
             )}
             {ticketData.statusType === 'completed' && <AppIcon name="Check" size={18} />}
             {ticketData.statusType === 'upcoming' && <AppIcon name="CalendarCheck" size={18} />}
+            {ticketData.statusType === 'cancelled' && <AppIcon name="XCircle" size={16} color="#DC2626" />}
             <Text
               style={[
                 styles.liveStatusText,
                 ticketData.statusType === 'completed' && styles.completedStatusText,
                 ticketData.statusType === 'upcoming' && styles.upcomingStatusText,
+                ticketData.statusType === 'cancelled' && styles.cancelledStatusText,
               ]}
             >
               {ticketData.statusText}
@@ -877,6 +974,28 @@ export const RequestDetailsChaircareMobileScreen: React.FC<{
               <Text style={styles.invoiceBottomBtnText}>Invoice</Text>
             </TouchableOpacity>
           </View>
+        ) : ticketData.statusType === 'cancelled' ? (
+          <TouchableOpacity
+            style={[styles.primaryBottomBtn, { backgroundColor: Colors.surfaceContainerHigh }]}
+            onPress={handlePrimaryBottomAction}
+            activeOpacity={0.88}
+          >
+            <Text style={[styles.primaryBottomBtnText, { color: Colors.onSurface }]}>
+              {ticketData.primaryActionTitle}
+            </Text>
+            <AppIcon name="ArrowRight" size={16} color={Colors.onSurface} />
+          </TouchableOpacity>
+        ) : ticketData.primaryActionTitle === 'Cancel Request' ? (
+          <TouchableOpacity
+            style={[styles.primaryBottomBtn, { backgroundColor: '#DC2626' }]}
+            onPress={handlePrimaryBottomAction}
+            activeOpacity={0.88}
+          >
+            <Text style={styles.primaryBottomBtnText}>
+              Cancel Service Request
+            </Text>
+            <AppIcon name="XCircle" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.primaryBottomBtn}
@@ -1078,6 +1197,11 @@ const styles = StyleSheet.create({
   upcomingStatusBadge: {
     backgroundColor: Colors.surfaceContainerHigh,
   },
+  cancelledStatusBadge: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
   pulseDotWrapper: {
     width: 8,
     height: 8,
@@ -1118,6 +1242,10 @@ const styles = StyleSheet.create({
   },
   upcomingStatusText: {
     color: Colors.onSurfaceVariant,
+  },
+  cancelledStatusText: {
+    color: '#DC2626',
+    fontWeight: '800',
   },
   cardContainer: {
     backgroundColor: Colors.surfaceContainerLowest,

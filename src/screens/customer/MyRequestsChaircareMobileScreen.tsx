@@ -23,13 +23,13 @@ import { useAuth } from '../../context/AuthContext';
 import { downloadInvoice } from '../../services/invoiceService';
 import { DisputeTicketModal } from '../../components/customer/DisputeTicketModal';
 
-type FilterType = 'all' | 'upcoming' | 'active' | 'completed';
+type FilterType = 'all' | 'upcoming' | 'active' | 'completed' | 'cancelled';
 
 interface RequestTicket {
   id: string;
   ticketNumber: string;
   serviceTitle: string;
-  status: 'completed' | 'active' | 'upcoming';
+  status: 'completed' | 'active' | 'upcoming' | 'cancelled';
   statusLabel: string;
   chairModel: string;
   issueDescription: string;
@@ -48,6 +48,7 @@ interface RequestTicket {
   timeSlot?: string;
   enRouteStatus?: string;
   fullDescription?: string;
+  cancellationReason?: string;
 }
 
 /**
@@ -82,22 +83,26 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
         const res = await customerApi.getMyRequests();
         if (isMounted && res.success && Array.isArray(res.data)) {
           const mapped: RequestTicket[] = res.data.map((item: any) => {
-            let itemStatus: 'completed' | 'active' | 'upcoming' = 'active';
+            const rawStatus = (item.status || '').toLowerCase().trim();
+            let itemStatus: 'completed' | 'active' | 'upcoming' | 'cancelled' = 'active';
             let label = 'Tech Assigned';
 
-            if (item.status === 'completed') {
+            if (rawStatus === 'cancelled' || rawStatus === 'canceled') {
+              itemStatus = 'cancelled';
+              label = 'Cancelled';
+            } else if (rawStatus === 'completed') {
               itemStatus = 'completed';
               label = 'Completed';
-            } else if (item.status === 'draft' || item.status === 'scheduled') {
+            } else if (rawStatus === 'draft' || rawStatus === 'scheduled') {
               itemStatus = 'upcoming';
               label = 'Scheduled';
-            } else if (item.status === 'in_route') {
+            } else if (rawStatus === 'in_route') {
               label = 'En Route';
-            } else if (item.status === 'arrived') {
+            } else if (rawStatus === 'arrived') {
               label = 'Arrived';
-            } else if (item.status === 'in_progress') {
+            } else if (rawStatus === 'in_progress') {
               label = 'In Progress';
-            } else if (item.status === 'finding_technician') {
+            } else if (rawStatus === 'finding_technician' || rawStatus === 'pending') {
               label = 'Finding Tech';
             }
 
@@ -141,7 +146,8 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
               enRouteStatus: item.status === 'in_route' ? 'En Route' : label,
               amount: finalAmount,
               isPaid,
-              isEstimated: !isPaid && itemStatus !== 'completed',
+              isEstimated: !isPaid && itemStatus !== 'completed' && itemStatus !== 'cancelled',
+              cancellationReason: item.cancellationReason || item.cancellation_reason,
             };
           });
           setTicketsData(mapped);
@@ -177,9 +183,52 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
       upcoming: ticketsData.filter((t) => t.status === 'upcoming').length,
       active: ticketsData.filter((t) => t.status === 'active').length,
       completed: ticketsData.filter((t) => t.status === 'completed').length,
+      cancelled: ticketsData.filter((t) => t.status === 'cancelled').length,
     }),
     [ticketsData]
   );
+
+  const handleCancelRequest = (ticket: RequestTicket) => {
+    const doCancel = async () => {
+      try {
+        setLoading(true);
+        const res = await customerApi.cancelRequest(ticket.id, 'Cancelled by customer');
+        if (res.success) {
+          setTicketsData((prev) =>
+            prev.map((t) =>
+              t.id === ticket.id
+                ? {
+                    ...t,
+                    status: 'cancelled',
+                    statusLabel: 'Cancelled',
+                    cancellationReason: 'Cancelled by customer',
+                  }
+                : t
+            )
+          );
+          Alert.alert(
+            'Request Cancelled',
+            `Ticket ${ticket.ticketNumber} has been successfully cancelled.`
+          );
+        } else {
+          Alert.alert('Unable to Cancel', res.error || 'Failed to cancel request.');
+        }
+      } catch (err: any) {
+        Alert.alert('Unable to Cancel', err.message || 'Failed to cancel request.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    Alert.alert(
+      'Cancel Service Request?',
+      `Are you sure you want to cancel ticket ${ticket.ticketNumber}? This will terminate technician dispatch.`,
+      [
+        { text: 'Keep Request', style: 'cancel' },
+        { text: 'Yes, Cancel', style: 'destructive', onPress: doCancel },
+      ]
+    );
+  };
 
   const handleDownloadInvoice = async (ticket: RequestTicket) => {
     try {
@@ -420,6 +469,39 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
               </Text>
             </View>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              currentFilter === 'cancelled' && styles.filterPillActive,
+            ]}
+            onPress={() => setCurrentFilter('cancelled')}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.filterPillText,
+                currentFilter === 'cancelled' && styles.filterPillTextActive,
+              ]}
+            >
+              Cancelled
+            </Text>
+            <View
+              style={[
+                styles.filterCountBadge,
+                currentFilter === 'cancelled' && styles.filterCountBadgeActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterCountText,
+                  currentFilter === 'cancelled' && styles.filterCountTextActive,
+                ]}
+              >
+                {counts.cancelled}
+              </Text>
+            </View>
+          </TouchableOpacity>
         </ScrollView>
 
         {loading ? (
@@ -433,6 +515,8 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
               const isCompleted = ticket.status === 'completed';
               const isActive = ticket.status === 'active';
               const isUpcoming = ticket.status === 'upcoming';
+              const isCancelled = ticket.status === 'cancelled';
+              const isPending = ticket.statusLabel === 'Finding Tech' || !ticket.technician;
 
               return (
                 <TouchableOpacity
@@ -456,6 +540,13 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                       <View style={styles.completedBadge}>
                         <AppIcon name="CheckCircle2" size={13} color="#059669" />
                         <Text style={styles.completedBadgeText}>Completed</Text>
+                      </View>
+                    )}
+
+                    {isCancelled && (
+                      <View style={styles.cancelledBadge}>
+                        <AppIcon name="XCircle" size={13} color="#DC2626" />
+                        <Text style={styles.cancelledBadgeText}>Cancelled</Text>
                       </View>
                     )}
 
@@ -525,6 +616,34 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                           </Text>
                         </View>
                       </View>
+                    </View>
+                  )}
+
+                  {/* Timing & Address Strip for Cancelled */}
+                  {isCancelled && (
+                    <View style={styles.cancelledTimingBox}>
+                      <View style={styles.cancelledTimingHeader}>
+                        <View style={styles.cancelledTimingLeft}>
+                          <AppIcon name="Clock" size={15} color="#DC2626" />
+                          <Text style={styles.cancelledTimingText}>
+                            {ticket.dateInfo}
+                          </Text>
+                        </View>
+                        <Text style={styles.cancelledTag}>
+                          {ticket.cancellationReason || 'CANCELLED'}
+                        </Text>
+                      </View>
+                      {ticket.locationInfo && (
+                        <View style={styles.activeLocationRow}>
+                          <AppIcon name="MapPin" size={14} color={Colors.outline} />
+                          <Text
+                            style={styles.activeLocationText}
+                            numberOfLines={1}
+                          >
+                            {ticket.locationInfo}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   )}
 
@@ -670,6 +789,46 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                       </View>
                     )}
 
+                    {isCancelled && (
+                      <View style={styles.activeActionFullRow}>
+                        <View style={styles.activeEstimatedCol}>
+                          <Text style={[styles.estimatedSmallLabel, { color: '#DC2626' }]}>
+                            STATUS
+                          </Text>
+                          <Text style={[styles.estimatedBigAmount, { color: '#DC2626', fontSize: 13 }]}>
+                            Terminated
+                          </Text>
+                        </View>
+                        <View style={styles.activeButtonsGroup}>
+                          <TouchableOpacity
+                            style={styles.disputeReportBtn}
+                            onPress={() => setDisputeTargetTicket(ticket)}
+                            activeOpacity={0.75}
+                          >
+                            <AppIcon name="AlertTriangle" size={13} color="#ba1a1a" />
+                            <Text style={styles.disputeReportText}>Report</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.detailsBtn}
+                            onPress={() => handleViewDetails(ticket.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.detailsBtnText}>Details</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.rebookBtn}
+                            onPress={() => navigation.navigate('CustomerMain', { screen: 'ServicesAvailableTab' })}
+                            activeOpacity={0.85}
+                          >
+                            <AppIcon name="RotateCcw" size={13} color={Colors.primary} />
+                            <Text style={styles.rebookBtnText}>Book Again</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
                     {isActive && (
                       <View style={styles.activeActionFullRow}>
                         <View style={styles.activeEstimatedCol}>
@@ -698,16 +857,30 @@ export const MyRequestsChaircareMobileScreen: React.FC<{
                             <Text style={styles.detailsBtnText}>Details</Text>
                           </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.trackTechBtn}
-                            onPress={() => handleTrackTech(ticket.id)}
-                            activeOpacity={0.85}
-                          >
-                            <AppIcon name="MapPin" size={14} color="#FFFFFF" />
-                            <Text style={styles.trackTechBtnText}>
-                              Track Tech
-                            </Text>
-                          </TouchableOpacity>
+                          {/* Only show Track Tech when technician is assigned and NOT pending */}
+                          {!isPending ? (
+                            <TouchableOpacity
+                              style={styles.trackTechBtn}
+                              onPress={() => handleTrackTech(ticket.id)}
+                              activeOpacity={0.85}
+                            >
+                              <AppIcon name="MapPin" size={14} color="#FFFFFF" />
+                              <Text style={styles.trackTechBtnText}>
+                                Track Tech
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.cancelTicketBtn}
+                              onPress={() => handleCancelRequest(ticket)}
+                              activeOpacity={0.85}
+                            >
+                              <AppIcon name="XCircle" size={13} color="#DC2626" />
+                              <Text style={styles.cancelTicketBtnText}>
+                                Cancel
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
                     )}
@@ -1072,6 +1245,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#059669',
   },
+  cancelledBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelledBadgeText: {
+    ...Typography.labelMd,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+    textTransform: 'uppercase',
+  },
   activeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1211,6 +1402,37 @@ const styles = StyleSheet.create({
     ...Typography.bodySm,
     fontSize: 11,
     color: Colors.onSurfaceVariant,
+  },
+  cancelledTimingBox: {
+    backgroundColor: '#FEF2F2',
+    borderRadius: BorderRadius.lg,
+    padding: 10,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  cancelledTimingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  cancelledTimingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cancelledTimingText: {
+    ...Typography.bodySm,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  cancelledTag: {
+    ...Typography.labelMono,
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#DC2626',
+    textTransform: 'uppercase',
   },
   activeTimingBox: {
     backgroundColor: Colors.surfaceContainer,
@@ -1484,6 +1706,39 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Colors.onPrimary,
+  },
+  cancelTicketBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  cancelTicketBtnText: {
+    ...Typography.labelMd,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  rebookBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.secondaryCobalt,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: BorderRadius.lg,
+    ...Shadows.level1,
+  },
+  rebookBtnText: {
+    ...Typography.labelMd,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   upcomingActionRow: {
     width: '100%',
