@@ -80,6 +80,16 @@ const CONFIG_GROUPS: ConfigGroup[] = [
         iconBgType: 'secondary',
         targetScreen: 'AdminUsers',
       },
+      {
+        id: 'temporary_password_requests',
+        title: 'Temporary Password Requests',
+        description: 'Review forgot password requests from customers & technicians, and issue temporary passwords',
+        badge: 'Credentials',
+        badgeType: 'info',
+        icon: 'vpn-key',
+        iconBgType: 'secondary',
+        targetScreen: 'SecuritySystemPreferences',
+      },
     ],
   },
   {
