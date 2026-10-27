@@ -31,14 +31,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "1f904f88-2548-4204-97cd-76bf69358c2a"
+        "projectId": "16ef9b4c-b4bf-4233-98fd-a7e63c15deb1"
       }
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/1f904f88-2548-4204-97cd-76bf69358c2a"
-    }
+    "owner": "smruthijha"
   }
 }
