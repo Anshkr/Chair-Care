@@ -41,60 +41,59 @@ export interface SavedAddressItem {
   isDefault?: boolean;
 }
 
-const DEFAULT_SAVED_ADDRESSES: SavedAddressItem[] = [
-  {
-    id: 'addr_home',
-    tag: 'Home',
-    label: 'Home',
-    flatNo: 'Tower 4, Apt 1102, 11th Floor',
-    buildingName: 'Cyber Heights Residences',
-    streetArea: 'Sector 62, Golf Course Extension Road',
-    city: 'Gurgaon',
-    state: 'Haryana',
-    pincode: '122002',
-    landmark: 'Near Rapid Metro Sector 55-56',
-    instructions: 'MyGate entry code: 4492',
-    fullAddress: 'Tower 4, Apt 1102, Cyber Heights, Sector 62, Gurgaon, Haryana - 122002',
-    latitude: 28.4195,
-    longitude: 77.0850,
-    isDefault: true,
-  },
-  {
-    id: 'addr_office',
-    tag: 'Office',
-    label: 'Office HQ',
-    flatNo: 'Suite 402, 4th Floor',
-    buildingName: 'WeWork Forum, DLF Cyber City',
-    streetArea: 'DLF Phase 2, Sector 24',
-    city: 'Gurgaon',
-    state: 'Haryana',
-    pincode: '122002',
-    landmark: 'Opposite Cyber Hub Building 10',
-    instructions: 'Collect visitor badge at ground reception desk',
-    fullAddress: 'Suite 402, 4th Floor, WeWork Forum, DLF Cyber City, Sector 24, Gurgaon - 122002',
-    latitude: 28.4950,
-    longitude: 77.0880,
-    isDefault: false,
-  },
-];
+export const DEFAULT_SAVED_ADDRESSES: SavedAddressItem[] = [];
 
 const getStorageKey = (userId?: string) => `chaircare_saved_addresses_${userId || 'guest'}`;
 
-const loadSavedAddressesFromStorage = (userId?: string): SavedAddressItem[] => {
+export const loadSavedAddressesFromStorage = (
+  userId?: string,
+  defaultAddr?: string
+): SavedAddressItem[] => {
+  let list: SavedAddressItem[] = [];
+  let hasStoredValue = false;
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
       const raw = window.localStorage.getItem(getStorageKey(userId));
       if (raw !== null) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          return parsed;
+          list = parsed.map((item: any, idx: number) => ({
+            ...item,
+            id: item.id || `addr_${Date.now()}_${idx}`,
+          }));
+          hasStoredValue = true;
         }
       }
     } catch {
       // fallback
     }
   }
-  return DEFAULT_SAVED_ADDRESSES;
+
+  if (hasStoredValue) {
+    return list;
+  }
+
+  // If new user with no saved addresses in storage, but has a profile default address
+  if (defaultAddr && defaultAddr.trim()) {
+    const trimmed = defaultAddr.trim();
+    return [
+      {
+        id: `addr_profile_${userId || 'user'}`,
+        tag: 'Home',
+        label: 'Home',
+        flatNo: '',
+        buildingName: '',
+        streetArea: trimmed,
+        city: '',
+        state: '',
+        pincode: '',
+        fullAddress: trimmed,
+        isDefault: true,
+      },
+    ];
+  }
+
+  return [];
 };
 
 const persistSavedAddressesToStorage = (addresses: SavedAddressItem[], userId?: string) => {
@@ -127,23 +126,23 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
     }
   }, [isCustomerAuthorized]);
 
-  // Saved addresses list
+  // Saved addresses list strictly scoped to current logged-in user
   const [savedAddresses, setSavedAddresses] = useState<SavedAddressItem[]>(() =>
-    loadSavedAddressesFromStorage(currentUser?.id)
+    loadSavedAddressesFromStorage(currentUser?.id, currentUser?.defaultAddress)
   );
 
-  // Selected saved address ID (or null if entering new)
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>('addr_home');
+  // Selected saved address ID (null by default for new users)
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
 
-  // Manual input fields - Flat No FIRST as requested!
-  const [flatNo, setFlatNo] = useState<string>('Tower 4, Apt 1102, 11th Floor');
-  const [buildingName, setBuildingName] = useState<string>('Cyber Heights Residences');
-  const [streetArea, setStreetArea] = useState<string>('Sector 62, Golf Course Extension Road');
-  const [city, setCity] = useState<string>('Gurgaon');
-  const [stateName, setStateName] = useState<string>('Haryana');
-  const [pincode, setPincode] = useState<string>('122002');
-  const [landmark, setLandmark] = useState<string>('Near Rapid Metro Sector 55-56');
-  const [instructions, setInstructions] = useState<string>('MyGate entry code: 4492');
+  // Manual input fields - empty by default so new user sees a clean form
+  const [flatNo, setFlatNo] = useState<string>(draft?.unitOrFloor || '');
+  const [buildingName, setBuildingName] = useState<string>('');
+  const [streetArea, setStreetArea] = useState<string>(draft?.serviceAddress || currentUser?.defaultAddress || '');
+  const [city, setCity] = useState<string>('');
+  const [stateName, setStateName] = useState<string>('');
+  const [pincode, setPincode] = useState<string>('');
+  const [landmark, setLandmark] = useState<string>('');
+  const [instructions, setInstructions] = useState<string>('');
 
   // Option to save location for future
   const [saveForFuture, setSaveForFuture] = useState<boolean>(true);
@@ -155,37 +154,55 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
   const [gpsMessage, setGpsMessage] = useState<string | null>(null);
 
   // Coordinates state for exact technician dispatch
-  const [latitude, setLatitude] = useState<number | undefined>(
-    draft?.latitude || DEFAULT_SAVED_ADDRESSES[0].latitude
-  );
-  const [longitude, setLongitude] = useState<number | undefined>(
-    draft?.longitude || DEFAULT_SAVED_ADDRESSES[0].longitude
-  );
+  const [latitude, setLatitude] = useState<number | undefined>(draft?.latitude);
+  const [longitude, setLongitude] = useState<number | undefined>(draft?.longitude);
   const [isMapPickerVisible, setIsMapPickerVisible] = useState<boolean>(false);
   const [isConvertingAddress, setIsConvertingAddress] = useState<boolean>(false);
-  const [locationSource, setLocationSource] = useState<'saved' | 'map' | 'manual' | 'gps'>('saved');
+  const [locationSource, setLocationSource] = useState<'saved' | 'map' | 'manual' | 'gps'>(
+    draft?.latitude ? 'map' : 'manual'
+  );
 
-  // Sync saved addresses on mount or profile load
+  // Sync saved addresses on mount or whenever user switches/logs in
   useEffect(() => {
-    const list = loadSavedAddressesFromStorage(currentUser?.id);
+    const list = loadSavedAddressesFromStorage(currentUser?.id, currentUser?.defaultAddress);
     setSavedAddresses(list);
-    if (currentUser?.defaultAddress) {
-      // Check if user's defaultAddress matches any
-      const matching = list.find((a) => a.fullAddress === currentUser.defaultAddress);
-      if (matching) {
-        setSelectedAddressId(matching.id);
-        populateFieldsFromAddress(matching);
+
+    if (list.length > 0) {
+      // Find matching default or first
+      const matching = currentUser?.defaultAddress
+        ? list.find((a) => a.fullAddress === currentUser.defaultAddress)
+        : null;
+      const target = matching || list.find((a) => a.isDefault) || list[0];
+      if (target) {
+        setSelectedAddressId(target.id);
+        populateFieldsFromAddress(target);
+        setLocationSource('saved');
+        return;
       }
     }
-  }, [currentUser?.id]);
+
+    // New user with no saved addresses: reset to clean blank state
+    setSelectedAddressId(null);
+    setLocationSource(draft?.latitude ? 'map' : 'manual');
+    setFlatNo(draft?.unitOrFloor || '');
+    setBuildingName('');
+    setStreetArea(draft?.serviceAddress || currentUser?.defaultAddress || '');
+    setCity('');
+    setStateName('');
+    setPincode('');
+    setLandmark('');
+    setInstructions('');
+    setLatitude(draft?.latitude);
+    setLongitude(draft?.longitude);
+  }, [currentUser?.id, currentUser?.defaultAddress]);
 
   const populateFieldsFromAddress = (item: SavedAddressItem) => {
     setFlatNo(item.flatNo || '');
     setBuildingName(item.buildingName || '');
     setStreetArea(item.streetArea || '');
-    setCity(item.city || 'Gurgaon');
-    setStateName(item.state || 'Haryana');
-    setPincode(item.pincode || '122002');
+    setCity(item.city || '');
+    setStateName(item.state || '');
+    setPincode(item.pincode || '');
     setLandmark(item.landmark || '');
     setInstructions(item.instructions || '');
     setSelectedTag(item.tag || 'Home');
@@ -653,82 +670,96 @@ export const BookingStep3ServiceLocationChaircareMobileScreen: React.FC<{
           </View>
 
           <View style={styles.addressList}>
-            {savedAddresses.map((addr) => {
-              const isSelected = selectedAddressId === addr.id;
-              const isHome = addr.tag === 'Home';
-              const isOffice = addr.tag === 'Office';
+            {savedAddresses.length === 0 ? (
+              <View style={styles.emptySavedContainer}>
+                <View style={styles.emptySavedIconBox}>
+                  <AppIcon name="MapPin" size={20} color="#38bdf8" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.emptySavedTitle}>No saved addresses yet</Text>
+                  <Text style={styles.emptySavedSub}>
+                    Enter your location details below or pinpoint on the map. Your address will be saved directly to your account.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              savedAddresses.map((addr) => {
+                const isSelected = selectedAddressId === addr.id;
+                const isHome = addr.tag === 'Home';
+                const isOffice = addr.tag === 'Office';
 
-              return (
-                <TouchableOpacity
-                  key={addr.id}
-                  style={[
-                    styles.addressCard,
-                    isSelected ? styles.addressCardSelected : styles.addressCardUnselected,
-                  ]}
-                  onPress={() => handleSelectSavedAddress(addr)}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.addressLeft}>
-                    <View
-                      style={[
-                        styles.addressIconBox,
-                        isSelected
-                          ? styles.addressIconBoxSelected
-                          : styles.addressIconBoxUnselected,
-                      ]}
-                    >
-                      <AppIcon
-                        name={isHome ? 'Home' : isOffice ? 'Building2' : 'MapPin'}
-                        size={20}
-                        color={isSelected ? Colors.secondaryCobalt : Colors.onSurfaceVariant}
-                      />
-                    </View>
-
-                    <View style={styles.addressDetails}>
-                      <View style={styles.addressTitleRow}>
-                        <Text style={styles.addressNameText}>{addr.label || addr.tag}</Text>
-                        <View style={styles.tagBadge}>
-                          <Text style={styles.tagBadgeText}>{addr.tag.toUpperCase()}</Text>
-                        </View>
-                        {isSelected && (
-                          <View style={styles.selectedTag}>
-                            <Text style={styles.selectedTagText}>✓ Selected</Text>
-                          </View>
-                        )}
+                return (
+                  <TouchableOpacity
+                    key={addr.id}
+                    style={[
+                      styles.addressCard,
+                      isSelected ? styles.addressCardSelected : styles.addressCardUnselected,
+                    ]}
+                    onPress={() => handleSelectSavedAddress(addr)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.addressLeft}>
+                      <View
+                        style={[
+                          styles.addressIconBox,
+                          isSelected
+                            ? styles.addressIconBoxSelected
+                            : styles.addressIconBoxUnselected,
+                        ]}
+                      >
+                        <AppIcon
+                          name={isHome ? 'Home' : isOffice ? 'Building2' : 'MapPin'}
+                          size={20}
+                          color={isSelected ? Colors.secondaryCobalt : Colors.onSurfaceVariant}
+                        />
                       </View>
 
-                      <Text style={styles.addressFlatText}>
-                        {addr.flatNo}{addr.buildingName ? ` • ${addr.buildingName}` : ''}
-                      </Text>
-
-                      <Text style={styles.addressFullText} numberOfLines={2}>
-                        {addr.streetArea}, {addr.city} - {addr.pincode}
-                      </Text>
-
-                      {addr.instructions ? (
-                        <View style={styles.instructionPill}>
-                          <AppIcon name="Key" size={12} color={Colors.onSurfaceVariant} />
-                          <Text style={styles.instructionPillText} numberOfLines={1}>
-                            {addr.instructions}
-                          </Text>
+                      <View style={styles.addressDetails}>
+                        <View style={styles.addressTitleRow}>
+                          <Text style={styles.addressNameText}>{addr.label || addr.tag}</Text>
+                          <View style={styles.tagBadge}>
+                            <Text style={styles.tagBadgeText}>{addr.tag.toUpperCase()}</Text>
+                          </View>
+                          {isSelected && (
+                            <View style={styles.selectedTag}>
+                              <Text style={styles.selectedTagText}>✓ Selected</Text>
+                            </View>
+                          )}
                         </View>
+
+                        <Text style={styles.addressFlatText}>
+                          {addr.flatNo}{addr.buildingName ? ` • ${addr.buildingName}` : ''}
+                        </Text>
+
+                        <Text style={styles.addressFullText} numberOfLines={2}>
+                          {addr.streetArea}, {addr.city} - {addr.pincode}
+                        </Text>
+
+                        {addr.instructions ? (
+                          <View style={styles.instructionPill}>
+                            <AppIcon name="Key" size={12} color={Colors.onSurfaceVariant} />
+                            <Text style={styles.instructionPillText} numberOfLines={1}>
+                              {addr.instructions}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.radioCircle,
+                        isSelected ? styles.radioSelected : styles.radioUnselected,
+                      ]}
+                    >
+                      {isSelected ? (
+                        <AppIcon name="Check" size={12} color="#FFFFFF" />
                       ) : null}
                     </View>
-                  </View>
-
-                  <View
-                    style={[
-                      styles.radioCircle,
-                      isSelected ? styles.radioSelected : styles.radioUnselected,
-                    ]}
-                  >
-                    {isSelected ? (
-                      <AppIcon name="Check" size={12} color="#FFFFFF" />
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+                  </TouchableOpacity>
+                );
+              })
+            )}
           </View>
         </View>
 
@@ -1819,5 +1850,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: Colors.onSurfaceVariant,
     lineHeight: 14,
+  },
+  emptySavedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+  },
+  emptySavedIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptySavedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#E2E8F0',
+    marginBottom: 2,
+  },
+  emptySavedSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    lineHeight: 16,
   },
 });

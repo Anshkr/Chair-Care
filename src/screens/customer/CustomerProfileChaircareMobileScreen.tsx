@@ -78,15 +78,15 @@ const loadSavedAddressesFromStorage = (userId?: string, defaultAddr?: string): S
     const trimmed = defaultAddr.trim();
     list = [
       {
-        id: 'addr_default_profile',
+        id: `addr_default_${userId || 'user'}`,
         tag: 'Home',
         label: 'Primary Address',
         flatNo: '',
         buildingName: '',
-        streetArea: '',
-        city: 'Gurgaon',
-        state: 'Haryana',
-        pincode: '122002',
+        streetArea: trimmed,
+        city: '',
+        state: '',
+        pincode: '',
         fullAddress: trimmed,
         isDefault: true,
       },
@@ -155,9 +155,9 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
   const [addressFormFlat, setAddressFormFlat] = useState('');
   const [addressFormBuilding, setAddressFormBuilding] = useState('');
   const [addressFormStreet, setAddressFormStreet] = useState('');
-  const [addressFormCity, setAddressFormCity] = useState('Gurgaon');
-  const [addressFormState, setAddressFormState] = useState('Haryana');
-  const [addressFormPincode, setAddressFormPincode] = useState('122002');
+  const [addressFormCity, setAddressFormCity] = useState('');
+  const [addressFormState, setAddressFormState] = useState('');
+  const [addressFormPincode, setAddressFormPincode] = useState('');
   const [addressFormFullText, setAddressFormFullText] = useState('');
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [isGpsLocating, setIsGpsLocating] = useState(false);
@@ -247,9 +247,9 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     setAddressFormFlat('');
     setAddressFormBuilding('');
     setAddressFormStreet('');
-    setAddressFormCity('Gurgaon');
-    setAddressFormState('Haryana');
-    setAddressFormPincode('122002');
+    setAddressFormCity('');
+    setAddressFormState('');
+    setAddressFormPincode('');
     setAddressFormFullText('');
     setIsEditingAddress(true);
   };
@@ -261,9 +261,9 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     setAddressFormFlat(addr.flatNo || '');
     setAddressFormBuilding(addr.buildingName || '');
     setAddressFormStreet(addr.streetArea || '');
-    setAddressFormCity(addr.city || 'Gurgaon');
-    setAddressFormState(addr.state || 'Haryana');
-    setAddressFormPincode(addr.pincode || '122002');
+    setAddressFormCity(addr.city || '');
+    setAddressFormState(addr.state || '');
+    setAddressFormPincode(addr.pincode || '');
     setAddressFormFullText(addr.fullAddress || '');
     setIsEditingAddress(true);
   };
