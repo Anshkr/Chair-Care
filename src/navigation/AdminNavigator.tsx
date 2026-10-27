@@ -93,10 +93,10 @@ const AdminTabs = () => {
         name="AdminSettingsTab"
         component={AdminScreens.AdminSettingsChaircareMobileScreen}
         options={{
-          tabBarLabel: 'Settings',
+          tabBarLabel: 'Passwords',
           tabBarIcon: ({ color, focused }) => (
             <AppIcon
-              name="Settings"
+              name="Key"
               size={20}
               color={color}
               strokeWidth={focused ? 2.2 : 1.8}

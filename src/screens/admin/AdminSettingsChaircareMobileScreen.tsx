@@ -1,5 +1,4 @@
-import { AppIcon } from '../../components/common/AppIcon';
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,218 +6,28 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   Animated,
+  Modal,
+  Platform,
   useWindowDimensions,
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  RefreshControl,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
-import { Typography } from '../../constants/typography';
-import { useAuth } from '../../context/AuthContext';
+import { AppIcon } from '../../components/common/AppIcon';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { AdminHeaderAvatar } from '../../components/common/AdminHeaderAvatar';
+import { adminApi, TemporaryPasswordRequestItem } from '../../services/api/adminApi';
 
 /**
  * Screen ID: A59
- * Title: System Settings (Super Admin Central Platform Control)
- * Folder: design-reference/admin/admin_settings_chaircare_mobile
+ * Title: Temporary Password Requests (Admin Credentials Management)
+ * Tab: Dedicated Password Requests Tab in Admin Console
  */
-
-interface ConfigItem {
-  id: string;
-  title: string;
-  description: string;
-  badge?: string;
-  badgeType?: 'success' | 'info' | 'neutral';
-  icon: keyof typeof MaterialIcons.glyphMap;
-  iconBgType?: 'secondary' | 'surface' | 'tertiary';
-  targetScreen?: string;
-}
-
-interface ConfigGroup {
-  id: string;
-  headerTitle: string;
-  headerTag: string;
-  items: ConfigItem[];
-}
-
-const CONFIG_GROUPS: ConfigGroup[] = [
-  {
-    id: 'directories',
-    headerTitle: 'User & Directory Management',
-    headerTag: 'All Users',
-    items: [
-      {
-        id: 'all_technicians',
-        title: 'All Technicians',
-        description: 'Field technician roster, active status, ratings & verification',
-        badge: 'Fleet Roster',
-        badgeType: 'info',
-        icon: 'engineering',
-        iconBgType: 'secondary',
-        targetScreen: 'TechniciansTab',
-      },
-      {
-        id: 'all_customers',
-        title: 'All Customers',
-        description: 'Customer directory, booking records, phone numbers & profiles',
-        badge: 'Customer Base',
-        badgeType: 'neutral',
-        icon: 'people',
-        iconBgType: 'surface',
-        targetScreen: 'Customers',
-      },
-      {
-        id: 'all_admins',
-        title: 'All Administrators',
-        description: 'Admin team members, roles, permissions & access levels',
-        badge: 'Admin Team',
-        badgeType: 'success',
-        icon: 'admin-panel-settings',
-        iconBgType: 'secondary',
-        targetScreen: 'AdminUsers',
-      },
-      {
-        id: 'temporary_password_requests',
-        title: 'Temporary Password Requests',
-        description: 'Review forgot password requests from customers & technicians, and issue temporary passwords',
-        badge: 'Credentials',
-        badgeType: 'info',
-        icon: 'vpn-key',
-        iconBgType: 'secondary',
-        targetScreen: 'SecuritySystemPreferences',
-      },
-    ],
-  },
-  {
-    id: 'core_ops',
-    headerTitle: 'Platform & Service Configuration',
-    headerTag: 'Core Settings',
-    items: [
-      {
-        id: 'platform_config',
-        title: 'Platform Configuration',
-        description: 'Service availability, booking windows, and depot operating hours',
-        badge: 'Active & Online',
-        badgeType: 'success',
-        icon: 'tune',
-        iconBgType: 'secondary',
-        targetScreen: 'PlatformConfiguration',
-      },
-      {
-        id: 'pricing_config',
-        title: 'Service & Pricing Management',
-        description: 'Base chair repair rates, spare parts pricing & diagnostic fees',
-        badge: 'Active Rates',
-        badgeType: 'neutral',
-        icon: 'payments',
-        iconBgType: 'surface',
-        targetScreen: 'ServicePricingConfiguration',
-      },
-      {
-        id: 'fleet_rules',
-        title: 'Technician Dispatch Rules',
-        description: 'Automatic nearby technician matching and service radius',
-        badge: '10 km Radius',
-        badgeType: 'info',
-        icon: 'commute',
-        iconBgType: 'secondary',
-        targetScreen: 'TechnicianMatchingSystemConfiguration',
-      },
-    ],
-  },
-  {
-    id: 'support_care',
-    headerTitle: 'Customer Care & Disputes',
-    headerTag: 'Resolutions',
-    items: [
-      {
-        id: 'chat_bridge',
-        title: 'Customer Support Tickets',
-        description: 'Live inquiries, customer help requests, and open tickets',
-        badge: 'Live Helpdesk',
-        badgeType: 'info',
-        icon: 'support-agent',
-        iconBgType: 'surface',
-        targetScreen: 'Support',
-      },
-      {
-        id: 'refund_controls',
-        title: 'Disputes & Refund Requests',
-        description: 'Customer claims, dispute resolution & refund approvals',
-        badge: 'Claims Center',
-        badgeType: 'neutral',
-        icon: 'receipt-long',
-        iconBgType: 'surface',
-        targetScreen: 'Disputes',
-      },
-      {
-        id: 'reviews_ratings',
-        title: 'Customer Reviews & Ratings',
-        description: 'Service feedback, chair repair ratings & moderation',
-        badge: 'Ratings',
-        badgeType: 'neutral',
-        icon: 'star',
-        iconBgType: 'secondary',
-        targetScreen: 'ReviewsRatings',
-      },
-    ],
-  },
-  {
-    id: 'treasury',
-    headerTitle: 'Payments & Financials',
-    headerTag: 'Transactions',
-    items: [
-      {
-        id: 'escrow_rules',
-        title: 'Payments & Transactions',
-        description: 'Payment gateway settings, customer invoices & technician payouts',
-        badge: 'Protected',
-        badgeType: 'success',
-        icon: 'account-balance',
-        iconBgType: 'secondary',
-        targetScreen: 'PaymentsTab',
-      },
-    ],
-  },
-  {
-    id: 'system_security',
-    headerTitle: 'System & Security',
-    headerTag: 'Security & Logs',
-    items: [
-      {
-        id: 'auth_bounds',
-        title: 'Security & Login Protections',
-        description: 'Two-factor authentication, session timeouts & password security',
-        badge: 'Protected',
-        badgeType: 'info',
-        icon: 'lock',
-        iconBgType: 'secondary',
-        targetScreen: 'SecuritySystemPreferences',
-      },
-      {
-        id: 'audit_ledger',
-        title: 'Activity History & Logs',
-        description: 'Detailed log of admin actions, service updates & changes',
-        badge: 'Live Log',
-        badgeType: 'success',
-        icon: 'history',
-        iconBgType: 'surface',
-        targetScreen: 'ActivityLogs',
-      },
-      {
-        id: 'notif_routing',
-        title: 'Alerts & Notifications',
-        description: 'Push notification preferences and system announcements',
-        icon: 'notifications-active',
-        iconBgType: 'surface',
-        targetScreen: 'NotificationPreferences',
-      },
-    ],
-  },
-];
 
 export const AdminSettingsChaircareMobileScreen: React.FC<{
   navigation?: any;
@@ -228,13 +37,32 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  // Search Filter State
+  // Requests state
+  const [tempRequests, setTempRequests] = useState<TemporaryPasswordRequestItem[]>([]);
+  const [isLoadingRequests, setIsLoadingRequests] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [requestsFilter, setRequestsFilter] = useState<'pending' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Toast state
   const [toastMessage, setToastMessage] = useState<string>('');
   const [toastVisible, setToastVisible] = useState<boolean>(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
+
+  // Fulfill Modal State
+  const [selectedFulfillRequest, setSelectedFulfillRequest] =
+    useState<TemporaryPasswordRequestItem | null>(null);
+  const [fulfillTempPassword, setFulfillTempPassword] = useState<string>('');
+  const [isFulfilling, setIsFulfilling] = useState<boolean>(false);
+
+  // Manual On-Demand Issue Modal State
+  const [isManualIssueModalVisible, setIsManualIssueModalVisible] = useState<boolean>(false);
+  const [manualUserRole, setManualUserRole] = useState<'customer' | 'technician'>('customer');
+  const [manualUserList, setManualUserList] = useState<any[]>([]);
+  const [manualSearchQuery, setManualSearchQuery] = useState<string>('');
+  const [selectedManualUser, setSelectedManualUser] = useState<any | null>(null);
+  const [manualTempPassword, setManualTempPassword] = useState<string>('');
+  const [isManualIssuing, setIsManualIssuing] = useState<boolean>(false);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -256,38 +84,177 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
     });
   };
 
-  const handleNavigate = (item: ConfigItem) => {
-    if (item.targetScreen && navigation?.navigate) {
-      navigation.navigate(item.targetScreen);
-    } else {
-      showToast(`Accessing ${item.title}`);
+  const generateSuggestedPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    let res = 'ChairCare#';
+    for (let i = 0; i < 4; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return res;
+  };
+
+  const loadTemporaryPasswordRequests = async (isPullToRefresh = false) => {
+    try {
+      if (isPullToRefresh) {
+        setIsRefreshing(true);
+      } else {
+        setIsLoadingRequests(true);
+      }
+      const res = await adminApi.getTemporaryPasswordRequests();
+      if (res.success && Array.isArray(res.data)) {
+        setTempRequests(res.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load temporary password requests:', err);
+    } finally {
+      setIsLoadingRequests(false);
+      setIsRefreshing(false);
     }
   };
 
-  const { logout, currentUser } = useAuth();
+  useEffect(() => {
+    loadTemporaryPasswordRequests();
+  }, []);
 
-  const handleLogout = () => {
-    showToast('Admin Session Ended');
-    logout();
+  // Filtered requests list
+  const pendingRequests = useMemo(() => {
+    return tempRequests.filter((r) => r.status === 'pending');
+  }, [tempRequests]);
+
+  const displayedRequests = useMemo(() => {
+    let list = requestsFilter === 'pending' ? pendingRequests : tempRequests;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((r) => {
+        const name = (r.userName || r.user_name || '').toLowerCase();
+        const email = (r.userEmail || r.user_email || '').toLowerCase();
+        const phone = (r.userPhone || r.user_phone || '').toLowerCase();
+        const role = (r.role || '').toLowerCase();
+        return name.includes(q) || email.includes(q) || phone.includes(q) || role.includes(q);
+      });
+    }
+    return list;
+  }, [requestsFilter, pendingRequests, tempRequests, searchQuery]);
+
+  const handleOpenFulfillModal = (req: TemporaryPasswordRequestItem) => {
+    setSelectedFulfillRequest(req);
+    setFulfillTempPassword(generateSuggestedPassword());
   };
 
-  // Filter groups
-  const filteredGroups = useMemo(() => {
-    if (!searchQuery.trim()) return CONFIG_GROUPS;
-    const q = searchQuery.toLowerCase();
-    return CONFIG_GROUPS.map((group) => {
-      const filteredItems = group.items.filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          (item.badge && item.badge.toLowerCase().includes(q))
+  const handleFulfillSubmit = async () => {
+    if (!selectedFulfillRequest) return;
+    if (!fulfillTempPassword.trim()) {
+      Alert.alert('Required', 'Please enter or generate a temporary password.');
+      return;
+    }
+
+    try {
+      setIsFulfilling(true);
+      const res = await adminApi.fulfillTemporaryPasswordRequest(
+        selectedFulfillRequest.id,
+        fulfillTempPassword.trim()
       );
-      return {
-        ...group,
-        items: filteredItems,
-      };
-    }).filter((group) => group.items.length > 0);
-  }, [searchQuery]);
+      if (res.success) {
+        Alert.alert(
+          'Temporary Password Issued!',
+          `Temporary password '${res.data?.temporaryPassword || fulfillTempPassword.trim()}' has been set for ${
+            selectedFulfillRequest.userName || selectedFulfillRequest.user_name
+          } (${selectedFulfillRequest.role}) and delivered to their in-app notifications.`
+        );
+        setSelectedFulfillRequest(null);
+        await loadTemporaryPasswordRequests();
+        showToast('Password issued & notification dispatched');
+      } else {
+        Alert.alert('Error', res.error || 'Failed to fulfill request.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setIsFulfilling(false);
+    }
+  };
+
+  const handleOpenManualIssueModal = async () => {
+    setIsManualIssueModalVisible(true);
+    setManualTempPassword(generateSuggestedPassword());
+    setSelectedManualUser(null);
+    setManualSearchQuery('');
+    try {
+      if (manualUserRole === 'customer') {
+        const res = await adminApi.getAllCustomers();
+        if (res.success && Array.isArray(res.data)) {
+          setManualUserList(res.data);
+        }
+      } else {
+        const res = await adminApi.getAllTechnicians();
+        if (res.success && Array.isArray(res.data)) {
+          setManualUserList(res.data);
+        }
+      }
+    } catch {}
+  };
+
+  const handleSwitchManualRole = async (role: 'customer' | 'technician') => {
+    setManualUserRole(role);
+    setSelectedManualUser(null);
+    setManualSearchQuery('');
+    try {
+      if (role === 'customer') {
+        const res = await adminApi.getAllCustomers();
+        if (res.success && Array.isArray(res.data)) setManualUserList(res.data);
+      } else {
+        const res = await adminApi.getAllTechnicians();
+        if (res.success && Array.isArray(res.data)) setManualUserList(res.data);
+      }
+    } catch {}
+  };
+
+  const filteredManualUserList = useMemo(() => {
+    if (!manualSearchQuery.trim()) return manualUserList;
+    const q = manualSearchQuery.toLowerCase();
+    return manualUserList.filter(
+      (u) =>
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.phone || '').toLowerCase().includes(q)
+    );
+  }, [manualUserList, manualSearchQuery]);
+
+  const handleManualIssueSubmit = async () => {
+    if (!selectedManualUser) {
+      Alert.alert('Required', 'Please select a customer or technician from the list.');
+      return;
+    }
+    if (!manualTempPassword.trim()) {
+      Alert.alert('Required', 'Please enter or generate a temporary password.');
+      return;
+    }
+
+    try {
+      setIsManualIssuing(true);
+      const res = await adminApi.setUserTemporaryPassword(
+        selectedManualUser.id,
+        manualTempPassword.trim()
+      );
+      if (res.success) {
+        Alert.alert(
+          'Temporary Password Issued!',
+          `Temporary password '${res.data?.temporaryPassword || manualTempPassword.trim()}' has been set for ${
+            selectedManualUser.name
+          } and delivered to their in-app notifications.`
+        );
+        setIsManualIssueModalVisible(false);
+        await loadTemporaryPasswordRequests();
+        showToast('Temporary password successfully issued');
+      } else {
+        Alert.alert('Error', res.error || 'Failed to issue temporary password.');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Something went wrong.');
+    } finally {
+      setIsManualIssuing(false);
+    }
+  };
 
   return (
     <View style={[styles.screenContainer, { paddingTop: insets.top }]}>
@@ -320,8 +287,8 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
         <View style={styles.headerLeft}>
           <BrandLogo size={36} containerStyle={{ marginRight: 10 }} />
           <View style={styles.headerTitleCol}>
-            <Text style={styles.headerSub}>SUPER ADMIN</Text>
-            <Text style={styles.headerTitle}>System Settings</Text>
+            <Text style={styles.headerSub}>CREDENTIALS &amp; SECURITY</Text>
+            <Text style={styles.headerTitle}>Password Requests</Text>
           </View>
         </View>
 
@@ -357,237 +324,585 @@ export const AdminSettingsChaircareMobileScreen: React.FC<{
         style={styles.scrollView}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: Math.max(insets.bottom + 20, 36) },
+          { paddingBottom: Math.max(insets.bottom + 30, 48) },
           isDesktop && styles.desktopContainer,
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => loadTemporaryPasswordRequests(true)}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
       >
-        {/* Sub-Header Status Bar */}
-        <View style={styles.subHeaderBar}>
-          <View style={styles.subHeaderCol}>
-            <Text style={styles.subHeaderTitle}>Platform Control</Text>
-            <Text style={styles.subHeaderSubtitle}>
-              Centralized platform settings & directory management
+        {/* KPI / Status Summary Card */}
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryTopRow}>
+            <View style={styles.summaryIconBox}>
+              <AppIcon name="Key" size={22} color="#00174B" />
+            </View>
+            <View style={styles.summaryTexts}>
+              <Text style={styles.summaryTitle}>Temporary Password Requests</Text>
+              <Text style={styles.summarySub}>
+                Fulfill password requests from customers &amp; technicians or issue on demand
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.summaryBadge,
+                pendingRequests.length > 0
+                  ? styles.summaryBadgePending
+                  : styles.summaryBadgeResolved,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.summaryBadgeText,
+                  pendingRequests.length > 0
+                    ? styles.summaryBadgeTextPending
+                    : styles.summaryBadgeTextResolved,
+                ]}
+              >
+                {pendingRequests.length > 0
+                  ? `${pendingRequests.length} PENDING`
+                  : 'ALL RESOLVED'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Issue on Demand Action Button */}
+          <TouchableOpacity
+            style={styles.actionBtnIssueDemand}
+            onPress={handleOpenManualIssueModal}
+            activeOpacity={0.85}
+          >
+            <AppIcon name="Plus" size={16} color="#00174B" />
+            <Text style={styles.actionBtnIssueDemandText}>
+              + Issue Temporary Password for Any User
             </Text>
-          </View>
-          <View style={styles.nodeLivePill}>
-            <View style={styles.nodeLivePulseDot} />
-            <Text style={styles.nodeLiveText}>ONLINE</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
-        {/* 1. Account & Security Profile Bento Card */}
-        <View style={styles.rootProfileCard}>
-          <View style={styles.rootCardGlow} />
-
-          <View style={styles.rootCardContent}>
-            <View style={styles.rootCardTopRow}>
-              <View style={styles.rootCardLeft}>
-                <View style={styles.rootAvatarWrap}>
-                  <Image
-                    source={{
-                      uri: currentUser?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
-                    }}
-                    style={styles.rootAvatarImg}
-                  />
-                  <View style={styles.rootAvatarCheck}>
-                    <MaterialIcons name="check" size={10} color="#002113" />
-                  </View>
-                </View>
-
-                <View style={styles.rootInfoCol}>
-                  <View style={styles.rootNameRow}>
-                    <Text style={styles.rootName}>{currentUser?.name || 'Administrator'}</Text>
-                    <MaterialIcons name="verified-user" size={16} color="#DBE1FF" />
-                  </View>
-                  <Text style={styles.rootUid}>{currentUser?.email || 'admin@chaircare.com'}</Text>
-                </View>
-              </View>
-
-              <View style={styles.fullAccessBadge}>
-                <Text style={styles.fullAccessBadgeText}>Full Access</Text>
-              </View>
-            </View>
-
-            {/* Last Auth Sub-Box */}
-            <View style={styles.lastAuthBox}>
-              <View style={styles.lastAuthCol}>
-                <Text style={styles.lastAuthLabel}>SECURITY STATUS</Text>
-                <Text style={styles.lastAuthValue}>Protected & Authenticated</Text>
-              </View>
-              <View style={styles.hardwareKeyPill}>
-                <MaterialIcons name="security" size={14} color="#4EDEA3" />
-                <Text style={styles.hardwareKeyText}>Two-Factor Security Active</Text>
-              </View>
-            </View>
-
-            {/* Manage Root Credentials Link */}
+        {/* Filter Chips & Search Bar */}
+        <View style={styles.filterSection}>
+          <View style={styles.filterRow}>
             <TouchableOpacity
-              style={styles.manageRootLink}
-              onPress={() => {
-                if (navigation?.navigate) {
-                  navigation.navigate('AdminProfileSystemStatus');
-                } else {
-                  showToast('Admin Profile active');
-                }
-              }}
+              style={[
+                styles.filterTab,
+                requestsFilter === 'pending' && styles.filterTabActive,
+              ]}
+              onPress={() => setRequestsFilter('pending')}
               activeOpacity={0.7}
             >
-              <Text style={styles.manageRootLinkText}>
-                View Admin Profile
+              <Text
+                style={[
+                  styles.filterTabText,
+                  requestsFilter === 'pending' && styles.filterTabTextActive,
+                ]}
+              >
+                Pending ({pendingRequests.length})
               </Text>
-              <MaterialIcons name="chevron-right" size={18} color="#7C839B" />
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterTab,
+                requestsFilter === 'all' && styles.filterTabActive,
+              ]}
+              onPress={() => setRequestsFilter('all')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  requestsFilter === 'all' && styles.filterTabTextActive,
+                ]}
+              >
+                All History ({tempRequests.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={() => loadTemporaryPasswordRequests()}
+              activeOpacity={0.7}
+              accessibilityLabel="Refresh"
+            >
+              <AppIcon name="RefreshCw" size={16} color={Colors.onSurfaceVariant} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search Input */}
+          <View style={styles.searchBar}>
+            <MaterialIcons name="search" size={20} color={Colors.outline} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search by user name, email, phone..."
+              placeholderTextColor={Colors.outline}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
+                <MaterialIcons name="close" size={18} color={Colors.outline} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
-        {/* Search / Quick Filter Bar */}
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={20} color={Colors.outline} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search settings, user directories, or services..."
-            placeholderTextColor={Colors.outline}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')} activeOpacity={0.7}>
-              <MaterialIcons name="close" size={18} color={Colors.outline} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {/* List of Requests */}
+        {isLoadingRequests ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.loadingText}>Fetching password requests...</Text>
+          </View>
+        ) : displayedRequests.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialIcons name="verified-user" size={32} color="#009668" />
+            </View>
+            <Text style={styles.emptyTitle}>
+              {requestsFilter === 'pending' ? 'No Pending Requests' : 'No Request History'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+              {requestsFilter === 'pending'
+                ? 'All password requests have been successfully fulfilled.'
+                : 'No temporary password requests found in the platform.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.requestsList}>
+            {displayedRequests.map((req) => {
+              const reqUserName = req.userName || req.user_name || 'ChairCare User';
+              const reqUserEmail = req.userEmail || req.user_email || '';
+              const reqUserPhone = req.userPhone || req.user_phone || '';
+              const reqRole = req.role || 'customer';
+              const reqPass = req.temporaryPassword || req.temporary_password;
+              const rawDate = req.createdAt || req.created_at;
+              const formattedDate =
+                rawDate && !isNaN(new Date(rawDate).getTime())
+                  ? `${new Date(rawDate).toLocaleDateString()} at ${new Date(
+                      rawDate
+                    ).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Recently requested';
 
-        {/* 2. Platform Modules & Configuration Sections */}
-        <View style={styles.configGroupsList}>
-          {filteredGroups.map((group, gIdx) => (
-            <React.Fragment key={group.id}>
-              {/* Group Container */}
-              <View style={styles.groupSection}>
-                <View style={styles.groupHeader}>
-                  <Text style={styles.groupHeaderTitle}>{group.headerTitle}</Text>
-                  <Text
-                    style={[
-                      styles.groupHeaderTag,
-                      group.id === 'system_security' && styles.groupHeaderTagHighShield,
-                    ]}
-                  >
-                    {group.headerTag}
+              const initials =
+                reqUserName
+                  .split(' ')
+                  .map((w: string) => w[0])
+                  .join('')
+                  .substring(0, 2)
+                  .toUpperCase() || 'CC';
+
+              const isTech = reqRole === 'technician';
+
+              return (
+                <View key={req.id} style={styles.requestCard}>
+                  {/* Top Row: Avatar + Info + Status Pill */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.cardUserGroup}>
+                      <View
+                        style={[
+                          styles.avatarCircle,
+                          isTech ? styles.avatarTech : styles.avatarCust,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.avatarInitials,
+                            isTech ? styles.avatarInitialsTech : styles.avatarInitialsCust,
+                          ]}
+                        >
+                          {initials}
+                        </Text>
+                      </View>
+
+                      <View style={styles.userInfoTextCol}>
+                        <View style={styles.nameRow}>
+                          <Text style={styles.userNameText}>{reqUserName}</Text>
+                          <View
+                            style={[
+                              styles.rolePill,
+                              isTech ? styles.rolePillTech : styles.rolePillCust,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.rolePillText,
+                                isTech ? styles.rolePillTextTech : styles.rolePillTextCust,
+                              ]}
+                            >
+                              {reqRole.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {(reqUserEmail || reqUserPhone) && (
+                          <Text style={styles.contactText}>
+                            {reqUserEmail} {reqUserPhone ? `• ${reqUserPhone}` : ''}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.statusPill,
+                        req.status === 'pending'
+                          ? styles.statusPillPending
+                          : styles.statusPillFulfilled,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusPillText,
+                          req.status === 'pending'
+                            ? styles.statusPillTextPending
+                            : styles.statusPillTextFulfilled,
+                        ]}
+                      >
+                        {req.status === 'pending' ? 'PENDING' : 'FULFILLED'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Reason Note */}
+                  {req.reason ? (
+                    <View style={styles.reasonBox}>
+                      <Text style={styles.reasonLabel}>User Note:</Text>
+                      <Text style={styles.reasonText}>"{req.reason}"</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Card Bottom Row */}
+                  <View style={styles.cardFooterRow}>
+                    <View style={styles.dateCol}>
+                      <Text style={styles.dateLabel}>Requested</Text>
+                      <Text style={styles.dateText}>{formattedDate}</Text>
+                    </View>
+
+                    {req.status === 'pending' ? (
+                      <TouchableOpacity
+                        style={styles.fulfillBtn}
+                        onPress={() => handleOpenFulfillModal(req)}
+                        activeOpacity={0.85}
+                      >
+                        <AppIcon name="Key" size={14} color="#FFFFFF" />
+                        <Text style={styles.fulfillBtnText}>Issue Password</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.issuedBox}>
+                        <Text style={styles.issuedLabel}>Issued Password</Text>
+                        <Text style={styles.issuedCode}>{reqPass || '••••••'}</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+
+      {/* 1. Fulfill Temporary Password Request Modal */}
+      <Modal
+        visible={selectedFulfillRequest !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedFulfillRequest(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlayCenter}
+        >
+          <TouchableOpacity
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setSelectedFulfillRequest(null)}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeftGroup}>
+                <AppIcon name="Key" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Issue Temporary Password</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedFulfillRequest(null)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={20} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedFulfillRequest && (
+              <View style={styles.modalFormContent}>
+                {/* Target User Info */}
+                <View style={styles.modalUserBox}>
+                  <Text style={styles.modalUserName}>
+                    {selectedFulfillRequest.userName ||
+                      selectedFulfillRequest.user_name ||
+                      'ChairCare User'}
+                  </Text>
+                  <Text style={styles.modalUserSub}>
+                    {(selectedFulfillRequest.role || 'user').toUpperCase()} •{' '}
+                    {selectedFulfillRequest.userEmail ||
+                      selectedFulfillRequest.user_email ||
+                      'No email'}
+                    {selectedFulfillRequest.userPhone || selectedFulfillRequest.user_phone
+                      ? ` • ${
+                          selectedFulfillRequest.userPhone || selectedFulfillRequest.user_phone
+                        }`
+                      : ''}
+                  </Text>
+                  {selectedFulfillRequest.reason ? (
+                    <Text style={styles.modalUserReason}>
+                      Note: "{selectedFulfillRequest.reason}"
+                    </Text>
+                  ) : null}
+                </View>
+
+                {/* Password Input & Generator */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.passLabelRow}>
+                    <Text style={styles.inputLabel}>Temporary Password to Issue</Text>
+                    <TouchableOpacity
+                      onPress={() => setFulfillTempPassword(generateSuggestedPassword())}
+                      style={styles.regenBtn}
+                      activeOpacity={0.7}
+                    >
+                      <AppIcon name="RefreshCw" size={12} color={Colors.primary} />
+                      <Text style={styles.regenBtnText}>Regenerate</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TextInput
+                    style={styles.tempPassInput}
+                    value={fulfillTempPassword}
+                    onChangeText={setFulfillTempPassword}
+                    placeholder="Enter temporary password"
+                    placeholderTextColor={Colors.outline}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!isFulfilling}
+                    selectTextOnFocus
+                  />
+                </View>
+
+                <View style={styles.fulfillNoticeBox}>
+                  <MaterialIcons name="info" size={16} color={Colors.primary} />
+                  <Text style={styles.fulfillNoticeText}>
+                    This sets the temporary password and immediately sends an in-app
+                    notification to the user's account.
                   </Text>
                 </View>
 
-                <View style={styles.groupCard}>
-                  {group.items.map((item, idx) => {
-                    return (
-                      <React.Fragment key={item.id}>
-                        <TouchableOpacity
-                          style={styles.itemRow}
-                          onPress={() => handleNavigate(item)}
-                          activeOpacity={0.7}
-                        >
-                          {/* Item Icon */}
-                          <View
-                            style={[
-                              styles.itemIconWrap,
-                              item.iconBgType === 'secondary' && styles.itemIconSecondary,
-                              item.iconBgType === 'tertiary' && styles.itemIconTertiary,
-                              item.iconBgType === 'surface' && styles.itemIconSurface,
-                            ]}
-                          >
-                            <MaterialIcons
-                              name={item.icon}
-                              size={20}
-                              color={
-                                item.iconBgType === 'secondary'
-                                  ? '#00174B'
-                                  : item.iconBgType === 'tertiary'
-                                  ? '#009668'
-                                  : '#191C1E'
-                              }
-                            />
-                          </View>
+                <View style={styles.modalButtonRow}>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={() => setSelectedFulfillRequest(null)}
+                    disabled={isFulfilling}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
 
-                          {/* Item Text Col */}
-                          <View style={styles.itemContentCol}>
-                            <View style={styles.itemTitleRow}>
-                              <Text style={styles.itemTitle} numberOfLines={1}>
-                                {item.title}
-                              </Text>
-                              {item.badge && (
-                                <View
-                                  style={[
-                                    styles.itemBadge,
-                                    item.badgeType === 'success' && styles.itemBadgeSuccess,
-                                    item.badgeType === 'info' && styles.itemBadgeInfo,
-                                    item.badgeType === 'neutral' && styles.itemBadgeNeutral,
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.itemBadgeText,
-                                      item.badgeType === 'success' &&
-                                        styles.itemBadgeTextSuccess,
-                                      item.badgeType === 'info' && styles.itemBadgeTextInfo,
-                                      item.badgeType === 'neutral' && styles.itemBadgeTextNeutral,
-                                    ]}
-                                  >
-                                    {item.badge}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                            <Text style={styles.itemDescription} numberOfLines={1}>
-                              {item.description}
-                            </Text>
-                          </View>
-
-                          <MaterialIcons
-                            name="chevron-right"
-                            size={20}
-                            color={Colors.outline}
-                            style={styles.chevronIcon}
-                          />
-                        </TouchableOpacity>
-
-                        {idx < group.items.length - 1 && <View style={styles.itemDivider} />}
-                      </React.Fragment>
-                    );
-                  })}
+                  <TouchableOpacity
+                    style={[styles.modalSubmitBtn, isFulfilling && { opacity: 0.6 }]}
+                    onPress={handleFulfillSubmit}
+                    disabled={isFulfilling}
+                    activeOpacity={0.85}
+                  >
+                    {isFulfilling ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <AppIcon name="Send" size={15} color="#FFFFFF" />
+                        <Text style={styles.modalSubmitBtnText}>Issue &amp; Send</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
                 </View>
               </View>
-            </React.Fragment>
-          ))}
-        </View>
-
-        {/* 3. System Status & Logout */}
-        <View style={styles.footerSection}>
-          <View style={styles.coreEngineCard}>
-            <View style={styles.coreEngineHeader}>
-              <MaterialIcons name="verified" size={16} color="#4EDEA3" />
-              <Text style={styles.coreEngineTitle}>CHAIRCARE PLATFORM v1.0</Text>
-            </View>
-            <Text style={styles.coreEngineSub}>
-              All platform services active • Secure &amp; Protected
-            </Text>
+            )}
           </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
-          {/* Root Logout Button */}
+      {/* 2. Manual On-Demand Issue Modal for Any User */}
+      <Modal
+        visible={isManualIssueModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsManualIssueModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalOverlayCenter}
+        >
           <TouchableOpacity
-            style={styles.rootLogoutBtn}
-            onPress={handleLogout}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="power-settings-new" size={20} color="#93000A" />
-            <Text style={styles.rootLogoutBtnText}>
-              Log Out of Admin Account
-            </Text>
-          </TouchableOpacity>
+            style={StyleSheet.absoluteFillObject}
+            activeOpacity={1}
+            onPress={() => setIsManualIssueModalVisible(false)}
+          />
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeftGroup}>
+                <AppIcon name="Key" size={20} color={Colors.primary} />
+                <Text style={styles.modalTitle}>Issue Password for User</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsManualIssueModalVisible(false)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <MaterialIcons name="close" size={20} color={Colors.onSurfaceVariant} />
+              </TouchableOpacity>
+            </View>
 
-          <Text style={styles.copyrightText}>
-            CHAIRCARE TECHNOLOGIES PRIVATE LIMITED
-          </Text>
-        </View>
-      </ScrollView>
+            <View style={styles.modalFormContent}>
+              {/* Role Selector Tabs */}
+              <View style={styles.roleTabsWrap}>
+                <TouchableOpacity
+                  style={[
+                    styles.roleTab,
+                    manualUserRole === 'customer' && styles.roleTabActive,
+                  ]}
+                  onPress={() => handleSwitchManualRole('customer')}
+                >
+                  <Text
+                    style={[
+                      styles.roleTabText,
+                      manualUserRole === 'customer' && styles.roleTabTextActive,
+                    ]}
+                  >
+                    Customer
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.roleTab,
+                    manualUserRole === 'technician' && styles.roleTabActive,
+                  ]}
+                  onPress={() => handleSwitchManualRole('technician')}
+                >
+                  <Text
+                    style={[
+                      styles.roleTabText,
+                      manualUserRole === 'technician' && styles.roleTabTextActive,
+                    ]}
+                  >
+                    Technician
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* User search filter */}
+              <TextInput
+                style={styles.modalSearchInput}
+                placeholder={`Search ${manualUserRole}...`}
+                placeholderTextColor={Colors.outline}
+                value={manualSearchQuery}
+                onChangeText={setManualSearchQuery}
+              />
+
+              {/* User Picker Scroll */}
+              <ScrollView style={styles.userPickerScroll} nestedScrollEnabled>
+                {filteredManualUserList.length === 0 ? (
+                  <Text style={styles.noUsersFoundText}>No {manualUserRole}s found.</Text>
+                ) : (
+                  filteredManualUserList.map((u) => {
+                    const isSelected = selectedManualUser?.id === u.id;
+                    return (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={[
+                          styles.userPickerItem,
+                          isSelected && styles.userPickerItemSelected,
+                        ]}
+                        onPress={() => setSelectedManualUser(u)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              styles.userPickerName,
+                              isSelected && styles.userPickerNameSelected,
+                            ]}
+                          >
+                            {u.name}
+                          </Text>
+                          <Text style={styles.userPickerEmail}>
+                            {u.email} {u.phone ? `• ${u.phone}` : ''}
+                          </Text>
+                        </View>
+                        {isSelected && (
+                          <MaterialIcons name="check" size={18} color={Colors.primary} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+
+              {/* Password Generator */}
+              <View style={[styles.inputGroup, { marginTop: 12 }]}>
+                <View style={styles.passLabelRow}>
+                  <Text style={styles.inputLabel}>Temporary Password</Text>
+                  <TouchableOpacity
+                    onPress={() => setManualTempPassword(generateSuggestedPassword())}
+                    style={styles.regenBtn}
+                    activeOpacity={0.7}
+                  >
+                    <AppIcon name="RefreshCw" size={12} color={Colors.primary} />
+                    <Text style={styles.regenBtnText}>Regenerate</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={styles.tempPassInput}
+                  value={manualTempPassword}
+                  onChangeText={setManualTempPassword}
+                  placeholder="Enter temporary password"
+                  placeholderTextColor={Colors.outline}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isManualIssuing}
+                  selectTextOnFocus
+                />
+              </View>
+
+              <View style={styles.modalButtonRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setIsManualIssueModalVisible(false)}
+                  disabled={isManualIssuing}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.modalSubmitBtn, isManualIssuing && { opacity: 0.6 }]}
+                  onPress={handleManualIssueSubmit}
+                  disabled={isManualIssuing}
+                  activeOpacity={0.85}
+                >
+                  {isManualIssuing ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <AppIcon name="Send" size={15} color="#FFFFFF" />
+                      <Text style={styles.modalSubmitBtnText}>Issue &amp; Send</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -598,52 +913,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7F9FB',
   },
   desktopContainer: {
-    maxWidth: 720,
+    maxWidth: 820,
     alignSelf: 'center',
     width: '100%',
   },
-  // Header
   header: {
-    height: 60,
-    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(247, 249, 251, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(0,0,0,0.04)',
-    zIndex: 10,
+    borderBottomColor: '#E6E8EA',
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-  },
-  headerIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#131B2E',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   headerTitleCol: {
-    justifyContent: 'center',
+    flexDirection: 'column',
   },
   headerSub: {
-    ...Typography.labelMono,
     fontSize: 10,
-    color: '#0051D5',
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    fontWeight: '600',
+    color: '#00297A',
+    letterSpacing: 0.8,
   },
   headerTitle: {
-    ...Typography.headlineSm,
     fontSize: 18,
-    color: '#191C1E',
     fontWeight: '700',
-    letterSpacing: -0.2,
-    marginTop: -1,
+    color: '#191C1E',
   },
   headerRight: {
     flexDirection: 'row',
@@ -651,33 +951,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerIconBtn: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F0F4F8',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 20,
   },
-  profileAvatarWrap: {
-    position: 'relative',
-    marginLeft: 4,
-  },
-  headerAvatarImg: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  headerAvatarActiveDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#4EDEA3',
-    borderWidth: 2,
-    borderColor: '#F7F9FB',
-  },
-  // Scroll Content
   scrollView: {
     flex: 1,
   },
@@ -685,528 +965,634 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  // Sub-Header Bar
-  subHeaderBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  subHeaderCol: {
-    gap: 2,
-  },
-  subHeaderTitle: {
-    ...Typography.headlineSm,
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#191C1E',
-  },
-  subHeaderSubtitle: {
-    ...Typography.bodySm,
-    fontSize: 12,
-    color: '#45464D',
-  },
-  nodeLivePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-    backgroundColor: '#E6E8EA',
-  },
-  nodeLivePulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#4EDEA3',
-  },
-  nodeLiveText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#009668',
-  },
-  // Root Profile Bento Card
-  rootProfileCard: {
-    backgroundColor: '#131B2E',
-    borderRadius: 20,
+
+  // KPI Summary Card
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
-    position: 'relative',
-    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+    gap: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  rootCardGlow: {
-    position: 'absolute',
-    bottom: -30,
-    right: -30,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(0, 81, 213, 0.2)',
-  },
-  rootCardContent: {
+  summaryTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
   },
-  rootCardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  rootCardLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-    minWidth: 0,
-  },
-  rootAvatarWrap: {
-    position: 'relative',
-  },
-  rootAvatarImg: {
-    width: 48,
-    height: 48,
+  summaryIconBox: {
+    width: 44,
+    height: 44,
     borderRadius: 12,
-  },
-  rootAvatarCheck: {
-    position: 'absolute',
-    bottom: -3,
-    right: -3,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#4EDEA3',
+    backgroundColor: '#E0E7FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rootInfoCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  rootNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  rootName: {
-    ...Typography.titleLg,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  rootUid: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    color: '#7C839B',
-    marginTop: 1,
-  },
-  fullAccessBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0, 81, 213, 0.3)',
-  },
-  fullAccessBadgeText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#DBE1FF',
-  },
-  lastAuthBox: {
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 12,
-    padding: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  lastAuthCol: {
-    gap: 1,
-  },
-  lastAuthLabel: {
-    ...Typography.labelMono,
-    fontSize: 9,
-    color: '#7C839B',
-  },
-  lastAuthValue: {
-    ...Typography.bodySm,
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  hardwareKeyPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  hardwareKeyText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    color: '#4EDEA3',
-    fontWeight: '600',
-  },
-  manageRootLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 4,
-  },
-  manageRootLinkText: {
-    ...Typography.bodySm,
-    fontSize: 12,
-    color: '#7C839B',
-    fontWeight: '500',
-  },
-  // Search Bar
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#E6E8EA',
-  },
-  searchInput: {
-    flex: 1,
-    ...Typography.bodySm,
-    fontSize: 13,
-    color: '#191C1E',
-    padding: 0,
-  },
-  // Config Groups
-  configGroupsList: {
-    gap: 20,
-  },
-  groupSection: {
-    gap: 8,
-  },
-  groupHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-  },
-  groupHeaderTitle: {
-    ...Typography.labelMono,
-    fontSize: 11,
-    color: '#0051D5',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  groupHeaderTag: {
-    ...Typography.labelMono,
-    fontSize: 11,
-    color: '#76777D',
-  },
-  groupHeaderTagHighShield: {
-    backgroundColor: '#000000',
-    color: '#4EDEA3',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    fontWeight: '700',
-  },
-  groupCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#E6E8EA',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 14,
-  },
-  itemIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  itemIconSecondary: {
-    backgroundColor: '#DBE1FF',
-  },
-  itemIconTertiary: {
-    backgroundColor: '#6FFBBE',
-  },
-  itemIconSurface: {
-    backgroundColor: '#E0E3E5',
-  },
-  itemContentCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  itemTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-    marginBottom: 2,
-  },
-  itemTitle: {
-    ...Typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#191C1E',
+  summaryTexts: {
     flex: 1,
   },
-  itemBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    flexShrink: 0,
-  },
-  itemBadgeSuccess: {
-    backgroundColor: '#6FFBBE',
-  },
-  itemBadgeInfo: {
-    backgroundColor: 'rgba(0, 81, 213, 0.1)',
-  },
-  itemBadgeNeutral: {
-    backgroundColor: '#ECEEF0',
-  },
-  itemBadgeText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  itemBadgeTextSuccess: {
-    color: '#009668',
-  },
-  itemBadgeTextInfo: {
-    color: '#0051D5',
-  },
-  itemBadgeTextNeutral: {
-    color: '#191C1E',
-  },
-  itemDescription: {
-    ...Typography.bodySm,
-    fontSize: 12,
-    color: '#45464D',
-  },
-  itemDivider: {
-    height: 1,
-    backgroundColor: '#F2F4F6',
-    marginHorizontal: 14,
-  },
-  chevronIcon: {
-    flexShrink: 0,
-  },
-  // Diagnostics Panel
-  diagnosticsPanel: {
-    backgroundColor: '#ECEEF0',
-    borderRadius: 16,
-    padding: 14,
-    gap: 10,
-    borderWidth: 1,
-    borderColor: '#E0E3E5',
-  },
-  diagnosticsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  diagnosticsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  diagnosticsTitle: {
-    ...Typography.bodyMd,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#191C1E',
-  },
-  diagnosticsTag: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  diagnosticsTagText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    color: '#0051D5',
-    fontWeight: '700',
-  },
-  diagnosticsBody: {
-    ...Typography.bodySm,
-    fontSize: 12,
-    color: '#45464D',
-    lineHeight: 16,
-  },
-  gaugeGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 2,
-  },
-  gaugeCol: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 10,
-    gap: 4,
-  },
-  gaugeLabel: {
-    ...Typography.labelMono,
-    fontSize: 9,
-    color: '#76777D',
-  },
-  gaugeValue: {
-    ...Typography.titleLg,
+  summaryTitle: {
     fontSize: 15,
     fontWeight: '700',
     color: '#191C1E',
   },
-  gaugeBarTrack: {
-    height: 6,
-    backgroundColor: '#E6E8EA',
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginTop: 4,
+  summarySub: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#5B6B79',
+    marginTop: 2,
+    lineHeight: 16,
   },
-  gaugeBarFill: {
-    height: '100%',
-    backgroundColor: '#0051D5',
-    borderRadius: 3,
+  summaryBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
-  // Footer
-  footerSection: {
-    gap: 12,
-    alignItems: 'center',
-    marginTop: 8,
+  summaryBadgePending: {
+    backgroundColor: '#FEF3C7',
   },
-  coreEngineCard: {
-    width: '100%',
-    backgroundColor: '#F2F4F6',
-    borderRadius: 14,
-    padding: 12,
-    alignItems: 'center',
-    gap: 4,
+  summaryBadgeResolved: {
+    backgroundColor: '#DCFCE7',
   },
-  coreEngineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  coreEngineTitle: {
-    ...Typography.labelMono,
+  summaryBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#191C1E',
   },
-  coreEngineSub: {
-    ...Typography.bodySm,
-    fontSize: 11,
-    color: '#45464D',
-    textAlign: 'center',
+  summaryBadgeTextPending: {
+    color: '#B45309',
   },
-  rootLogoutBtn: {
-    width: '100%',
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#FFDAD6',
+  summaryBadgeTextResolved: {
+    color: '#15803D',
+  },
+  actionBtnIssueDemand: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    backgroundColor: '#EEF2FF',
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  actionBtnIssueDemandText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#00174B',
+  },
+
+  // Filter Section
+  filterSection: {
+    gap: 10,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+  },
+  filterTabActive: {
+    backgroundColor: '#00297A',
+    borderColor: '#00297A',
+  },
+  filterTabText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#5B6B79',
+  },
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  refreshBtn: {
+    marginLeft: 'auto',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#191C1E',
+    paddingVertical: 0,
+  },
+
+  // Requests List
+  requestsList: {
+    gap: 12,
+  },
+  requestCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  cardUserGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  avatarCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarCust: {
+    backgroundColor: '#EFF6FF',
+  },
+  avatarTech: {
+    backgroundColor: '#F0FDF4',
+  },
+  avatarInitials: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  avatarInitialsCust: {
+    color: '#1D4ED8',
+  },
+  avatarInitialsTech: {
+    color: '#15803D',
+  },
+  userInfoTextCol: {
+    flex: 1,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  userNameText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#191C1E',
+  },
+  rolePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  rolePillCust: {
+    backgroundColor: '#DBEAFE',
+  },
+  rolePillTech: {
+    backgroundColor: '#DCFCE7',
+  },
+  rolePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  rolePillTextCust: {
+    color: '#1E40AF',
+  },
+  rolePillTextTech: {
+    color: '#166534',
+  },
+  contactText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#5B6B79',
+    marginTop: 2,
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  statusPillPending: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusPillFulfilled: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  statusPillTextPending: {
+    color: '#B45309',
+  },
+  statusPillTextFulfilled: {
+    color: '#15803D',
+  },
+  reasonBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    padding: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: Colors.primary,
+  },
+  reasonLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  reasonText: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#1E293B',
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  cardFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  dateCol: {
+    flex: 1,
+  },
+  dateLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#94A3B8',
+  },
+  dateText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    marginTop: 1,
+  },
+  fulfillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#00297A',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  fulfillBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  issuedBox: {
+    alignItems: 'flex-end',
+  },
+  issuedLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  issuedCode: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+
+  // Loading & Empty States
+  loadingContainer: {
+    padding: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  emptyContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E6E8EA',
+    gap: 8,
+  },
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#191C1E',
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#64748B',
+    textAlign: 'center',
+    maxWidth: 260,
+    lineHeight: 18,
+  },
+
+  // Modals
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalSheet: {
+    width: '100%',
+    maxWidth: 440,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  modalHeaderLeftGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#191C1E',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalFormContent: {
+    marginTop: 14,
+    gap: 14,
+  },
+  modalUserBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  modalUserName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  modalUserSub: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+    marginTop: 2,
+  },
+  modalUserReason: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#334155',
+    fontStyle: 'italic',
+    marginTop: 6,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  passLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  regenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  regenBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  tempPassInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: 0.5,
+  },
+  fulfillNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    padding: 10,
+  },
+  fulfillNoticeText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#1E40AF',
+    lineHeight: 16,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+  },
+  modalCancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  modalSubmitBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#00297A',
+  },
+  modalSubmitBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+
+  // Manual Modal Styles
+  roleTabsWrap: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 4,
+    gap: 4,
+  },
+  roleTab: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  roleTabActive: {
+    backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
   },
-  rootLogoutBtnText: {
-    ...Typography.bodyMd,
-    fontSize: 13,
+  roleTabText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#64748B',
+  },
+  roleTabTextActive: {
+    color: '#0F172A',
     fontWeight: '700',
-    color: '#93000A',
   },
-  copyrightText: {
-    ...Typography.labelMono,
-    fontSize: 10,
-    color: '#76777D',
-    letterSpacing: 0.3,
+  modalSearchInput: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#1E293B',
   },
-  // Bottom Tab Bar
-  bottomTabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 60,
-    backgroundColor: 'rgba(247, 249, 251, 0.95)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.06)',
+  userPickerScroll: {
+    maxHeight: 160,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+  },
+  userPickerItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingHorizontal: 8,
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
   },
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    minWidth: 64,
+  userPickerItemSelected: {
+    backgroundColor: '#EFF6FF',
   },
-  tabLabel: {
-    ...Typography.labelMd,
-    fontSize: 10,
-    color: '#45464D',
-    fontWeight: '500',
+  userPickerName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
   },
-  tabLabelActive: {
-    color: '#0051D5',
-    fontWeight: '700',
+  userPickerNameSelected: {
+    color: '#1D4ED8',
   },
+  userPickerEmail: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: '#64748B',
+  },
+  noUsersFoundText: {
+    padding: 16,
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#94A3B8',
+  },
+
   // Toast
   toastContainer: {
     position: 'absolute',
-    alignSelf: 'center',
+    left: 20,
+    right: 20,
     zIndex: 999,
-    backgroundColor: '#2D3133',
-    paddingHorizontal: 16,
+    backgroundColor: '#002113',
     paddingVertical: 10,
-    borderRadius: 24,
+    paddingHorizontal: 16,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 10,
+    elevation: 6,
   },
   toastText: {
-    ...Typography.bodySm,
-    color: '#EFF1F3',
-    fontWeight: '600',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#FFFFFF',
   },
 });
