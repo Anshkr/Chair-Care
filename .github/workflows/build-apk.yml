@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       api_url:
-        description: 'Backend API URL (Point to your server, e.g. http://YOUR_SERVER_IP:5000/api/v1)'
+        description: 'Backend API URL (Pre-filled with your live server)'
         required: false
-        default: 'http://localhost:5000/api/v1'
+        default: 'https://chair-care.onrender.com/api/v1'
       build_type:
         description: 'Build Type'
         required: true
