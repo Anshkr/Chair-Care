@@ -138,20 +138,6 @@ export const AdminProfileSystemStatusChaircareMobileScreen: React.FC<{
         </View>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity
-            style={styles.headerIconBtn}
-            activeOpacity={0.7}
-            accessibilityLabel="Settings"
-            onPress={() => {
-              if (navigation?.navigate) {
-                navigation.navigate('AdminSettings');
-              } else {
-                showToast('Admin Settings');
-              }
-            }}
-          >
-            <MaterialIcons name="settings" size={22} color={Colors.onSurfaceVariant} />
-          </TouchableOpacity>
           <View style={styles.headerAvatarWrap}>
             <MaterialIcons name="person" size={18} color="#FFFFFF" />
           </View>
