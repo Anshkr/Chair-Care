@@ -15,6 +15,8 @@ import {
   Linking,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import { fileUriToBase64DataUrl } from '../../utils/fileUpload';
 import { ScreenContainer } from '../../components/common/ScreenContainer';
 import { BrandLogo } from '../../components/common/BrandLogo';
 import { ThemeSwitchButton } from '../../components/common/ThemeSwitchButton';
@@ -458,7 +460,7 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
     setEditModalVisible(true);
   };
 
-  const handlePickImage = () => {
+  const handlePickImage = async () => {
     if (Platform.OS === 'web' && typeof document !== 'undefined') {
       const input = document.createElement('input');
       input.type = 'file';
@@ -479,8 +481,39 @@ export const CustomerProfileChaircareMobileScreen: React.FC<{
         }
       };
       input.click();
-    } else {
-      Alert.alert('Upload Photo', 'Please select one of the curated avatars below.');
+      return;
+    }
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Gallery access is required to select a photo from your device.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const asset = result.assets[0];
+        const mime = asset.mimeType || 'image/jpeg';
+        let dataUri = asset.base64 ? `data:${mime};base64,${asset.base64}` : asset.uri;
+        if (!dataUri.startsWith('data:') && asset.uri) {
+          dataUri = await fileUriToBase64DataUrl(asset.uri, mime);
+        }
+        setTempAvatarUrl(dataUri);
+      }
+    } catch (err: any) {
+      console.warn('Native photo picker error:', err);
+      Alert.alert('Upload Error', 'Could not open device photo gallery. Please try again.');
     }
   };
 
